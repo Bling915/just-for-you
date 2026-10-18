@@ -33,8 +33,9 @@ type PhotoStorage interface {
 	SignRead(context.Context, string, time.Time) (string, error)
 }
 type TimelinePage struct {
-	Moments    []domain.Moment `json:"moments"`
-	NextCursor string          `json:"nextCursor,omitempty"`
+	Moments    []domain.Moment   `json:"moments"`
+	NextCursor string            `json:"nextCursor,omitempty"`
+	PhotoURLs  map[string]string `json:"-"`
 }
 type MomentRepository interface {
 	SaveWithGrants(context.Context, domain.Moment, []UploadGrant) (domain.Moment, error)

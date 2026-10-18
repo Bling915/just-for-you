@@ -150,3 +150,21 @@ func TestTimelineRejectsOldCursorAfterRelationshipEnds(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+func TestTimelineReturnsSignedReadURLs(t *testing.T) {
+	now := time.Now()
+	moment, err := momentdomain.NewMoment(1, 9, "", momentdomain.StatusNone, "", []string{"users/1/photo.jpg"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &memoryMoments{saved: []momentdomain.Moment{moment}}
+	service := newMomentService(now, fakeRelationships{active: ActiveRelationship{ID: 9}}, &fakeUploads{grants: map[string]UploadGrant{}}, repository)
+
+	page, err := service.GetTimeline(context.Background(), 1, "", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.PhotoURLs["users/1/photo.jpg"] != "https://read.test" {
+		t.Fatalf("photo URL was not signed: %#v", page.PhotoURLs)
+	}
+}

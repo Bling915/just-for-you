@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/nanfang/just-for-you/server/internal/moment/domain"
 	platformclock "github.com/nanfang/just-for-you/server/internal/platform/clock"
+	"time"
 )
 
 type PublishInput struct {
@@ -15,6 +16,7 @@ type PublishInput struct {
 type Home struct {
 	PartnerLatestStatus *domain.Moment
 	Recent              []domain.Moment
+	PhotoURLs           map[string]string
 }
 type Service struct {
 	relationships ActiveRelationshipReader
@@ -65,7 +67,12 @@ func (s *Service) GetTimeline(ctx context.Context, userID int64, cursor string, 
 	if limit > 50 {
 		limit = 50
 	}
-	return s.moments.List(ctx, relationship.ID, cursor, limit)
+	page, err := s.moments.List(ctx, relationship.ID, cursor, limit)
+	if err != nil {
+		return TimelinePage{}, err
+	}
+	page.PhotoURLs, err = s.signReadURLs(ctx, page.Moments)
+	return page, err
 }
 func (s *Service) GetHome(ctx context.Context, userID int64) (Home, error) {
 	relationship, err := s.relationships.GetActiveRelationship(ctx, userID)
@@ -77,7 +84,33 @@ func (s *Service) GetHome(ctx context.Context, userID int64) (Home, error) {
 		return Home{}, err
 	}
 	recent, err := s.moments.Recent(ctx, relationship.ID, 5)
-	return Home{PartnerLatestStatus: latest, Recent: recent}, err
+	if err != nil {
+		return Home{}, err
+	}
+	moments := append([]domain.Moment(nil), recent...)
+	if latest != nil {
+		moments = append(moments, *latest)
+	}
+	photoURLs, err := s.signReadURLs(ctx, moments)
+	return Home{PartnerLatestStatus: latest, Recent: recent, PhotoURLs: photoURLs}, err
+}
+
+func (s *Service) signReadURLs(ctx context.Context, moments []domain.Moment) (map[string]string, error) {
+	result := make(map[string]string)
+	expiresAt := s.clock.Now().Add(10 * time.Minute)
+	for _, moment := range moments {
+		for _, photo := range moment.Photos() {
+			if _, exists := result[photo.ObjectKey()]; exists {
+				continue
+			}
+			url, err := s.photos.SignRead(ctx, photo.ObjectKey(), expiresAt)
+			if err != nil {
+				return nil, err
+			}
+			result[photo.ObjectKey()] = url
+		}
+	}
+	return result, nil
 }
 func (s *Service) DeleteMoment(ctx context.Context, userID, momentID int64) error {
 	relationship, err := s.relationships.GetActiveRelationship(ctx, userID)

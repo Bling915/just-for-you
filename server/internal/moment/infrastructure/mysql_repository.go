@@ -1,0 +1,199 @@
+package infrastructure
+
+import (
+	"context"
+	"crypto/rand"
+	"database/sql"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"github.com/nanfang/just-for-you/server/internal/moment/application"
+	"github.com/nanfang/just-for-you/server/internal/moment/domain"
+	"strconv"
+	"strings"
+	"time"
+)
+
+type MySQLRepository struct{ db *sql.DB }
+
+func NewMySQLRepository(db *sql.DB) MySQLRepository { return MySQLRepository{db: db} }
+func (r MySQLRepository) CreateGrant(ctx context.Context, userID int64, input application.UploadInput, now time.Time) (application.UploadGrant, error) {
+	extension := map[string]string{"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[input.ContentType]
+	if extension == "" || input.Size < 1 || input.Size > 10<<20 {
+		return application.UploadGrant{}, domain.ErrInvalidUpload
+	}
+	random := make([]byte, 16)
+	if _, err := rand.Read(random); err != nil {
+		return application.UploadGrant{}, err
+	}
+	key := fmt.Sprintf("users/%d/%04d/%02d/%x.%s", userID, now.Year(), now.Month(), random, extension)
+	grant := application.UploadGrant{ObjectKey: key, OwnerID: userID, ContentType: input.ContentType, ExpiresAt: now.Add(10 * time.Minute)}
+	_, err := r.db.ExecContext(ctx, "INSERT INTO upload_grants(user_id,object_key,content_type,expires_at) VALUES(?,?,?,?)", userID, key, input.ContentType, grant.ExpiresAt)
+	return grant, err
+}
+func (r MySQLRepository) ValidateGrants(ctx context.Context, userID int64, keys []string, now time.Time) ([]application.UploadGrant, error) {
+	grants := make([]application.UploadGrant, len(keys))
+	for index, key := range keys {
+		var grant application.UploadGrant
+		var consumed sql.NullTime
+		err := r.db.QueryRowContext(ctx, "SELECT user_id,content_type,expires_at,consumed_at FROM upload_grants WHERE object_key=?", key).Scan(&grant.OwnerID, &grant.ContentType, &grant.ExpiresAt, &consumed)
+		if err != nil || grant.OwnerID != userID || consumed.Valid || !grant.ExpiresAt.After(now) {
+			return nil, domain.ErrInvalidUpload
+		}
+		grant.ObjectKey = key
+		grants[index] = grant
+	}
+	return grants, nil
+}
+func (r MySQLRepository) SaveWithGrants(ctx context.Context, moment domain.Moment, grants []application.UploadGrant) (domain.Moment, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.Moment{}, err
+	}
+	defer tx.Rollback()
+	for _, grant := range grants {
+		var owner int64
+		var expires time.Time
+		var consumed sql.NullTime
+		if err = tx.QueryRowContext(ctx, "SELECT user_id,expires_at,consumed_at FROM upload_grants WHERE object_key=? FOR UPDATE", grant.ObjectKey).Scan(&owner, &expires, &consumed); err != nil || owner != moment.AuthorID() || consumed.Valid || !expires.After(moment.CreatedAt()) {
+			return domain.Moment{}, domain.ErrInvalidUpload
+		}
+	}
+	result, err := tx.ExecContext(ctx, "INSERT INTO moments(couple_id,author_user_id,body,status_code,place_name,created_at) VALUES(?,?,?,?,?,?)", moment.RelationshipID(), moment.AuthorID(), moment.Text(), string(moment.Status()), moment.Place(), moment.CreatedAt())
+	if err != nil {
+		return domain.Moment{}, err
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return domain.Moment{}, err
+	}
+	for _, photo := range moment.Photos() {
+		if _, err = tx.ExecContext(ctx, "INSERT INTO moment_photos(moment_id,object_key,sort_order) VALUES(?,?,?)", id, photo.ObjectKey(), photo.Order()); err != nil {
+			return domain.Moment{}, err
+		}
+	}
+	for _, grant := range grants {
+		if _, err = tx.ExecContext(ctx, "UPDATE upload_grants SET consumed_at=? WHERE object_key=?", moment.CreatedAt(), grant.ObjectKey); err != nil {
+			return domain.Moment{}, err
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		return domain.Moment{}, err
+	}
+	return domain.RestoreMoment(id, moment.AuthorID(), moment.RelationshipID(), moment.Text(), moment.Status(), moment.Place(), moment.Photos(), moment.CreatedAt(), nil), nil
+}
+func (r MySQLRepository) List(ctx context.Context, relationshipID int64, cursor string, limit int) (application.TimelinePage, error) {
+	query := "SELECT id,author_user_id,body,status_code,place_name,created_at,deleted_at FROM moments WHERE couple_id=? AND deleted_at IS NULL"
+	args := []any{relationshipID}
+	if cursor != "" {
+		at, id, err := decodeCursor(cursor)
+		if err != nil {
+			return application.TimelinePage{}, err
+		}
+		query += " AND (created_at < ? OR (created_at = ? AND id < ?))"
+		args = append(args, at, at, id)
+	}
+	query += " ORDER BY created_at DESC,id DESC LIMIT ?"
+	args = append(args, limit+1)
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return application.TimelinePage{}, err
+	}
+	defer rows.Close()
+	moments := []domain.Moment{}
+	for rows.Next() {
+		moment, err := r.scanMoment(ctx, rows, relationshipID)
+		if err != nil {
+			return application.TimelinePage{}, err
+		}
+		moments = append(moments, moment)
+	}
+	page := application.TimelinePage{Moments: moments}
+	if len(moments) > limit {
+		last := moments[limit-1]
+		page.NextCursor = encodeCursor(last.CreatedAt(), last.ID())
+		page.Moments = moments[:limit]
+	}
+	return page, rows.Err()
+}
+
+type scanner interface{ Scan(...any) error }
+
+func (r MySQLRepository) scanMoment(ctx context.Context, row scanner, relationshipID int64) (domain.Moment, error) {
+	var id, author int64
+	var text, status, place string
+	var created time.Time
+	var deleted sql.NullTime
+	if err := row.Scan(&id, &author, &text, &status, &place, &created, &deleted); err != nil {
+		return domain.Moment{}, err
+	}
+	photoRows, err := r.db.QueryContext(ctx, "SELECT object_key,sort_order FROM moment_photos WHERE moment_id=? ORDER BY sort_order", id)
+	if err != nil {
+		return domain.Moment{}, err
+	}
+	defer photoRows.Close()
+	photos := []domain.Photo{}
+	for photoRows.Next() {
+		var key string
+		var order int
+		if err = photoRows.Scan(&key, &order); err != nil {
+			return domain.Moment{}, err
+		}
+		photos = append(photos, domain.NewPhoto(key, order))
+	}
+	var deletedAt *time.Time
+	if deleted.Valid {
+		deletedAt = &deleted.Time
+	}
+	return domain.RestoreMoment(id, author, relationshipID, text, domain.Status(status), place, photos, created, deletedAt), nil
+}
+func (r MySQLRepository) Recent(ctx context.Context, relationshipID int64, limit int) ([]domain.Moment, error) {
+	page, err := r.List(ctx, relationshipID, "", limit)
+	return page.Moments, err
+}
+func (r MySQLRepository) LatestStatusByAuthor(ctx context.Context, relationshipID, authorID int64) (*domain.Moment, error) {
+	row := r.db.QueryRowContext(ctx, "SELECT id,author_user_id,body,status_code,place_name,created_at,deleted_at FROM moments WHERE couple_id=? AND author_user_id=? AND status_code<>'' AND deleted_at IS NULL ORDER BY created_at DESC,id DESC LIMIT 1", relationshipID, authorID)
+	moment, err := r.scanMoment(ctx, row, relationshipID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	return &moment, err
+}
+func (r MySQLRepository) Find(ctx context.Context, relationshipID, momentID int64) (domain.Moment, error) {
+	row := r.db.QueryRowContext(ctx, "SELECT id,author_user_id,body,status_code,place_name,created_at,deleted_at FROM moments WHERE couple_id=? AND id=? AND deleted_at IS NULL", relationshipID, momentID)
+	moment, err := r.scanMoment(ctx, row, relationshipID)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = domain.ErrMomentNotFound
+	}
+	return moment, err
+}
+func (r MySQLRepository) Delete(ctx context.Context, momentID int64) error {
+	result, err := r.db.ExecContext(ctx, "UPDATE moments SET deleted_at=CURRENT_TIMESTAMP(6) WHERE id=? AND deleted_at IS NULL", momentID)
+	if err != nil {
+		return err
+	}
+	count, _ := result.RowsAffected()
+	if count != 1 {
+		return domain.ErrMomentNotFound
+	}
+	return nil
+}
+func encodeCursor(at time.Time, id int64) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(at.UTC().Format(time.RFC3339Nano) + "|" + strconv.FormatInt(id, 10)))
+}
+func decodeCursor(raw string) (time.Time, int64, error) {
+	decoded, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return time.Time{}, 0, err
+	}
+	parts := strings.Split(string(decoded), "|")
+	if len(parts) != 2 {
+		return time.Time{}, 0, fmt.Errorf("invalid cursor")
+	}
+	at, err := time.Parse(time.RFC3339Nano, parts[0])
+	if err != nil {
+		return time.Time{}, 0, err
+	}
+	id, err := strconv.ParseInt(parts[1], 10, 64)
+	return at, id, err
+}
