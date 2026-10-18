@@ -3,10 +3,13 @@ const { createUploadQueue }=require('../../utils/upload-queue')
 const { uploadService }=require('../../services/uploads')
 const { momentService }=require('../../services/moments')
 const { draftStore }=require('../../store/draft')
+const { sessionStore }=require('../../store/session')
+const { relationshipService }=require('../../services/relationships')
 
 Page({
   data:{text:'',status:'',placeName:'',files:[],textCount:0,placeCount:0,publishing:false,completed:0,total:0,statuses:[{code:'in_class',label:'在上课',icon:'✎'},{code:'miss_you',label:'想你了',icon:'♡'},{code:'tired',label:'有点累',icon:'☾'}]},
   onLoad(){const draft=draftStore.load();this.setData({...draft,textCount:countRunes(draft.text),placeCount:countRunes(draft.placeName)})},
+  async onShow(){if(!sessionStore.snapshot().accessToken)return wx.reLaunch({url:'/pages/welcome/index'});try{await relationshipService.getCurrent()}catch(error){if(error.code==='NO_ACTIVE_COUPLE'){draftStore.clear();return wx.reLaunch({url:'/pages/bind/index'})}}},
   onUnload(){if(!this.data.publishing)this.save()},
   inputText(event){const text=truncateRunes(event.detail.value,500);this.setData({text,textCount:countRunes(text)});this.save()},
   inputPlace(event){const placeName=truncateRunes(event.detail.value,80);this.setData({placeName,placeCount:countRunes(placeName)});this.save()},

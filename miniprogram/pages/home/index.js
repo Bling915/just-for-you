@@ -1,13 +1,14 @@
 const { momentService } = require('../../services/moments')
 const { sessionStore } = require('../../store/session')
 const { storage } = require('../../utils/storage')
+const { relationshipService } = require('../../services/relationships')
 
 const CACHE_KEY = 'homeSnapshot'
 
 Page({
   data:{state:'loading',home:null,moments:[],currentUserId:0,error:''},
-  onLoad(){ const session=sessionStore.snapshot(); const cached=storage.get(CACHE_KEY); this.setData({currentUserId:Number(session.userId)||0,...(cached?{home:cached,moments:cached.recent||[]}:{})}); this.load() },
-  onShow(){ if(this.data.state!=='loading') this.load({quiet:true}) },
+  onLoad(){ const session=sessionStore.snapshot(); this.setData({currentUserId:Number(session.userId)||0}) },
+  async onShow(){ const session=sessionStore.snapshot();if(!session.accessToken)return wx.reLaunch({url:'/pages/welcome/index'});try{await relationshipService.getCurrent()}catch(error){if(error.code==='NO_ACTIVE_COUPLE'){storage.remove(CACHE_KEY);this.setData({home:null,moments:[]});return wx.reLaunch({url:'/pages/bind/index'})}return}const cached=storage.get(CACHE_KEY);if(!this.data.home&&cached)this.setData({home:cached,moments:cached.recent||[]});this.load({quiet:Boolean(cached)}) },
   onPullDownRefresh(){ this.load().finally(()=>wx.stopPullDownRefresh()) },
   async load({quiet=false}={}){
     if(!quiet&&!this.data.home) this.setData({state:'loading',error:''})

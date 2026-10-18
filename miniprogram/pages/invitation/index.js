@@ -19,7 +19,7 @@ Page({
     try {
       await relationshipService.bind(this.data.code);
       wx.showToast({ title: '绑定成功', icon: 'success' });
-      setTimeout(() => wx.reLaunch({ url: '/pages/bind/index' }), 500);
+      setTimeout(() => wx.switchTab({ url: '/pages/home/index' }), 500);
     } catch (error) { this.setData({ error: messageForError(error.code) }); }
     finally { this.setData({ submitting: false }); }
   },

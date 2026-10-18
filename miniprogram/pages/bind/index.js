@@ -4,7 +4,7 @@ const { normalizeInvitationCode, messageForError } = require('../../utils/error-
 Page({
   data: { code: '', creating: false, checking: false, error: '', relationship: null },
   async onLoad() {
-    try { this.setData({ relationship: await relationshipService.getCurrent() }); } catch (error) {
+    try { this.setData({ relationship: await relationshipService.getCurrent() }); return wx.switchTab({url:'/pages/home/index'}); } catch (error) {
       if (error.code !== 'NO_ACTIVE_COUPLE') this.setData({ error: messageForError(error.code) });
     }
   },

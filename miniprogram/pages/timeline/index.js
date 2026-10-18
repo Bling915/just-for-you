@@ -1,7 +1,8 @@
-const { timelineStore }=require('../../store/timeline');const { momentService }=require('../../services/moments');const { sessionStore }=require('../../store/session')
+const { timelineStore }=require('../../store/timeline');const { momentService }=require('../../services/moments');const { sessionStore }=require('../../store/session');const { relationshipService }=require('../../services/relationships')
 Page({
  data:{moments:[],loading:true,loadingMore:false,hasMore:true,error:'',currentUserId:0},
- onLoad(){this.setData({currentUserId:Number(sessionStore.snapshot().userId)||0});this.refresh()},
+ onLoad(){this.setData({currentUserId:Number(sessionStore.snapshot().userId)||0})},
+ async onShow(){const session=sessionStore.snapshot();if(!session.accessToken)return wx.reLaunch({url:'/pages/welcome/index'});try{await relationshipService.getCurrent()}catch(error){timelineStore.reset();this.sync();if(error.code==='NO_ACTIVE_COUPLE')return wx.reLaunch({url:'/pages/bind/index'});return}if(!this.initialized){this.initialized=true;this.refresh()}},
  onPullDownRefresh(){this.refresh().finally(()=>wx.stopPullDownRefresh())},
  onReachBottom(){if(!this.data.loading&&!this.data.loadingMore&&this.data.hasMore)this.more()},
  sync(){this.setData(timelineStore.snapshot())},
