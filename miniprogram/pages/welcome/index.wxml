@@ -3,4 +3,6 @@
   <view class="eyebrow">JUST FOR YOU</view>
   <view class="title">小事成双对</view>
   <view class="subtitle">把平凡的小事，慢慢过成两个人的故事。</view>
+  <button class="primary-button" loading="{{submitting}}" disabled="{{submitting}}" bindtap="login">微信登录</button>
+  <view wx:if="{{error}}" class="error">{{error}}</view>
 </view>

@@ -1,6 +1,9 @@
 {
   "pages": [
-    "pages/welcome/index"
+    "pages/welcome/index",
+    "pages/profile-setup/index",
+    "pages/bind/index",
+    "pages/invitation/index"
   ],
   "window": {
     "navigationStyle": "custom",

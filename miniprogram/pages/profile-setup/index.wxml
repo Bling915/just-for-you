@@ -1,0 +1,11 @@
+<view class="page safe-page animate-in">
+  <view class="headline">先认识一下你</view><view class="hint">以后，每一件小事都会带着你的名字。</view>
+  <button class="avatar" open-type="chooseAvatar" bindchooseavatar="chooseAvatar">
+    <image wx:if="{{avatarPreview}}" src="{{avatarPreview}}" mode="aspectFill" />
+    <text wx:else>＋</text>
+  </button>
+  <view class="avatar-tip">选择头像（当前设备预览）</view>
+  <input class="name-input" type="nickname" maxlength="30" placeholder="你的昵称" value="{{displayName}}" bindinput="inputName" />
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+  <button class="primary" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submit">保存并继续</button>
+</view>

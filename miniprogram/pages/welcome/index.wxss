@@ -4,3 +4,6 @@
 .eyebrow { color: var(--color-primary); font-size: 20rpx; font-weight: 600; letter-spacing: 8rpx; }
 .title { margin-top: 18rpx; color: var(--color-text); font-size: 58rpx; font-weight: 700; letter-spacing: 4rpx; }
 .subtitle { max-width: 540rpx; margin-top: 22rpx; color: var(--color-text-muted); font-size: 27rpx; line-height: 1.8; }
+.primary-button { width: 520rpx; height: 96rpx; line-height: 96rpx; margin-top: 72rpx; border: 0; border-radius: 48rpx; color: #fff; background: linear-gradient(135deg, var(--color-primary), var(--color-primary-deep)); box-shadow: 0 18rpx 42rpx rgba(128, 106, 168, .24); font-size: 30rpx; }
+.primary-button::after { border: 0; }
+.error { margin-top: 24rpx; color: var(--color-danger); font-size: 24rpx; }

@@ -1,0 +1,15 @@
+<view class="page safe-page animate-in">
+  <view wx:if="{{loading}}" class="loading">正在确认邀请…</view>
+  <view wx:elif="{{error}}" class="error-card"><view>邀请暂时无法打开</view><text>{{error}}</text></view>
+  <block wx:elif="{{created}}">
+    <view class="eyebrow">你们的专属邀请码</view><view class="code">{{code}}</view>
+    <view class="hint">十分钟内有效，只能使用一次。把它发给想一起记录小事的人。</view>
+    <button class="primary" bindtap="copy">复制邀请码</button>
+  </block>
+  <block wx:else>
+    <view class="moon">☾</view><view class="headline">有人想和你一起记录小事</view>
+    <view class="invite-card"><text>邀请人用户编号</text><view class="creator">{{invitation.creatorUserId}}</view><text>邀请码 {{code}}</text></view>
+    <view class="hint">绑定后，你们会拥有一条只属于两个人的共同时间线。</view>
+    <button class="primary" loading="{{submitting}}" disabled="{{submitting}}" bindtap="bind">确认和 TA 绑定</button>
+  </block>
+</view>

@@ -1,0 +1,13 @@
+<view class="page safe-page animate-in">
+  <view class="orb"><view class="small-orb"></view></view>
+  <view class="headline">让小事，从两个人开始</view>
+  <view class="hint">创建邀请码发给对方，或者输入对方给你的六位码。</view>
+  <view wx:if="{{relationship}}" class="bound-card">已经和对方绑定成功 ♡</view>
+  <block wx:else>
+    <button class="primary" loading="{{creating}}" disabled="{{creating}}" bindtap="createInvitation">创建我的邀请码</button>
+    <view class="divider"><text>或者</text></view>
+    <input class="code" maxlength="6" value="{{code}}" placeholder="输入六位邀请码" bindinput="inputCode" />
+    <button class="secondary" disabled="{{checking}}" bindtap="preview">查看邀请</button>
+  </block>
+  <view wx:if="{{error}}" class="error">{{error}}</view>
+</view>
