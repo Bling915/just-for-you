@@ -1,0 +1,14 @@
+{
+  "appid": "touristappid",
+  "compileType": "miniprogram",
+  "libVersion": "trial",
+  "miniprogramRoot": "miniprogram/",
+  "projectname": "小事成双对",
+  "setting": {
+    "es6": true,
+    "minified": true,
+    "packNpmManually": false,
+    "postcss": true,
+    "urlCheck": false
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "little-things-in-pairs",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test miniprogram/tests/*.test.js"
+  },
+  "dependencies": {
+    "tdesign-miniprogram": "1.17.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

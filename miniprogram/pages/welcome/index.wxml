@@ -1,0 +1,6 @@
+<view class="welcome safe-page animate-in">
+  <view class="brand-orbit"><view class="brand-moon"></view></view>
+  <view class="eyebrow">JUST FOR YOU</view>
+  <view class="title">小事成双对</view>
+  <view class="subtitle">把平凡的小事，慢慢过成两个人的故事。</view>
+</view>

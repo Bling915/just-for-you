@@ -1,0 +1,15 @@
+@import "styles/tokens.wxss";
+@import "styles/animations.wxss";
+
+page {
+  min-height: 100%;
+  color: var(--color-text);
+  background: linear-gradient(155deg, var(--color-bg-warm) 0%, var(--color-bg-lavender) 100%);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.safe-page {
+  min-height: 100vh;
+  padding: calc(env(safe-area-inset-top) + 32rpx) 32rpx calc(env(safe-area-inset-bottom) + 40rpx);
+}

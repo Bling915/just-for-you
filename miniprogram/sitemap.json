@@ -1,0 +1,4 @@
+{
+  "desc": "小事成双对页面索引规则",
+  "rules": [{ "action": "disallow", "page": "*" }]
+}

@@ -1,0 +1,12 @@
+@keyframes gentle-fade-up {
+  from { opacity: 0; transform: translateY(16rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes gentle-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-8rpx) scale(1.025); }
+}
+
+.animate-in { animation: gentle-fade-up 360ms ease-out both; }
+.reduce-motion, .reduce-motion * { animation-duration: 1ms !important; animation-iteration-count: 1 !important; }

@@ -1,0 +1,12 @@
+{
+  "pages": [
+    "pages/welcome/index"
+  ],
+  "window": {
+    "navigationStyle": "custom",
+    "backgroundColor": "#F8F5FB",
+    "backgroundTextStyle": "dark"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

@@ -1,0 +1,13 @@
+page {
+  --color-primary: #9d87c1;
+  --color-primary-deep: #806aa8;
+  --color-text: #403946;
+  --color-text-muted: #83798b;
+  --color-bg-warm: #fffaf7;
+  --color-bg-lavender: #f0eafa;
+  --color-card: rgba(255, 255, 255, 0.76);
+  --color-moon: #f0ce7a;
+  --color-danger: #c87580;
+  --radius-card: 28rpx;
+  --shadow-card: 0 18rpx 48rpx rgba(119, 96, 150, 0.12);
+}

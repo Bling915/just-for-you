@@ -1,0 +1,7 @@
+{
+  "appid": "your-wechat-miniprogram-appid",
+  "projectname": "小事成双对（本地）",
+  "setting": {
+    "urlCheck": false
+  }
+}
