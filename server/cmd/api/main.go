@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/nanfang/just-for-you/server/internal/couple"
-	"github.com/nanfang/just-for-you/server/internal/httpapi"
 	identityapplication "github.com/nanfang/just-for-you/server/internal/identity/application"
 	identityinfrastructure "github.com/nanfang/just-for-you/server/internal/identity/infrastructure"
 	identityhttp "github.com/nanfang/just-for-you/server/internal/identity/interfaces/http"
@@ -14,6 +12,9 @@ import (
 	"github.com/nanfang/just-for-you/server/internal/platform/config"
 	"github.com/nanfang/just-for-you/server/internal/platform/database"
 	"github.com/nanfang/just-for-you/server/internal/platform/httpserver"
+	relationshipapplication "github.com/nanfang/just-for-you/server/internal/relationship/application"
+	relationshipinfrastructure "github.com/nanfang/just-for-you/server/internal/relationship/infrastructure"
+	relationshiphttp "github.com/nanfang/just-for-you/server/internal/relationship/interfaces/http"
 )
 
 func main() {
@@ -28,8 +29,8 @@ func main() {
 	defer db.Close()
 	tokens := identityinfrastructure.NewJWTManager([]byte(cfg.JWTSecret))
 	identityService := identityapplication.NewService(identityinfrastructure.WeChatIdentityProvider{AppID: cfg.WeChatAppID, Secret: cfg.WeChatSecret, Client: &http.Client{Timeout: 5 * time.Second}}, identityinfrastructure.MySQLRepository{DB: db}, tokens, platformclock.System{}, identityinfrastructure.GenerateRefreshToken)
-	coupleService := couple.NewService(couple.SQLRepository{DB: db}, time.Now, couple.RandomCode)
-	router := httpserver.NewRouter(httpserver.Dependencies{Tokens: tokens, Registrars: []httpserver.RouteRegistrar{identityhttp.NewHandler(identityService), httpapi.NewRelationshipRegistrar(coupleService)}})
+	relationshipService := relationshipapplication.NewService(relationshipinfrastructure.NewMySQLRepository(db), platformclock.System{}, relationshipinfrastructure.GenerateInvitationCode)
+	router := httpserver.NewRouter(httpserver.Dependencies{Tokens: tokens, Registrars: []httpserver.RouteRegistrar{identityhttp.NewHandler(identityService), relationshiphttp.NewHandler(relationshipService)}})
 	if err := router.Run(cfg.HTTPAddr); err != nil {
 		log.Fatal(err)
 	}
