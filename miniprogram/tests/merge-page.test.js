@@ -1,0 +1,2 @@
+const test=require('node:test');const assert=require('node:assert/strict');const {mergeMomentPage}=require('../utils/merge-page')
+test('deduplicates page boundaries and sorts by createdAt then id descending',()=>{const current=[{id:2,createdAt:'2026-10-18T10:00:00Z'},{id:1,createdAt:'2026-10-18T09:00:00Z'}];const incoming=[{id:1,createdAt:'2026-10-18T09:00:00Z'},{id:3,createdAt:'2026-10-18T10:00:00Z'}];assert.deepEqual(mergeMomentPage(current,incoming).map(x=>x.id),[3,2,1])})

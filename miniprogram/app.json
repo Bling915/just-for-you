@@ -5,7 +5,8 @@
     "pages/bind/index",
     "pages/invitation/index",
     "pages/home/index",
-    "pages/compose/index"
+    "pages/compose/index",
+    "pages/timeline/index"
   ],
   "window": {
     "navigationStyle": "custom",
