@@ -25,17 +25,21 @@ function createHttpClient({ request, storage, onSessionExpired, baseURL }) {
 
   function refreshAccess() {
     if (refreshPromise) return refreshPromise;
+    const refreshState = storage.snapshot();
+    const refreshEpoch = refreshState.epoch;
     refreshPromise = (async () => {
-      const refreshToken = storage.snapshot().refreshToken;
+      const refreshToken = refreshState.refreshToken;
       if (!refreshToken) throw { status: 401, code: 'INVALID_REFRESH', message: '请重新登录' };
       const response = await raw('POST', '/v1/auth/refresh', { refreshToken }, '');
       if (response.statusCode < 200 || response.statusCode >= 300) throw toError(response);
       const session = response.data && response.data.data;
-      storage.setSession(session);
+      if (storage.setSession(session, refreshEpoch) === false) throw { status: 401, code: 'SESSION_CHANGED', message: '会话已变化' };
       return session.accessToken;
     })().catch((error) => {
-      storage.clear();
-      onSessionExpired();
+      if (storage.snapshot().epoch === refreshEpoch) {
+        storage.clear();
+        onSessionExpired();
+      }
       throw error;
     }).finally(() => { refreshPromise = null; });
     return refreshPromise;
@@ -66,7 +70,11 @@ function wxRequest(options) {
 const http = createHttpClient({
   request: wxRequest,
   storage: sessionStore,
-  onSessionExpired() {},
+  onSessionExpired() {
+    const { appState } = require('../store/app-state');
+    appState.clearPrivateData();
+    wx.reLaunch({ url: '/pages/welcome/index' });
+  },
   baseURL: APP_CONFIG.apiBaseURL,
 });
 

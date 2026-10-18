@@ -2,6 +2,7 @@ const { authService } = require('../../services/auth');
 const { userService } = require('../../services/users');
 const { sessionStore } = require('../../store/session');
 const { messageForError } = require('../../utils/error-copy');
+const { appState } = require('../../store/app-state');
 
 Page({
   data: { submitting: false, error: '' },
@@ -11,6 +12,7 @@ Page({
     try {
       const login = await wx.login();
       const session = await authService.loginWithWeChat(login.code);
+      appState.clearPrivateData();
       sessionStore.setSession(session);
       const user = await userService.getMe();
       sessionStore.setUser(user);

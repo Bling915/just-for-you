@@ -16,7 +16,10 @@ App({
     try {
       sessionStore.setUser(await userService.getMe());
     } catch (error) {
-      if (error.status === 401) sessionStore.clear();
+      if (error.status === 401) {
+        const { appState } = require('./store/app-state');
+        appState.clearPrivateData();
+      }
     }
   },
 });

@@ -5,10 +5,11 @@ const { createHttpClient } = require('../services/http-client');
 
 function createSession(initial) {
   let value = { ...initial };
+  let epoch = 0;
   return {
-    snapshot: () => ({ ...value }),
-    setSession: (next) => { value = { ...next }; },
-    clear: () => { value = {}; },
+    snapshot: () => ({ ...value, epoch }),
+    setSession: (next, expectedEpoch) => { if (expectedEpoch !== undefined && expectedEpoch !== epoch) return false; value = { ...next }; return true; },
+    clear: () => { value = {}; epoch += 1; },
   };
 }
 
@@ -76,4 +77,14 @@ test('failed shared refresh expires the session once', async () => {
   assert.ok(results.every((result) => result.status === 'rejected'));
   assert.equal(refreshCalls, 1);
   assert.equal(expiredCalls, 1);
+});
+
+test('logout during refresh prevents the late refresh from restoring session', async () => {
+  let release;
+  const storage = createSession({ accessToken:'expired',refreshToken:'refresh',userId:1 });
+  const client=createHttpClient({baseURL:'https://api.test',storage,onSessionExpired(){},request:async(options)=>{
+    if(options.url.endsWith('/v1/auth/refresh')){await new Promise(resolve=>release=resolve);return{statusCode:200,data:{data:{accessToken:'late',refreshToken:'late',userId:1}}}}
+    return{statusCode:401,data:{error:{code:'UNAUTHORIZED'}}}
+  }});
+  const pending=client.get('/v1/home'); while(!release) await Promise.resolve(); storage.clear(); release(); await assert.rejects(pending); assert.equal(Boolean(storage.snapshot().accessToken),false);
 });

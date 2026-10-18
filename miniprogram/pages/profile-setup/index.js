@@ -4,10 +4,9 @@ const { messageForError } = require('../../utils/error-copy');
 const { countRunes, truncateRunes } = require('../../utils/runes');
 
 Page({
-  data: { displayName: '', avatarPreview: '', submitting: false, error: '', editing: false },
-  onLoad(options) { const user=sessionStore.snapshot().user||{}; const editing=options&&options.edit==='1'; this.setData({editing,displayName:editing?(user.displayName||''):''}); },
-  chooseAvatar(event) { this.setData({ avatarPreview: event.detail.avatarUrl || '' }); },
-  inputName(event) { this.setData({ displayName: truncateRunes(event.detail.value, 30), error: '' }); },
+  data: { displayName: '', initial: '♡', submitting: false, error: '', editing: false },
+  onLoad(options) { const user=sessionStore.snapshot().user||{}; const editing=options&&options.edit==='1'; const displayName=editing?(user.displayName||''):''; this.setData({editing,displayName,initial:displayName.slice(0,1)||'♡'}); },
+  inputName(event) { const displayName=truncateRunes(event.detail.value,30);this.setData({displayName,initial:displayName.slice(0,1)||'♡',error:''}); },
   async submit() {
     if (this.data.submitting || countRunes(this.data.displayName.trim()) < 1) {
       this.setData({ error: '请填写 1 至 30 个字符的昵称' });

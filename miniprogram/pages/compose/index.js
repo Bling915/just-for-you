@@ -14,7 +14,7 @@ Page({
   inputText(event){const text=truncateRunes(event.detail.value,500);this.setData({text,textCount:countRunes(text)});this.save()},
   inputPlace(event){const placeName=truncateRunes(event.detail.value,80);this.setData({placeName,placeCount:countRunes(placeName)});this.save()},
   selectStatus(event){const code=event.currentTarget.dataset.code;this.setData({status:this.data.status===code?'':code});this.save()},
-  filesChanged(event){this.setData({files:event.detail.files});this.save()},
+  filesChanged(event){this.queue=null;const files=event.detail.files.map(({path,thumb,size,contentType})=>({path,thumb,size,contentType}));this.setData({files});this.save()},
   async retryPhoto(){if(!this.queue||this.data.publishing)return;this.setData({publishing:true});const result=await this.queue.retryFailed();if(result.some(item=>item.status==='failed')){this.setData({publishing:false});this.save();return wx.showToast({title:'还是没传好，再试一次吧',icon:'none'})}await this.completePublish(result)},
   save(){draftStore.patch({text:this.data.text,status:this.data.status,placeName:this.data.placeName,files:this.data.files.map(({path,thumb,size,contentType})=>({path,thumb,size,contentType}))})},
   async completePublish(items){try{await momentService.publish({text:this.data.text.trim(),status:this.data.status,placeName:this.data.placeName.trim(),photoKeys:items.map(item=>item.objectKey)});draftStore.clear();this.queue=null;this.setData({publishing:false});wx.showToast({title:'小事记下了',icon:'success'});setTimeout(()=>wx.navigateBack(),500)}catch(_){this.setData({publishing:false});this.save();wx.showToast({title:'发布失败，草稿已保存',icon:'none'})}},
