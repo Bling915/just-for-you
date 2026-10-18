@@ -78,7 +78,7 @@ Just for You 是一款供情侣使用的私密微信小程序。第一批用户�
 
 ## 5. 系统架构
 
-系统采用简单的单体架构：
+系统采用实用型 DDD 单体架构：
 
 ```text
 微信小程序
@@ -86,11 +86,10 @@ Just for You 是一款供情侣使用的私密微信小程序。第一批用户�
     | HTTPS / JSON
     v
 Go API（Gin）
-    |-- 身份认证
-    |-- 用户资料
-    |-- 情侣关系与邀请
-    |-- 日常记录
-    `-- 对象存储集成
+    |-- Identity 身份域
+    |-- Relationship 关系域
+    |-- Moment 记录域
+    `-- Platform 公共技术能力
           |
           |-- MySQL：关系型业务数据
           `-- 对象存储：私有照片文件
@@ -107,17 +106,66 @@ Go API（Gin）
 - 部署：私密 MVP 阶段使用一台云服务器运行 Go 服务和 MySQL
 - 仓库：使用一个 Git 仓库，包含 `miniprogram/`、`server/`、部署配置和项目文档
 
-第一版明确不使用微服务、消息总线或独立管理后台。
+服务端按业务域组织。每个业务域内部包含 `domain`、`application`、`infrastructure` 和 `interfaces/http` 四层。依赖方向固定为 `interfaces → application → domain`；`infrastructure` 实现领域层或应用层定义的接口。领域层不得依赖 Gin、MySQL、JWT、微信 SDK 或 COS。
 
-## 6. 服务端模块
+```text
+server/internal/
+├── identity/
+│   ├── domain/
+│   ├── application/
+│   ├── infrastructure/
+│   └── interfaces/http/
+├── relationship/
+│   ├── domain/
+│   ├── application/
+│   ├── infrastructure/
+│   └── interfaces/http/
+├── moment/
+│   ├── domain/
+│   ├── application/
+│   ├── infrastructure/
+│   └── interfaces/http/
+└── platform/
+    ├── config/
+    ├── database/
+    ├── httpserver/
+    └── clock/
+```
 
-- `auth`：微信身份交换、应用访问令牌、刷新令牌和认证中间件
-- `user`：用户资料创建与更新
-- `couple`：创建邀请、接受邀请、查询关系和解除关系
-- `moment`：创建记录、查询时间线、查询最近状态和删除记录
-- `storage`：照片上传授权和临时读取地址
+`cmd/api/main.go` 负责手工组装依赖。第一版明确不使用微服务、消息总线、领域事件、CQRS、Unit of Work 框架、依赖注入框架或独立管理后台。
 
-每个模块通过清晰、有限的服务接口对外提供能力，并负责自身的业务校验。HTTP 处理器只负责请求和响应转换，不直接实现情侣关系授权逻辑。
+## 6. 领域模型与应用用例
+
+### Identity 身份域
+
+- `User` 实体负责昵称和头像规则。
+- `RefreshToken` 负责过期和撤销状态。
+- `WeChatIdentityProvider` 是外部身份接口，由基础设施层实现真实微信调用。
+- 应用用例包括 `LoginWithWeChat`、`RefreshSession`、`Logout` 和 `UpdateProfile`。
+
+### Relationship 关系域
+
+- `Relationship` 是情侣关系聚合根，状态为 `active` 或 `ended`。
+- `Invitation` 实体负责十分钟过期、一次性使用和禁止自绑等规则。
+- `BindRelationship` 应用用例协调绑定流程，仓储负责在一个 MySQL 事务中完成锁定和写入。
+- 应用用例包括 `CreateInvitation`、`PreviewInvitation`、`BindRelationship`、`GetRelationship` 和 `EndRelationship`。
+
+### Moment 记录域
+
+- `Moment` 是共同记录聚合根。
+- `Photo` 是包含对象键和排序序号的值对象。
+- `Status` 只允许 `in_class`、`miss_you` 和 `tired`。
+- `Moment.New(...)` 统一校验内容非空、文字不超过 500 个 Unicode 字符、地点不超过 80 个 Unicode 字符、照片最多九张且顺序合法。
+- 应用用例包括 `RequestPhotoUpload`、`PublishMoment`、`GetHome`、`GetTimeline` 和 `DeleteMoment`。
+
+一次发布由 HTTP Handler 调用 `PublishMoment` 用例；用例查询当前用户的有效关系，调用 `Moment.New(...)` 执行纯领域校验，验证照片授权，再通过 `MomentRepository` 事务化保存。HTTP 层只负责 DTO 转换和错误映射，不直接实现业务规则。
+
+### Platform 公共技术能力
+
+- `config`：环境变量读取与校验。
+- `database`：MySQL 连接和生命周期。
+- `httpserver`：Gin 路由、认证中间件和统一响应。
+- `clock`：可替换时间接口，保证过期逻辑可稳定测试。
 
 ## 7. 数据模型
 
@@ -201,15 +249,32 @@ API 使用统一 JSON 响应结构，返回业务数据，或返回稳定的应�
 
 服务器需要限制字段长度、文件类型和请求体大小，执行完整身份校验，并使用结构化日志。日志可以包含请求 ID 和内部用户 ID，但不得包含登录 `code`、访问令牌或微信会话密钥。
 
+业务错误由所属领域定义，例如 `identity.ErrInvalidNickname`、`relationship.ErrInvitationExpired`、`relationship.ErrAlreadyBound`、`moment.ErrTooManyPhotos` 和 `moment.ErrNotAuthor`。领域层与应用层不知道 HTTP 状态码；`interfaces/http` 统一将业务错误转换为稳定 API 错误码和中文提示。基础设施错误记录内部原因，但不得直接暴露给客户端。
+
 ## 10. 测试与验收
 
 ### 自动化测试
 
-- 对邀请码过期、单次使用、有效关系限制、解除关系和记录授权编写单元测试
-- 对参数校验和稳定错误响应编写 HTTP 处理器测试
-- 使用 MySQL 编写并发接受邀请、按关系过滤时间线等集成测试
+- `domain` 使用不依赖数据库的纯单元测试验证业务规则。
+- `application` 使用内存仓储或测试替身验证完整用例和权限。
+- `infrastructure` 使用 MySQL 集成测试验证 SQL、事务、并发绑定和按关系过滤时间线。
+- `interfaces/http` 测试请求解析、认证和稳定错误码映射。
+- 全局运行 `go test ./...`，并对并发相关代码运行 `go test -race ./...`。
 
-### 人工验收
+## 11. DDD 重构迁移策略
+
+现有代码按业务域逐步迁移，避免一次性推倒：
+
+1. 建立 `platform` 公共技术能力。
+2. 将现有 `auth` 和 `user` 迁移为 `identity` 域。
+3. 将现有 `couple` 迁移为 `relationship` 域。
+4. 删除旧包，修正路由和 `cmd/api/main.go` 的依赖组装，并确保现有测试通过。
+5. 按新 DDD 结构实现尚未完成的 `moment` 域。
+6. 继续小程序前端、部署和双人真机验收。
+
+上一版架构下尚未提交的 `moment` 和 `storage` RED 测试将按新领域边界改写。GoLand 生成的 `.idea/` 不纳入版本控制。
+
+## 12. 人工验收
 
 使用两个不同的微信账号和两台真机完成以下验证：
 
@@ -226,7 +291,7 @@ API 使用统一 JSON 响应结构，返回业务数据，或返回稳定的应�
 11. 解除关系后双方立即失去访问权限
 12. 网络失败和照片上传失败时提供清晰反馈
 
-## 11. 后续产品问题
+## 13. 后续产品问题
 
 后续迭代需要单独设计以下事项：
 
