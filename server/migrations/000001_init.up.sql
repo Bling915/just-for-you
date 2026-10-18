@@ -64,7 +64,7 @@ CREATE TABLE refresh_tokens (
 
 CREATE TABLE upload_grants (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, user_id BIGINT UNSIGNED NOT NULL,
-  object_key VARCHAR(1024) NOT NULL, content_type VARCHAR(64) NOT NULL,
+  object_key VARCHAR(512) NOT NULL, content_type VARCHAR(64) NOT NULL,
   expires_at DATETIME(6) NOT NULL, consumed_at DATETIME(6) NULL,
   created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), PRIMARY KEY (id),
   UNIQUE KEY uq_upload_object (object_key), KEY idx_upload_user (user_id, expires_at),
