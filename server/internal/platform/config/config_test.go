@@ -20,7 +20,6 @@ func setValidEnvironment(t *testing.T) {
 func TestLoadRejectsMissingMySQLDSN(t *testing.T) {
 	setValidEnvironment(t)
 	t.Setenv("MYSQL_DSN", "")
-
 	_, err := Load()
 	if err == nil || !strings.Contains(err.Error(), "MYSQL_DSN") {
 		t.Fatalf("Load() error = %v, want error naming MYSQL_DSN", err)
@@ -30,7 +29,6 @@ func TestLoadRejectsMissingMySQLDSN(t *testing.T) {
 func TestLoadRejectsShortJWTSecret(t *testing.T) {
 	setValidEnvironment(t)
 	t.Setenv("JWT_SECRET", "too-short")
-
 	_, err := Load()
 	if err == nil || !strings.Contains(err.Error(), "at least 32 bytes") {
 		t.Fatalf("Load() error = %v, want minimum-length error", err)

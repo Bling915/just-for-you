@@ -26,13 +26,12 @@ func Load() (Config, error) {
 	if cfg.HTTPAddr == "" {
 		cfg.HTTPAddr = ":8080"
 	}
-	required := map[string]string{
+	for name, value := range map[string]string{
 		"MYSQL_DSN": cfg.MySQLDSN, "JWT_SECRET": cfg.JWTSecret,
 		"WECHAT_APP_ID": cfg.WeChatAppID, "WECHAT_APP_SECRET": cfg.WeChatSecret,
 		"COS_BUCKET_URL": cfg.COSBucketURL, "COS_SECRET_ID": cfg.COSSecretID,
 		"COS_SECRET_KEY": cfg.COSSecretKey,
-	}
-	for name, value := range required {
+	} {
 		if value == "" {
 			return Config{}, fmt.Errorf("%s is required", name)
 		}
