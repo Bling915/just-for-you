@@ -3,7 +3,8 @@
     "pages/welcome/index",
     "pages/profile-setup/index",
     "pages/bind/index",
-    "pages/invitation/index"
+    "pages/invitation/index",
+    "pages/home/index"
   ],
   "window": {
     "navigationStyle": "custom",

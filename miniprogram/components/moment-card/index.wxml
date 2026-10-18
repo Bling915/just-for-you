@@ -1,0 +1,7 @@
+<view class="card animate-in">
+  <view class="top"><view class="avatar">{{moment.authorId === currentUserId ? '我' : 'TA'}}</view><view class="meta"><view>{{moment.authorId === currentUserId ? '我' : '对方'}}</view><text>{{displayTime}}</text></view><button wx:if="{{moment.authorId === currentUserId}}" class="more" bindtap="remove">删除</button></view>
+  <view wx:if="{{moment.status}}" class="status">{{labels[moment.status]}}</view>
+  <view wx:if="{{moment.text}}" class="body">{{moment.text}}</view>
+  <photo-grid wx:if="{{moment.photos.length}}" photos="{{moment.photos}}" bind:preview="preview"/>
+  <view wx:if="{{moment.placeName}}" class="place">⌖ {{moment.placeName}}</view>
+</view>

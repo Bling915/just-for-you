@@ -1,0 +1,1 @@
+<view class="grid grid--{{photos.length}}"><view wx:for="{{photos}}" wx:key="objectKey" class="cell" data-index="{{index}}" bindtap="preview"><image wx:if="{{item.url && !failed[index]}}" src="{{item.url}}" mode="aspectFill" data-index="{{index}}" binderror="fail"/><view wx:else class="fallback">图片暂时走丢了</view></view></view>

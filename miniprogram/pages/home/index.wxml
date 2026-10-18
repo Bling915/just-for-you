@@ -1,0 +1,13 @@
+<view class="page safe-page">
+  <view class="nav"><view><text class="eyebrow">LITTLE THINGS</text><view class="title">小事成双对</view></view><view class="pair">两个人 · 一段日常</view></view>
+  <block wx:if="{{state === 'loading'}}"><view class="orb-skeleton"></view><skeleton-card/><skeleton-card/></block>
+  <block wx:else>
+    <view wx:if="{{state === 'error-with-cache'}}" class="notice" bindtap="retry">网络打了个盹，正在展示上次内容 · 点此重试</view>
+    <view class="hero"><view class="hero-caption">TA 的此刻</view><status-orb moment="{{home.partnerLatestStatus}}"/></view>
+    <view class="section-head"><view>最近的小事</view><text>{{moments.length ? '慢慢收藏每个今天' : '从今天开始'}}</text></view>
+    <empty-state wx:if="{{state === 'empty'}}"/>
+    <empty-state wx:elif="{{state === 'error-empty'}}" title="暂时没有连上" description="可能只是网络打了个盹，等一下再看看。" action="重新加载" bind:action="retry"/>
+    <view wx:else class="feed"><moment-card wx:for="{{moments}}" wx:key="id" moment="{{item}}" current-user-id="{{currentUserId}}" bind:delete="remove" bind:previewphotos="preview"/></view>
+  </block>
+  <floating-compose-button bind:compose="compose"/>
+</view>

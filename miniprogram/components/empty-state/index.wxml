@@ -1,0 +1,1 @@
+<view class="empty"><view class="moon">☾</view><view class="title">{{title}}</view><view class="description">{{description}}</view><button wx:if="{{action}}" bindtap="act">{{action}}</button></view>

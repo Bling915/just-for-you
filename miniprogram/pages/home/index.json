@@ -1,0 +1,1 @@
+{"enablePullDownRefresh":true,"backgroundColor":"#F8F5FB","usingComponents":{"status-orb":"/components/status-orb/index","moment-card":"/components/moment-card/index","empty-state":"/components/empty-state/index","skeleton-card":"/components/skeleton-card/index","floating-compose-button":"/components/floating-compose-button/index"}}
