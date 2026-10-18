@@ -1,0 +1,7 @@
+DROP TABLE IF EXISTS upload_grants;
+DROP TABLE IF EXISTS refresh_tokens;
+DROP TABLE IF EXISTS moment_photos;
+DROP TABLE IF EXISTS moments;
+DROP TABLE IF EXISTS invite_codes;
+DROP TABLE IF EXISTS couples;
+DROP TABLE IF EXISTS users;
