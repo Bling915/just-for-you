@@ -4,13 +4,14 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	"github.com/nanfang/just-for-you/server/internal/couple"
+	"github.com/nanfang/just-for-you/server/internal/platform/httpserver"
 	"net/http"
 )
 
 type coupleHandler struct{ s *couple.Service }
 
 func (h coupleHandler) create(c *gin.Context) {
-	x, e := h.s.CreateInvite(c, c.GetInt64(userIDKey))
+	x, e := h.s.CreateInvite(c, httpserver.UserID(c))
 	if e != nil {
 		writeError(c, 400, "INVITE_FAILED", "无法创建邀请码")
 		return
@@ -18,7 +19,7 @@ func (h coupleHandler) create(c *gin.Context) {
 	writeData(c, 201, x)
 }
 func (h coupleHandler) preview(c *gin.Context) {
-	x, e := h.s.PreviewInvite(c, c.GetInt64(userIDKey), c.Param("code"))
+	x, e := h.s.PreviewInvite(c, httpserver.UserID(c), c.Param("code"))
 	if e != nil {
 		h.err(c, e)
 		return
@@ -33,7 +34,7 @@ func (h coupleHandler) accept(c *gin.Context) {
 		writeError(c, 400, "INVITE_INVALID", "邀请码无效")
 		return
 	}
-	x, e := h.s.AcceptInvite(c, c.GetInt64(userIDKey), in.Code)
+	x, e := h.s.AcceptInvite(c, httpserver.UserID(c), in.Code)
 	if e != nil {
 		h.err(c, e)
 		return
@@ -41,7 +42,7 @@ func (h coupleHandler) accept(c *gin.Context) {
 	writeData(c, 201, x)
 }
 func (h coupleHandler) get(c *gin.Context) {
-	x, e := h.s.GetActive(c, c.GetInt64(userIDKey))
+	x, e := h.s.GetActive(c, httpserver.UserID(c))
 	if e != nil {
 		h.err(c, e)
 		return
@@ -49,7 +50,7 @@ func (h coupleHandler) get(c *gin.Context) {
 	writeData(c, 200, x)
 }
 func (h coupleHandler) unbind(c *gin.Context) {
-	if e := h.s.Unbind(c, c.GetInt64(userIDKey)); e != nil {
+	if e := h.s.Unbind(c, httpserver.UserID(c)); e != nil {
 		h.err(c, e)
 		return
 	}

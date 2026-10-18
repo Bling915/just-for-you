@@ -5,12 +5,15 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/nanfang/just-for-you/server/internal/auth"
 	"github.com/nanfang/just-for-you/server/internal/couple"
 	"github.com/nanfang/just-for-you/server/internal/httpapi"
+	identityapplication "github.com/nanfang/just-for-you/server/internal/identity/application"
+	identityinfrastructure "github.com/nanfang/just-for-you/server/internal/identity/infrastructure"
+	identityhttp "github.com/nanfang/just-for-you/server/internal/identity/interfaces/http"
+	platformclock "github.com/nanfang/just-for-you/server/internal/platform/clock"
 	"github.com/nanfang/just-for-you/server/internal/platform/config"
 	"github.com/nanfang/just-for-you/server/internal/platform/database"
-	"github.com/nanfang/just-for-you/server/internal/user"
+	"github.com/nanfang/just-for-you/server/internal/platform/httpserver"
 )
 
 func main() {
@@ -23,10 +26,11 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
-	tokens := auth.NewTokenManager([]byte(cfg.JWTSecret))
-	authService := auth.NewService(auth.HTTPWeChatExchanger{AppID: cfg.WeChatAppID, Secret: cfg.WeChatSecret, Client: &http.Client{Timeout: 5 * time.Second}}, auth.SQLRepository{DB: db}, tokens, time.Now)
+	tokens := identityinfrastructure.NewJWTManager([]byte(cfg.JWTSecret))
+	identityService := identityapplication.NewService(identityinfrastructure.WeChatIdentityProvider{AppID: cfg.WeChatAppID, Secret: cfg.WeChatSecret, Client: &http.Client{Timeout: 5 * time.Second}}, identityinfrastructure.MySQLRepository{DB: db}, tokens, platformclock.System{}, identityinfrastructure.GenerateRefreshToken)
 	coupleService := couple.NewService(couple.SQLRepository{DB: db}, time.Now, couple.RandomCode)
-	if err := httpapi.NewRouter(httpapi.Dependencies{DB: db, AuthService: authService, Tokens: tokens, UserService: user.Service{DB: db}, CoupleService: coupleService}).Run(cfg.HTTPAddr); err != nil {
+	router := httpserver.NewRouter(httpserver.Dependencies{Tokens: tokens, Registrars: []httpserver.RouteRegistrar{identityhttp.NewHandler(identityService), httpapi.NewRelationshipRegistrar(coupleService)}})
+	if err := router.Run(cfg.HTTPAddr); err != nil {
 		log.Fatal(err)
 	}
 }
