@@ -1,4 +1,4 @@
-const { APP_CONFIG } = require('../config');
+const { APP_CONFIG } = require('../config.js');
 const { sessionStore } = require('../store/session');
 
 function toError(response) {

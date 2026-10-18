@@ -9,4 +9,11 @@
 }
 
 .animate-in { animation: gentle-fade-up 360ms ease-out both; }
-.reduce-motion, .reduce-motion * { animation-duration: 1ms !important; animation-iteration-count: 1 !important; }
+.reduce-motion { animation-duration: 1ms !important; animation-iteration-count: 1 !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-in, .orb, .brand-moon, .orb-skeleton, .line {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
