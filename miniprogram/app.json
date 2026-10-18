@@ -4,7 +4,8 @@
     "pages/profile-setup/index",
     "pages/bind/index",
     "pages/invitation/index",
-    "pages/home/index"
+    "pages/home/index",
+    "pages/compose/index"
   ],
   "window": {
     "navigationStyle": "custom",

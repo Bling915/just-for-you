@@ -15,7 +15,7 @@ Page({
     catch(error){ const cached=this.data.home; this.setData({state:cached?'error-with-cache':'error-empty',error:'暂时没有连上，再试一次吧'}) }
   },
   retry(){this.load()},
-  compose(){wx.navigateTo({url:'/pages/publish/index'})},
+  compose(){wx.navigateTo({url:'/pages/compose/index'})},
   preview(event){wx.previewImage(event.detail)},
   remove(event){
     const id=event.detail.id
