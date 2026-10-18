@@ -65,7 +65,7 @@ Just for you/
     └── tests/                       # 可由 Node 执行的纯函数测试
 ```
 
-### 任务 1：服务端骨架、配置与数据库迁移
+### Task 1：服务端骨架、配置与数据库迁移
 
 **文件：**
 - 创建：`server/go.mod`
@@ -113,7 +113,7 @@ git add .env.example Makefile docker-compose.yml server
 git commit -m "feat: bootstrap Go API and MySQL schema"
 ```
 
-### 任务 2：微信登录、令牌与用户资料
+### Task 2：微信登录、令牌与用户资料
 
 **文件：**
 - 创建：`server/internal/auth/model.go`
@@ -165,7 +165,7 @@ git add server/internal server/cmd/api/main.go
 git commit -m "feat: add WeChat authentication and profiles"
 ```
 
-### 任务 3：邀请码、绑定与解除关系
+### Task 3：邀请码、绑定与解除关系
 
 **文件：**
 - 创建：`server/internal/couple/model.go`
@@ -212,7 +212,7 @@ git add server/internal/couple server/internal/httpapi
 git commit -m "feat: add couple invitations and binding"
 ```
 
-### 任务 4：照片授权、记录、首页与时间线
+### Task 4：照片授权、记录、首页与时间线
 
 **文件：**
 - 创建：`server/internal/storage/service.go`
@@ -270,7 +270,7 @@ git add server/internal
 git commit -m "feat: add private moments and photo uploads"
 ```
 
-### 任务 5：小程序基础、登录与会话恢复
+### Task 5：小程序基础、登录与会话恢复
 
 **文件：**
 - 创建：`miniprogram/project.config.json`
@@ -318,7 +318,7 @@ git add miniprogram
 git commit -m "feat: add mini program login flow"
 ```
 
-### 任务 6：情侣绑定和设置页面
+### Task 6：情侣绑定和设置页面
 
 **文件：**
 - 创建：`miniprogram/services/couple.js`
@@ -358,7 +358,7 @@ git add miniprogram
 git commit -m "feat: add couple binding experience"
 ```
 
-### 任务 7：首页、九图发布和共同时间线
+### Task 7：首页、九图发布和共同时间线
 
 **文件：**
 - 创建：`miniprogram/services/moment.js`
@@ -407,7 +407,7 @@ git add miniprogram
 git commit -m "feat: add shared timeline and nine-photo moments"
 ```
 
-### 任务 8：部署、联调与双人真机验收
+### Task 8：部署、联调与双人真机验收
 
 **文件：**
 - 创建：`deploy/nginx.conf`
