@@ -1,227 +1,227 @@
-# Just for You MVP Design
+# Just for You MVP 设计文档
 
-## 1. Product intent
+## 1. 产品目标
 
-Just for You is a private WeChat Mini Program for couples. Its first users are the developer and their partner. It should make small daily moments easy to share, make a long-distance partner feel present, and gradually turn those moments into a shared timeline.
+Just for You 是一款供情侣使用的私密微信小程序。第一批用户是开发者和伴侣。产品需要让双方可以轻松分享日常小事，让异地伴侣感受到彼此的存在，并将这些内容逐渐沉淀为共同时间线。
 
-The project also serves as an end-to-end development exercise covering product definition, Mini Program UI, Go API design, authentication, database design, object storage, deployment, testing, and release.
+这个项目也用于锻炼完整的软件开发流程，包括产品定义、小程序界面、Go API 设计、身份认证、数据库设计、对象存储、部署、测试和发布。
 
-## 2. First milestone
+## 2. 第一阶段目标
 
-Within seven days, deliver an experience build that works on two real phones for the developer and their partner. Passing WeChat's public release review is not required for this milestone because domain registration, infrastructure setup, and platform review may take longer.
+在七天内交付一个能在两台真机上运行，并可供开发者和伴侣实际使用的体验版。由于域名备案、基础设施配置和微信平台审核可能需要更长时间，本阶段不要求通过微信审核并正式公开发布。
 
-The milestone succeeds when two users can:
+满足以下条件即视为第一阶段完成：
 
-1. Log in with WeChat and create profiles.
-2. Bind into one private couple using a one-time six-character invitation code.
-3. Publish a small moment with text, a quick status, an optional photo, and an optional place name.
-4. See the partner's latest status on the home page.
-5. Browse the same private shared timeline.
-6. Delete only their own posts.
-7. Unbind and immediately lose access to the former shared timeline.
+1. 两位用户可以分别通过微信登录并创建个人资料。
+2. 两位用户可以通过一个六位一次性邀请码建立私密情侣关系。
+3. 任意一方可以发布包含文字、快捷状态、可选照片和可选地点名称的记录。
+4. 双方可以在首页看到伴侣的最近状态。
+5. 双方可以浏览同一条私密共同时间线。
+6. 用户只能删除自己发布的记录。
+7. 解除关系后，双方立即失去对原共同时间线的访问权限。
 
-## 3. Scope
+## 3. 功能范围
 
-### Included
+### 第一版包含
 
-- WeChat login and local user profile
-- One active couple relationship per user
-- Short-lived, single-use six-character invitation code
-- Quick statuses such as `In class`, `Miss you`, and `A little tired`
-- Short text posts
-- Up to one photo per post
-- Optional human-readable place name
-- Partner's latest status and recent moments on the home page
-- Reverse-chronological shared timeline
-- Deletion of the current user's own posts
-- Explicit confirmation before unbinding
+- 微信登录及本地用户资料
+- 每个用户同时只能存在于一段有效情侣关系中
+- 短时有效、仅可使用一次的六位邀请码
+- “上课中”“想你了”“有点累”等快捷状态
+- 简短文字记录
+- 每条记录最多一张照片
+- 可选的可读地点名称
+- 首页展示伴侣的最近状态和双方最近记录
+- 按时间倒序展示共同时间线
+- 用户删除自己发布的记录
+- 解除关系前进行明确的二次确认
 
-### Excluded
+### 第一版不包含
 
-- Chat and direct messaging
-- Likes and comments
-- Continuous or precise location tracking
-- Push notifications
-- Editing published moments
-- Multiple partners or group relationships
-- Public content and discovery
-- Payments, subscriptions, and other monetization
-- Historical-data export or permanent deletion workflow
+- 聊天和即时消息
+- 点赞与评论
+- 持续定位或精确位置轨迹
+- 推送通知
+- 编辑已发布记录
+- 多伴侣或群组关系
+- 公开内容和内容发现
+- 付费、订阅及其他商业化功能
+- 解除关系后的历史数据导出或永久删除流程
 
-These exclusions keep the first build focused on validating whether couples repeatedly use lightweight status sharing and shared memory capture.
+以上限制用于保证第一版聚焦于验证两个核心价值：情侣是否愿意持续分享轻量状态，以及是否会使用共同记忆时间线。
 
-## 4. User experience
+## 4. 用户体验
 
-### Login and profile
+### 登录与个人资料
 
-The user signs in through WeChat, then chooses a display name and avatar. The Mini Program exchanges the temporary WeChat login code with the Go API and stores the API's application token.
+用户通过微信登录，然后设置昵称和头像。小程序把微信返回的临时登录 `code` 发送给 Go API，由后端完成微信身份交换，并向小程序签发本系统的登录令牌。
 
-### Couple binding
+### 情侣绑定
 
-An unbound user creates a short-lived six-character invitation code. A second unbound user enters it, reviews the inviter's identity, and confirms. The server performs the binding atomically. Each invitation is single-use, and each user can belong to only one active relationship. QR-code invitations are deferred until after the MVP.
+未绑定的用户可以创建一个短时有效的六位邀请码。另一位未绑定用户输入邀请码、确认邀请方身份并同意绑定。服务器以事务方式完成绑定。每个邀请码只能使用一次，每个用户只能处于一段有效情侣关系中。二维码邀请延后到 MVP 完成后再考虑。
 
-### Home page
+### 首页
 
-The home page shows the partner's latest quick status and its update time. A prominent `Record this moment` action opens the composer. A short list of recent moments provides immediate context.
+首页展示伴侣最近一次快捷状态及其更新时间，并提供醒目的“记录此刻”入口。页面下方展示少量最近记录，让用户快速了解双方近况。
 
-### Moment composer
+### 发布记录
 
-The user may select a quick status, write a short message, attach one photo, and add a place name. All fields other than the post itself are optional, but the server requires at least one meaningful content field. The UI prevents accidental duplicate submission.
+用户可以选择快捷状态、输入简短文字、添加一张照片，并填写地点名称。各字段均可选，但服务器要求一条记录至少包含一项有效内容。提交过程中按钮不可重复点击，以避免重复发布。
 
-### Shared timeline
+### 共同时间线
 
-The timeline displays both partners' moments in reverse chronological order. Each card identifies the author and may show text, status, photo, place name, and timestamp.
+时间线按发布时间倒序展示双方的记录。每张卡片标明发布者，并根据实际内容展示文字、状态、照片、地点名称和发布时间。
 
-### Unbinding
+### 解除关系
 
-Unbinding requires explicit confirmation. Once complete, both users immediately lose access to the former relationship and its moments. Historical data remains frozen in storage for the MVP but is not visible to either party. Export and deletion policies are deferred to a later design.
+解除关系需要明确确认。解除后，双方立即失去对原关系及其记录的访问权限。MVP 阶段暂时保留并冻结历史数据，但双方均不可查看。数据导出及永久删除策略留待后续单独设计。
 
-## 5. Architecture
+## 5. 系统架构
 
-The system uses a simple monolithic architecture:
+系统采用简单的单体架构：
 
 ```text
-WeChat Mini Program
-        |
-        | HTTPS / JSON
-        v
-Go API (Gin)
-  |-- authentication
-  |-- users
-  |-- couples and invitations
-  |-- moments
-  `-- object-storage integration
-        |
-        |-- MySQL: relational application data
-        `-- Object storage: private photo objects
+微信小程序
+    |
+    | HTTPS / JSON
+    v
+Go API（Gin）
+    |-- 身份认证
+    |-- 用户资料
+    |-- 情侣关系与邀请
+    |-- 日常记录
+    `-- 对象存储集成
+          |
+          |-- MySQL：关系型业务数据
+          `-- 对象存储：私有照片文件
 ```
 
-### Technology choices
+### 技术选型
 
-- Client: native WeChat Mini Program using WXML, WXSS, and JavaScript
-- Server: Go with Gin in a single deployable service
-- Database: MySQL
-- Data access: Go's `database/sql` with focused handwritten queries; no ORM in the MVP
-- Photos: private object storage such as Tencent Cloud COS
-- Edge: Nginx for TLS termination and reverse proxying
-- Deployment: one cloud server for the Go service and MySQL during the private MVP
-- Repository: one Git repository containing `miniprogram/`, `server/`, deployment configuration, and documentation
+- 客户端：原生微信小程序，使用 WXML、WXSS 和 JavaScript
+- 服务端：Go + Gin，构建为单个可部署服务
+- 数据库：MySQL
+- 数据访问：使用 Go 标准库 `database/sql` 编写聚焦的 SQL 查询，MVP 不引入 ORM
+- 照片：腾讯云 COS 等私有对象存储
+- 接入层：Nginx 负责 TLS 终止和反向代理
+- 部署：私密 MVP 阶段使用一台云服务器运行 Go 服务和 MySQL
+- 仓库：使用一个 Git 仓库，包含 `miniprogram/`、`server/`、部署配置和项目文档
 
-The design intentionally avoids microservices, event buses, and a separate admin application.
+第一版明确不使用微服务、消息总线或独立管理后台。
 
-## 6. Server modules
+## 6. 服务端模块
 
-- `auth`: WeChat code exchange, application access tokens, refresh tokens, and authentication middleware
-- `user`: profile creation and updates
-- `couple`: invitation creation, invitation acceptance, relationship lookup, and unbinding
-- `moment`: moment creation, timeline queries, latest status, and deletion
-- `storage`: photo upload authorization and temporary read URLs
+- `auth`：微信身份交换、应用访问令牌、刷新令牌和认证中间件
+- `user`：用户资料创建与更新
+- `couple`：创建邀请、接受邀请、查询关系和解除关系
+- `moment`：创建记录、查询时间线、查询最近状态和删除记录
+- `storage`：照片上传授权和临时读取地址
 
-Each module exposes a narrow service interface and owns its validation rules. HTTP handlers translate requests and responses but do not implement relationship authorization themselves.
+每个模块通过清晰、有限的服务接口对外提供能力，并负责自身的业务校验。HTTP 处理器只负责请求和响应转换，不直接实现情侣关系授权逻辑。
 
-## 7. Data model
+## 7. 数据模型
 
-### `users`
+### `users` 用户表
 
-- Internal user ID
-- Stable WeChat identifier
-- Display name
-- Avatar URL or object key
-- Created and updated timestamps
+- 内部用户 ID
+- 稳定的微信用户标识
+- 昵称
+- 头像地址或对象存储键
+- 创建时间和更新时间
 
-### `couples`
+### `couples` 情侣关系表
 
-- Relationship ID
-- Both user IDs
-- Status: active or ended
-- Bound timestamp
-- Ended timestamp
+- 关系 ID
+- 双方用户 ID
+- 状态：有效或已结束
+- 绑定时间
+- 结束时间
 
-Database constraints and a transaction prevent either participant from entering two active relationships.
+通过数据库约束与事务，防止任意一方同时进入两段有效关系。
 
-### `invite_codes`
+### `invite_codes` 邀请码表
 
-- Invitation ID and unguessable code
-- Creator user ID
-- Expiration timestamp
-- Consumed timestamp and consuming user ID
+- 邀请记录 ID 和不可预测的邀请码
+- 创建者用户 ID
+- 过期时间
+- 使用时间和使用者用户 ID
 
-### `moments`
+### `moments` 日常记录表
 
-- Moment ID
-- Relationship ID
-- Author user ID
-- Optional text
-- Optional quick-status value
-- Optional place name
-- Optional photo object key
-- Created timestamp
-- Deleted timestamp for soft deletion if used
+- 记录 ID
+- 关系 ID
+- 发布者用户 ID
+- 可选文字
+- 可选快捷状态值
+- 可选地点名称
+- 可选照片对象存储键
+- 创建时间
+- 软删除方案启用时的删除时间
 
-### `refresh_tokens`
+### `refresh_tokens` 刷新令牌表
 
-- Token identifier or hash
-- User ID
-- Expiration and revocation timestamps
+- 令牌标识或令牌哈希
+- 用户 ID
+- 过期时间和撤销时间
 
-Raw refresh tokens and WeChat session credentials are never stored in logs.
+任何原始刷新令牌和微信会话凭证都不得写入日志。
 
-## 8. Authorization and privacy
+## 8. 授权与隐私
 
-- Every protected endpoint derives the current user from the validated application token.
-- Timeline and moment lookups derive the active relationship on the server. A relationship ID supplied by the client is never sufficient authorization.
-- Only an active relationship participant may view its moments.
-- Only the author may delete a moment.
-- Invitation codes are unguessable, expire quickly, and can be consumed once.
-- The invitation acceptance operation locks and validates both users and the invitation in one database transaction.
-- Photos use random object keys and private buckets. The server issues short-lived upload or read authorization.
-- The MVP stores a user-entered place name, not a continuous location history or precise movement trail.
-- Unbinding revokes access immediately. Frozen historical data cannot be queried by either former participant.
+- 所有受保护接口都必须从经过校验的应用令牌中确定当前用户。
+- 查询时间线和记录时，由服务器根据当前用户查找有效情侣关系。客户端传入关系 ID 不能作为充分的授权依据。
+- 只有有效关系中的双方可以查看该关系下的记录。
+- 只有记录发布者可以删除该记录。
+- 邀请码必须不可预测、短时有效且仅能使用一次。
+- 接受邀请时，在一个数据库事务中锁定并校验邀请码和双方用户状态。
+- 照片使用随机对象键和私有存储桶，由服务器签发短时有效的上传或读取授权。
+- MVP 只保存用户主动填写的地点名称，不保存连续定位信息或精确行动轨迹。
+- 解除关系后立即撤销访问权限，冻结的历史数据不能被原关系中的任意一方查询。
 
-## 9. API behavior and errors
+## 9. API 行为与异常处理
 
-The API returns a consistent JSON envelope containing either data or a stable application error code with a user-safe message. Expected failures include expired login, invalid or consumed invitations, existing relationships, forbidden moment access, invalid content, failed photo authorization, and transient server errors.
+API 使用统一 JSON 响应结构，返回业务数据，或返回稳定的应用错误码和适合用户阅读的错误提示。需要处理的预期错误包括：登录失效、邀请码无效或已使用、用户已有关系、无权访问记录、内容校验失败、照片授权失败和临时服务器错误。
 
-The Mini Program:
+小程序需要：
 
-- prompts for a new login when authentication expires;
-- shows actionable messages for invitation and validation failures;
-- distinguishes photo-upload failure from post-creation failure;
-- disables the submit action while a request is in flight; and
-- allows safe retry after transient network errors.
+- 在认证过期时引导用户重新登录；
+- 对邀请和参数校验失败给出可执行的提示；
+- 区分照片上传失败和记录创建失败；
+- 请求进行中禁用提交按钮；
+- 网络临时失败后允许安全重试。
 
-The server applies field-length and file-type limits, request-size limits, authentication checks, and structured logging. Logs may contain request IDs and internal user IDs but not login codes, tokens, or WeChat session secrets.
+服务器需要限制字段长度、文件类型和请求体大小，执行完整身份校验，并使用结构化日志。日志可以包含请求 ID 和内部用户 ID，但不得包含登录 `code`、访问令牌或微信会话密钥。
 
-## 10. Testing and acceptance
+## 10. 测试与验收
 
-### Automated tests
+### 自动化测试
 
-- Unit tests for invitation expiration, single-use behavior, active-relationship rules, unbinding, and moment authorization
-- Handler tests for validation and stable error responses
-- Integration tests against MySQL for concurrent invitation acceptance and relationship-filtered timeline queries
+- 对邀请码过期、单次使用、有效关系限制、解除关系和记录授权编写单元测试
+- 对参数校验和稳定错误响应编写 HTTP 处理器测试
+- 使用 MySQL 编写并发接受邀请、按关系过滤时间线等集成测试
 
-### Manual acceptance
+### 人工验收
 
-Use two distinct WeChat accounts on two real phones to verify:
+使用两个不同的微信账号和两台真机完成以下验证：
 
-1. Login and profile creation
-2. Invitation creation and successful binding
-3. Rejection of expired, reused, and invalid invitations
-4. Text-only, status-only, and photo moments
-5. Identical and correctly ordered timelines on both phones
-6. Visibility of the partner's latest status
-7. Deletion restricted to the author
-8. No access from an unbound third account
-9. Immediate access loss after unbinding
-10. Clear behavior during network and photo-upload failures
+1. 登录和个人资料创建
+2. 邀请码创建和成功绑定
+3. 过期、重复使用和无效邀请码均被拒绝
+4. 成功发布纯文字、纯状态及带照片的记录
+5. 两台手机看到相同且顺序正确的时间线
+6. 首页正确展示伴侣最近状态
+7. 只有发布者可以删除自己的记录
+8. 未绑定的第三个账号无法访问双方数据
+9. 解除关系后双方立即失去访问权限
+10. 网络失败和照片上传失败时提供清晰反馈
 
-## 11. Deferred product questions
+## 11. 后续产品问题
 
-Later iterations must explicitly design:
+后续迭代需要单独设计以下事项：
 
-- permanent deletion, retention, and export of memories after unbinding;
-- notification consent and frequency;
-- richer memory formats and anniversary review;
-- onboarding for public users;
-- abuse reporting and account recovery; and
-- monetization based on validated user behavior rather than speculative features.
+- 解除关系后共同记忆的永久删除、保留和导出机制
+- 通知授权与通知频率
+- 更丰富的记忆形式和纪念日回顾
+- 面向公开用户的引导流程
+- 滥用举报和账号恢复机制
+- 基于真实用户行为验证商业模式，而不是提前堆积付费功能
