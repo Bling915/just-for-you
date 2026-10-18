@@ -56,6 +56,29 @@ func (r MySQLRepository) AcceptInvitation(ctx context.Context, code string, user
 	if err = invitation.CanBeAcceptedBy(userID, now); err != nil {
 		return domain.Relationship{}, err
 	}
+	// Lock stable user rows in a deterministic order so different invitations
+	// cannot concurrently bind the same user into two active relationships.
+	first, second := creator, userID
+	if first > second {
+		first, second = second, first
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT id FROM users WHERE id IN (?,?) ORDER BY id FOR UPDATE", first, second)
+	if err != nil {
+		return domain.Relationship{}, err
+	}
+	locked := 0
+	for rows.Next() {
+		locked++
+	}
+	if err := rows.Close(); err != nil {
+		return domain.Relationship{}, err
+	}
+	if err := rows.Err(); err != nil {
+		return domain.Relationship{}, err
+	}
+	if locked != 2 {
+		return domain.Relationship{}, domain.ErrInvitationInvalid
+	}
 	var count int
 	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM couples WHERE status='active' AND (user_a_id IN (?,?) OR user_b_id IN (?,?)) FOR UPDATE", userID, creator, userID, creator).Scan(&count); err != nil {
 		return domain.Relationship{}, err

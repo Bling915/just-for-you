@@ -47,13 +47,16 @@ func (f *fakeUploads) ValidateGrants(_ context.Context, userID int64, keys []str
 	return result, nil
 }
 
-type fakeStorage struct{}
+type fakeStorage struct{ verifyErr error }
 
 func (fakeStorage) SignUpload(context.Context, string, string, time.Time) (string, error) {
 	return "https://upload.test", nil
 }
 func (fakeStorage) SignRead(context.Context, string, time.Time) (string, error) {
 	return "https://read.test", nil
+}
+func (f fakeStorage) VerifyUploaded(context.Context, string, string, int64) error {
+	return f.verifyErr
 }
 
 type memoryMoments struct {
@@ -97,6 +100,18 @@ func TestPublishMomentRejectsMissingRelationship(t *testing.T) {
 func TestPublishMomentRejectsInvalidPhotoGrant(t *testing.T) {
 	service := newMomentService(time.Now(), fakeRelationships{active: ActiveRelationship{ID: 9}}, &fakeUploads{grants: map[string]UploadGrant{}}, &memoryMoments{})
 	_, err := service.PublishMoment(context.Background(), 1, PublishInput{PhotoKeys: []string{"forged"}})
+	if !errors.Is(err, momentdomain.ErrInvalidUpload) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestPublishMomentRejectsMissingOrInvalidStoredObject(t *testing.T) {
+	now := time.Now()
+	uploads := &fakeUploads{grants: map[string]UploadGrant{
+		"photo": {ObjectKey: "photo", OwnerID: 1, ContentType: "image/jpeg", ExpiresAt: now.Add(time.Minute)},
+	}}
+	service := NewService(fakeRelationships{active: ActiveRelationship{ID: 9}}, uploads, &memoryMoments{}, fakeStorage{verifyErr: momentdomain.ErrInvalidUpload}, fixedClock{now})
+	_, err := service.PublishMoment(context.Background(), 1, PublishInput{PhotoKeys: []string{"photo"}})
 	if !errors.Is(err, momentdomain.ErrInvalidUpload) {
 		t.Fatalf("err=%v", err)
 	}

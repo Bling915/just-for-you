@@ -30,7 +30,7 @@ func (h *Handler) RegisterProtected(group *gin.RouterGroup) {
 func (h *Handler) create(c *gin.Context) {
 	x, err := h.useCases.CreateInvitation(c, httpserver.UserID(c))
 	if err != nil {
-		httpserver.WriteError(c, 400, "INVITE_FAILED", "无法创建邀请码")
+		writeDomainError(c, err)
 		return
 	}
 	httpserver.WriteData(c, 201, invitationDTO(x))
@@ -74,22 +74,29 @@ func (h *Handler) end(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 func writeDomainError(c *gin.Context, err error) {
-	status := 400
-	code := "INVITE_INVALID"
+	status := http.StatusInternalServerError
+	code := "INTERNAL_ERROR"
 	switch {
+	case errors.Is(err, domain.ErrInvitationInvalid):
+		status, code = http.StatusBadRequest, "INVITE_INVALID"
 	case errors.Is(err, domain.ErrInvitationExpired):
-		code = "INVITE_EXPIRED"
+		status, code = http.StatusBadRequest, "INVITE_EXPIRED"
 	case errors.Is(err, domain.ErrInvitationUsed):
-		code = "INVITE_USED"
+		status, code = http.StatusBadRequest, "INVITE_USED"
 	case errors.Is(err, domain.ErrCannotBindSelf):
-		code = "CANNOT_BIND_SELF"
+		status, code = http.StatusBadRequest, "CANNOT_BIND_SELF"
 	case errors.Is(err, domain.ErrAlreadyBound):
-		code = "ALREADY_BOUND"
+		status, code = http.StatusBadRequest, "ALREADY_BOUND"
 	case errors.Is(err, domain.ErrNoActiveRelationship):
 		code = "NO_ACTIVE_COUPLE"
 		status = 404
 	}
-	httpserver.WriteError(c, status, code, "操作失败")
+	message := "操作失败"
+	if status == http.StatusInternalServerError {
+		message = "服务暂时不可用"
+		_ = c.Error(err)
+	}
+	httpserver.WriteError(c, status, code, message)
 }
 func invitationDTO(x domain.Invitation) gin.H {
 	return gin.H{"code": x.Code(), "creatorUserId": x.CreatorID(), "expiresAt": x.ExpiresAt()}

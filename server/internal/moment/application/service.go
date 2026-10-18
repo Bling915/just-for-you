@@ -50,6 +50,11 @@ func (s *Service) PublishMoment(ctx context.Context, userID int64, input Publish
 	if err != nil {
 		return domain.Moment{}, err
 	}
+	for _, grant := range grants {
+		if err := s.photos.VerifyUploaded(ctx, grant.ObjectKey, grant.ContentType, 10<<20); err != nil {
+			return domain.Moment{}, err
+		}
+	}
 	moment, err := domain.NewMoment(userID, relationship.ID, input.Text, input.Status, input.PlaceName, input.PhotoKeys, s.clock.Now())
 	if err != nil {
 		return domain.Moment{}, err

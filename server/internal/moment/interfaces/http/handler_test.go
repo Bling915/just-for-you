@@ -1,11 +1,73 @@
 package momenthttp
-import("context";"net/http";"net/http/httptest";"strings";"testing";"github.com/gin-gonic/gin";"github.com/nanfang/just-for-you/server/internal/moment/application";"github.com/nanfang/just-for-you/server/internal/moment/domain";relationshipdomain "github.com/nanfang/just-for-you/server/internal/relationship/domain")
-type fakeUseCases struct{publishErr error;deleteErr error}
-func(fakeUseCases)RequestPhotoUpload(context.Context,int64,application.UploadInput)(application.UploadGrant,error){return application.UploadGrant{},domain.ErrInvalidUpload}
-func(f fakeUseCases)PublishMoment(context.Context,int64,application.PublishInput)(domain.Moment,error){return domain.Moment{},f.publishErr}
-func(fakeUseCases)GetTimeline(context.Context,int64,string,int)(application.TimelinePage,error){return application.TimelinePage{},nil}
-func(fakeUseCases)GetHome(context.Context,int64)(application.Home,error){return application.Home{},nil}
-func(f fakeUseCases)DeleteMoment(context.Context,int64,int64)error{return f.deleteErr}
-func routerFor(useCases UseCases)*gin.Engine{gin.SetMode(gin.TestMode);router:=gin.New();group:=router.Group("/v1",func(c *gin.Context){c.Set("userID",int64(1))});NewHandler(useCases).RegisterProtected(group);return router}
-func TestPublishMapsDomainErrors(t *testing.T){cases:=[]struct{err error;code string}{{domain.ErrTooManyPhotos,"TOO_MANY_PHOTOS"},{domain.ErrEmptyMoment,"EMPTY_MOMENT"},{domain.ErrInvalidUpload,"INVALID_UPLOAD"},{relationshipdomain.ErrNoActiveRelationship,"NO_ACTIVE_COUPLE"}};for _,item:=range cases{t.Run(item.code,func(t *testing.T){response:=httptest.NewRecorder();request:=httptest.NewRequest(http.MethodPost,"/v1/moments",strings.NewReader(`{"text":"hello"}`));request.Header.Set("Content-Type","application/json");routerFor(fakeUseCases{publishErr:item.err}).ServeHTTP(response,request);if !strings.Contains(response.Body.String(),`"code":"`+item.code+`"`){t.Fatalf("body=%s",response.Body.String())}})}}
-func TestDeleteMapsNotAuthor(t *testing.T){response:=httptest.NewRecorder();routerFor(fakeUseCases{deleteErr:domain.ErrNotAuthor}).ServeHTTP(response,httptest.NewRequest(http.MethodDelete,"/v1/moments/9",nil));if response.Code!=http.StatusForbidden||!strings.Contains(response.Body.String(),`"code":"NOT_AUTHOR"`){t.Fatalf("status=%d body=%s",response.Code,response.Body.String())}}
+
+import (
+	"context"
+	"errors"
+	"github.com/gin-gonic/gin"
+	"github.com/nanfang/just-for-you/server/internal/moment/application"
+	"github.com/nanfang/just-for-you/server/internal/moment/domain"
+	relationshipdomain "github.com/nanfang/just-for-you/server/internal/relationship/domain"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+type fakeUseCases struct {
+	publishErr error
+	deleteErr  error
+}
+
+func (fakeUseCases) RequestPhotoUpload(context.Context, int64, application.UploadInput) (application.UploadGrant, error) {
+	return application.UploadGrant{}, domain.ErrInvalidUpload
+}
+func (f fakeUseCases) PublishMoment(context.Context, int64, application.PublishInput) (domain.Moment, error) {
+	return domain.Moment{}, f.publishErr
+}
+func (fakeUseCases) GetTimeline(context.Context, int64, string, int) (application.TimelinePage, error) {
+	return application.TimelinePage{}, nil
+}
+func (fakeUseCases) GetHome(context.Context, int64) (application.Home, error) {
+	return application.Home{}, nil
+}
+func (f fakeUseCases) DeleteMoment(context.Context, int64, int64) error { return f.deleteErr }
+func routerFor(useCases UseCases) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	group := router.Group("/v1", func(c *gin.Context) { c.Set("userID", int64(1)) })
+	NewHandler(useCases).RegisterProtected(group)
+	return router
+}
+func TestPublishMapsDomainErrors(t *testing.T) {
+	cases := []struct {
+		err  error
+		code string
+	}{{domain.ErrTooManyPhotos, "TOO_MANY_PHOTOS"}, {domain.ErrEmptyMoment, "EMPTY_MOMENT"}, {domain.ErrInvalidUpload, "INVALID_UPLOAD"}, {relationshipdomain.ErrNoActiveRelationship, "NO_ACTIVE_COUPLE"}}
+	for _, item := range cases {
+		t.Run(item.code, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodPost, "/v1/moments", strings.NewReader(`{"text":"hello"}`))
+			request.Header.Set("Content-Type", "application/json")
+			routerFor(fakeUseCases{publishErr: item.err}).ServeHTTP(response, request)
+			if !strings.Contains(response.Body.String(), `"code":"`+item.code+`"`) {
+				t.Fatalf("body=%s", response.Body.String())
+			}
+		})
+	}
+}
+func TestDeleteMapsNotAuthor(t *testing.T) {
+	response := httptest.NewRecorder()
+	routerFor(fakeUseCases{deleteErr: domain.ErrNotAuthor}).ServeHTTP(response, httptest.NewRequest(http.MethodDelete, "/v1/moments/9", nil))
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"NOT_AUTHOR"`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+func TestPublishMapsInfrastructureFailureToServerError(t *testing.T) {
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/moments", strings.NewReader(`{"text":"hello"}`))
+	request.Header.Set("Content-Type", "application/json")
+	routerFor(fakeUseCases{publishErr: errors.New("database unavailable")}).ServeHTTP(response, request)
+	if response.Code != http.StatusInternalServerError || !strings.Contains(response.Body.String(), `"code":"INTERNAL_ERROR"`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}

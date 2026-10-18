@@ -40,7 +40,12 @@ func (h *Handler) login(c *gin.Context) {
 	}
 	session, err := h.useCases.LoginWithWeChat(c, input.Code)
 	if err != nil {
-		httpserver.WriteError(c, 400, "LOGIN_FAILED", "登录失败")
+		if errors.Is(err, domain.ErrCodeRequired) {
+			httpserver.WriteError(c, http.StatusBadRequest, "LOGIN_FAILED", "登录凭证不能为空")
+		} else {
+			_ = c.Error(err)
+			httpserver.WriteError(c, http.StatusServiceUnavailable, "TEMPORARY_UNAVAILABLE", "登录服务暂时不可用")
+		}
 		return
 	}
 	httpserver.WriteData(c, 200, session)
@@ -55,7 +60,12 @@ func (h *Handler) refresh(c *gin.Context) {
 	}
 	session, err := h.useCases.RefreshSession(c, input.RefreshToken)
 	if err != nil {
-		httpserver.WriteError(c, 401, "INVALID_REFRESH", "请重新登录")
+		if errors.Is(err, domain.ErrInvalidRefreshToken) {
+			httpserver.WriteError(c, http.StatusUnauthorized, "INVALID_REFRESH", "请重新登录")
+		} else {
+			_ = c.Error(err)
+			httpserver.WriteError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "服务暂时不可用")
+		}
 		return
 	}
 	httpserver.WriteData(c, 200, session)
@@ -72,7 +82,12 @@ func (h *Handler) logout(c *gin.Context) {
 func (h *Handler) getMe(c *gin.Context) {
 	user, err := h.useCases.GetMe(c, httpserver.UserID(c))
 	if err != nil {
-		httpserver.WriteError(c, 404, "USER_NOT_FOUND", "用户不存在")
+		if errors.Is(err, domain.ErrUserNotFound) {
+			httpserver.WriteError(c, http.StatusNotFound, "USER_NOT_FOUND", "用户不存在")
+		} else {
+			_ = c.Error(err)
+			httpserver.WriteError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "服务暂时不可用")
+		}
 		return
 	}
 	httpserver.WriteData(c, 200, toDTO(user))
@@ -88,11 +103,12 @@ func (h *Handler) updateProfile(c *gin.Context) {
 	}
 	user, err := h.useCases.UpdateProfile(c, httpserver.UserID(c), input.DisplayName, input.AvatarRef)
 	if err != nil {
-		code := "PROFILE_UPDATE_FAILED"
 		if errors.Is(err, domain.ErrInvalidNickname) {
-			code = "INVALID_PROFILE"
+			httpserver.WriteError(c, http.StatusBadRequest, "INVALID_PROFILE", "昵称需为 1 至 30 个字符")
+		} else {
+			_ = c.Error(err)
+			httpserver.WriteError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "服务暂时不可用")
 		}
-		httpserver.WriteError(c, 400, code, "昵称需为 1 至 30 个字符")
 		return
 	}
 	httpserver.WriteData(c, 200, toDTO(user))

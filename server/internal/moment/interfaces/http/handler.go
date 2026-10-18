@@ -119,26 +119,29 @@ func optionalPositiveInt(raw string) (int, error) {
 }
 
 func writeError(c *gin.Context, err error) {
-	status, code, message := http.StatusBadRequest, "INVALID_ARGUMENT", "操作失败"
+	status, code, message := http.StatusInternalServerError, "INTERNAL_ERROR", "服务暂时不可用"
 	switch {
 	case errors.Is(err, domain.ErrTooManyPhotos):
-		code, message = "TOO_MANY_PHOTOS", "最多上传九张照片"
+		status, code, message = http.StatusBadRequest, "TOO_MANY_PHOTOS", "最多上传九张照片"
 	case errors.Is(err, domain.ErrEmptyMoment):
-		code, message = "EMPTY_MOMENT", "请记录一些内容"
+		status, code, message = http.StatusBadRequest, "EMPTY_MOMENT", "请记录一些内容"
 	case errors.Is(err, domain.ErrInvalidUpload), errors.Is(err, domain.ErrDuplicatePhoto):
-		code, message = "INVALID_UPLOAD", "照片无效或已过期"
+		status, code, message = http.StatusBadRequest, "INVALID_UPLOAD", "照片无效或已过期"
 	case errors.Is(err, domain.ErrTextTooLong):
-		code, message = "TEXT_TOO_LONG", "文字不能超过 500 个字"
+		status, code, message = http.StatusBadRequest, "TEXT_TOO_LONG", "文字不能超过 500 个字"
 	case errors.Is(err, domain.ErrPlaceTooLong):
-		code, message = "PLACE_TOO_LONG", "位置名称不能超过 80 个字"
+		status, code, message = http.StatusBadRequest, "PLACE_TOO_LONG", "位置名称不能超过 80 个字"
 	case errors.Is(err, domain.ErrInvalidStatus):
-		code, message = "INVALID_STATUS", "状态无效"
+		status, code, message = http.StatusBadRequest, "INVALID_STATUS", "状态无效"
 	case errors.Is(err, domain.ErrNotAuthor):
 		status, code, message = http.StatusForbidden, "NOT_AUTHOR", "只能删除自己的动态"
 	case errors.Is(err, domain.ErrMomentNotFound):
 		status, code, message = http.StatusNotFound, "MOMENT_NOT_FOUND", "动态不存在"
 	case errors.Is(err, relationshipdomain.ErrNoActiveRelationship):
 		status, code, message = http.StatusNotFound, "NO_ACTIVE_COUPLE", "还没有绑定情侣关系"
+	}
+	if status >= http.StatusInternalServerError {
+		_ = c.Error(err)
 	}
 	httpserver.WriteError(c, status, code, message)
 }

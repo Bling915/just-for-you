@@ -39,7 +39,7 @@ Content-Type: application/json
 {"contentType":"image/jpeg","size":245760}
 ```
 
-返回 `objectKey`、`contentType`、`expiresAt` 和 `uploadUrl`。客户端用 `PUT` 将原始文件上传到 `uploadUrl`。支持 JPEG、PNG、WebP，单张不超过 10 MiB。
+返回 `objectKey`、`contentType`、`expiresAt` 和 `uploadUrl`。客户端用 `PUT` 将原始文件上传到 `uploadUrl`，并设置与申请时完全一致的 `Content-Type` 请求头。支持 JPEG、PNG、WebP，单张不超过 10 MiB；发布前服务端还会从 COS 验证对象确实存在，以及实际类型和大小。
 
 ### 发布记录
 

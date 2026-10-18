@@ -31,6 +31,7 @@ type UploadAuthorizer interface {
 type PhotoStorage interface {
 	SignUpload(context.Context, string, string, time.Time) (string, error)
 	SignRead(context.Context, string, time.Time) (string, error)
+	VerifyUploaded(context.Context, string, string, int64) error
 }
 type TimelinePage struct {
 	Moments    []domain.Moment   `json:"moments"`
