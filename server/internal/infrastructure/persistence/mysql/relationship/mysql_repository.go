@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	application "github.com/nanfang/just-for-you/server/internal/application/relationship"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	"time"
 )
@@ -162,6 +163,34 @@ func (r MySQLRepository) GetActive(ctx context.Context, userID int64) (domain.Re
 		endedAt = &ended.Time
 	}
 	return domain.RestoreRelationship(id, a, b, status, bound, endedAt), nil
+}
+func (r MySQLRepository) GetActiveDetails(ctx context.Context, userID int64) (domain.Relationship, application.PartnerProfile, bool, error) {
+	var id, a, b, partnerID int64
+	var status, displayName, avatarURL string
+	var bound time.Time
+	var ended sql.NullTime
+	var soloTest bool
+	err := r.db.QueryRowContext(ctx, `
+		SELECT c.id,c.user_a_id,c.user_b_id,c.status,c.bound_at,c.ended_at,
+		       partner.id,partner.display_name,partner.avatar_ref,
+		       partner.wechat_openid LIKE 'solo-test-partner:%'
+		FROM couples c
+		JOIN users partner ON partner.id=CASE WHEN c.user_a_id=? THEN c.user_b_id ELSE c.user_a_id END
+		WHERE c.status='active' AND (c.user_a_id=? OR c.user_b_id=?)`, userID, userID, userID).
+		Scan(&id, &a, &b, &status, &bound, &ended, &partnerID, &displayName, &avatarURL, &soloTest)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Relationship{}, application.PartnerProfile{}, false, domain.ErrNoActiveRelationship
+	}
+	if err != nil {
+		return domain.Relationship{}, application.PartnerProfile{}, false, err
+	}
+	var endedAt *time.Time
+	if ended.Valid {
+		endedAt = &ended.Time
+	}
+	relationship := domain.RestoreRelationship(id, a, b, status, bound, endedAt)
+	partner := application.PartnerProfile{UserID: partnerID, DisplayName: displayName, AvatarURL: avatarURL}
+	return relationship, partner, soloTest, nil
 }
 func (r MySQLRepository) End(ctx context.Context, userID int64, now time.Time) error {
 	result, err := r.db.ExecContext(ctx, "UPDATE couples SET status='ended',ended_at=? WHERE status='active' AND (user_a_id=? OR user_b_id=?)", now, userID, userID)

@@ -20,7 +20,7 @@ type BindRelationshipExecutor interface {
 	Execute(context.Context, application.BindRelationshipCommand) (domain.Relationship, error)
 }
 type GetRelationshipExecutor interface {
-	Execute(context.Context, application.GetRelationshipQuery) (domain.Relationship, error)
+	Execute(context.Context, application.GetRelationshipQuery) (application.CurrentRelationship, error)
 }
 type EndRelationshipExecutor interface {
 	Execute(context.Context, application.EndRelationshipCommand) error
@@ -87,7 +87,7 @@ func (h *Handler) get(c *gin.Context) {
 		writeDomainError(c, err)
 		return
 	}
-	httpserver.WriteData(c, 200, relationshipDTO(x))
+	httpserver.WriteData(c, 200, currentRelationshipDTO(x))
 }
 func (h *Handler) end(c *gin.Context) {
 	if err := h.useCases.EndRelationship.Execute(c, application.EndRelationshipCommand{UserID: httpserver.UserID(c)}); err != nil {
@@ -134,4 +134,12 @@ func invitationDTO(x domain.Invitation) gin.H {
 }
 func relationshipDTO(x domain.Relationship) gin.H {
 	return gin.H{"id": x.ID(), "userAId": x.UserAID(), "userBId": x.UserBID(), "status": x.Status(), "boundAt": x.BoundAt()}
+}
+func currentRelationshipDTO(x application.CurrentRelationship) gin.H {
+	relationship := x.Relationship
+	return gin.H{
+		"id": relationship.ID(), "userAId": relationship.UserAID(), "userBId": relationship.UserBID(),
+		"status": relationship.Status(), "boundAt": relationship.BoundAt(), "soloTest": x.SoloTest,
+		"partner": gin.H{"userId": x.Partner.UserID, "displayName": x.Partner.DisplayName, "avatarUrl": x.Partner.AvatarURL},
+	}
 }

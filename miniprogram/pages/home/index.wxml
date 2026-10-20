@@ -3,6 +3,10 @@
   <block wx:if="{{state === 'loading'}}"><view class="orb-skeleton"></view><skeleton-card/><skeleton-card/></block>
   <block wx:else>
     <view wx:if="{{state === 'error-with-cache'}}" class="notice" bindtap="retry">网络打了个盹，正在展示上次内容 · 点此重试</view>
+    <view wx:if="{{relationship}}" class="partner-card">
+      <view class="partner-avatar"><image wx:if="{{relationship.partner.avatarUrl}}" src="{{relationship.partner.avatarUrl}}" mode="aspectFill"/><text wx:else>{{partnerInitial}}</text></view>
+      <view class="partner-copy"><view><text>{{relationship.partner.displayName || '你的搭子'}}</text><text wx:if="{{relationship.soloTest}}" class="solo-badge">单人测试</text></view><view>牵手第 {{relationshipDays}} 天</view></view>
+    </view>
     <view class="hero"><view class="hero-caption">TA 的此刻</view><status-orb moment="{{home.partnerLatestStatus}}"/></view>
     <view class="section-head"><view>最近的小事</view><text>{{moments.length ? '慢慢收藏每个今天' : '从今天开始'}}</text></view>
     <empty-state wx:if="{{state === 'empty'}}"/>

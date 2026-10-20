@@ -1,5 +1,6 @@
 const { relationshipService } = require('../../services/relationships');
 const { messageForError } = require('../../utils/error-copy');
+const { pendingInvitation } = require('../../utils/pending-invitation');
 
 Page({
   data: { code: '', expiresAt: '', created: false, invitation: null, loading: true, submitting: false, error: '' },
@@ -13,11 +14,15 @@ Page({
     finally { this.setData({ loading: false }); }
   },
   copy() { wx.setClipboardData({ data: this.data.code }); },
+  onShareAppMessage() {
+    return { title: '和我一起，把小事慢慢过成我们的故事', path: `/pages/welcome/index?invite=${encodeURIComponent(this.data.code)}` };
+  },
   async bind() {
     if (this.data.submitting) return;
     this.setData({ submitting: true, error: '' });
     try {
       await relationshipService.bind(this.data.code);
+      pendingInvitation.consume();
       wx.showToast({ title: '绑定成功', icon: 'success' });
       setTimeout(() => wx.switchTab({ url: '/pages/home/index' }), 500);
     } catch (error) { this.setData({ error: messageForError(error.code) }); }

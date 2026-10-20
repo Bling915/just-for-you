@@ -76,6 +76,20 @@ func (r *memoryRepository) GetActive(_ context.Context, userID int64) (domain.Re
 	}
 	return x, nil
 }
+func (r *memoryRepository) GetActiveDetails(ctx context.Context, userID int64) (domain.Relationship, PartnerProfile, bool, error) {
+	relationship, err := r.GetActive(ctx, userID)
+	if err != nil {
+		return domain.Relationship{}, PartnerProfile{}, false, err
+	}
+	partnerID := relationship.UserAID()
+	if partnerID == userID {
+		partnerID = relationship.UserBID()
+	}
+	if partnerID >= 1000 {
+		return relationship, PartnerProfile{UserID: partnerID, DisplayName: "测试搭子"}, true, nil
+	}
+	return relationship, PartnerProfile{UserID: partnerID, DisplayName: "小南", AvatarURL: "cos://avatar"}, false, nil
+}
 func (r *memoryRepository) End(_ context.Context, userID int64, now time.Time) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -157,5 +171,38 @@ func TestEnableSoloTestRejectsAlreadyBoundUser(t *testing.T) {
 	_, err := useCase.Execute(context.Background(), EnableSoloTestCommand{UserID: 7})
 	if !errors.Is(err, domain.ErrAlreadyBound) {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestGetRelationshipReturnsPartnerProfileWithoutPrivateIdentity(t *testing.T) {
+	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	relationship := domain.NewRelationship(9, 7, 8, now)
+	repo := &memoryRepository{active: map[int64]domain.Relationship{7: relationship, 8: relationship}}
+	useCase := NewGetRelationshipUseCase(repo)
+
+	result, err := useCase.Execute(context.Background(), GetRelationshipQuery{UserID: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Partner.UserID != 8 || result.Partner.DisplayName != "小南" || result.Partner.AvatarURL != "cos://avatar" {
+		t.Fatalf("partner=%+v", result.Partner)
+	}
+	if result.SoloTest {
+		t.Fatal("real relationship reported as solo test")
+	}
+}
+
+func TestGetRelationshipMarksSoloTestPartner(t *testing.T) {
+	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	relationship := domain.NewRelationship(10, 7, 1007, now)
+	repo := &memoryRepository{active: map[int64]domain.Relationship{7: relationship, 1007: relationship}}
+	useCase := NewGetRelationshipUseCase(repo)
+
+	result, err := useCase.Execute(context.Background(), GetRelationshipQuery{UserID: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.SoloTest {
+		t.Fatal("solo relationship was not identified")
 	}
 }

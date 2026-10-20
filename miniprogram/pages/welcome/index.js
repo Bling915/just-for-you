@@ -3,9 +3,11 @@ const { userService } = require('../../services/users');
 const { sessionStore } = require('../../store/session');
 const { messageForError } = require('../../utils/error-copy');
 const { appState } = require('../../store/app-state');
+const { pendingInvitation } = require('../../utils/pending-invitation');
 
 Page({
   data: { submitting: false, error: '' },
+  onLoad(options) { pendingInvitation.capture(options && options.invite); },
   async login() {
     if (this.data.submitting) return;
     this.setData({ submitting: true, error: '' });

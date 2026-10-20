@@ -1,10 +1,13 @@
 const { relationshipService } = require('../../services/relationships');
 const { normalizeInvitationCode, messageForError } = require('../../utils/error-copy');
 const { APP_CONFIG } = require('../../config');
+const { pendingInvitation } = require('../../utils/pending-invitation');
 
 Page({
   data: { code: '', creating: false, checking: false, soloTesting: false, soloTestEnabled: APP_CONFIG.soloTestEnabled, error: '', relationship: null },
   async onLoad() {
+    const pendingCode = pendingInvitation.peek();
+    if (pendingCode) this.setData({ code: pendingCode });
     try { this.setData({ relationship: await relationshipService.getCurrent() }); return wx.switchTab({url:'/pages/home/index'}); } catch (error) {
       if (error.code !== 'NO_ACTIVE_COUPLE') this.setData({ error: messageForError(error.code) });
     }

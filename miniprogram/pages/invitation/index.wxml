@@ -4,7 +4,8 @@
   <block wx:elif="{{created}}">
     <view class="eyebrow">你们的专属邀请码</view><view class="code">{{code}}</view>
     <view class="hint">十分钟内有效，只能使用一次。把它发给想一起记录小事的人。</view>
-    <button class="primary" bindtap="copy">复制邀请码</button>
+    <button class="primary" open-type="share">分享给 TA</button>
+    <button class="secondary" bindtap="copy">复制邀请码</button>
   </block>
   <block wx:else>
     <view class="moon">☾</view><view class="headline">有人想和你一起记录小事</view>

@@ -12,5 +12,6 @@ type Repository interface {
 	AcceptInvitation(context.Context, string, int64, time.Time) (domain.Relationship, error)
 	CreateSoloRelationship(context.Context, int64, time.Time) (domain.Relationship, error)
 	GetActive(context.Context, int64) (domain.Relationship, error)
+	GetActiveDetails(context.Context, int64) (domain.Relationship, PartnerProfile, bool, error)
 	End(context.Context, int64, time.Time) error
 }

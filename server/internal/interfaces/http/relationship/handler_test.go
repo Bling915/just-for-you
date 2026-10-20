@@ -34,8 +34,17 @@ func (f fakeBind) Execute(context.Context, application.BindRelationshipCommand) 
 
 type fakeGet struct{}
 
-func (fakeGet) Execute(context.Context, application.GetRelationshipQuery) (domain.Relationship, error) {
-	return domain.Relationship{}, domain.ErrNoActiveRelationship
+func (fakeGet) Execute(context.Context, application.GetRelationshipQuery) (application.CurrentRelationship, error) {
+	return application.CurrentRelationship{}, domain.ErrNoActiveRelationship
+}
+
+type fakeGetProfile struct{}
+
+func (fakeGetProfile) Execute(context.Context, application.GetRelationshipQuery) (application.CurrentRelationship, error) {
+	return application.CurrentRelationship{
+		Relationship: domain.NewRelationship(9, 7, 8, time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)),
+		Partner:      application.PartnerProfile{UserID: 8, DisplayName: "小南", AvatarURL: "cos://avatar"},
+	}, nil
 }
 
 type fakeEnd struct{}
@@ -80,6 +89,24 @@ func TestGetMapsNoActiveRelationship(t *testing.T) {
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/couples/me", nil))
 	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"NO_ACTIVE_COUPLE"`) {
 		t.Fatalf("body=%s", response.Body.String())
+	}
+}
+
+func TestGetReturnsPartnerProfileWithoutOpenID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	group := router.Group("/v1", func(c *gin.Context) { c.Set("userID", int64(7)) })
+	useCases := fakeUseCases(nil)
+	useCases.GetRelationship = fakeGetProfile{}
+	NewHandler(useCases).RegisterProtected(group)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/couples/me", nil))
+	body := response.Body.String()
+	if response.Code != http.StatusOK || !strings.Contains(body, `"partner"`) || !strings.Contains(body, `"displayName":"小南"`) || !strings.Contains(body, `"soloTest":false`) {
+		t.Fatalf("status=%d body=%s", response.Code, body)
+	}
+	if strings.Contains(strings.ToLower(body), "openid") {
+		t.Fatalf("private identity leaked: %s", body)
 	}
 }
 
