@@ -6,20 +6,21 @@ import (
 	"time"
 
 	identityapplication "github.com/nanfang/just-for-you/server/internal/application/identity"
+	momentapplication "github.com/nanfang/just-for-you/server/internal/application/moment"
 	relationshipapplication "github.com/nanfang/just-for-you/server/internal/application/relationship"
 	infraClock "github.com/nanfang/just-for-you/server/internal/infrastructure/clock"
 	"github.com/nanfang/just-for-you/server/internal/infrastructure/config"
 	wechat "github.com/nanfang/just-for-you/server/internal/infrastructure/identity/wechat"
 	identitymysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/identity"
+	momentmysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/moment"
 	relationshipmysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/relationship"
 	database "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/shared"
 	jwt "github.com/nanfang/just-for-you/server/internal/infrastructure/security/jwt"
+	cos "github.com/nanfang/just-for-you/server/internal/infrastructure/storage/cos"
 	identityhttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/identity"
+	momenthttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/moment"
 	relationshiphttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/relationship"
 	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
-	momentapplication "github.com/nanfang/just-for-you/server/internal/moment/application"
-	momentinfrastructure "github.com/nanfang/just-for-you/server/internal/moment/infrastructure"
-	momenthttp "github.com/nanfang/just-for-you/server/internal/moment/interfaces/http"
 )
 
 func main() {
@@ -51,24 +52,25 @@ func main() {
 		GetRelationship:   getRelationship,
 		EndRelationship:   relationshipapplication.NewEndRelationshipUseCase(relationshipRepository, infraClock.System{}),
 	}
-	momentRepository := momentinfrastructure.NewMySQLRepository(db)
-	photoStorage, err := momentinfrastructure.NewCOSStorage(cfg.COSBucketURL, cfg.COSSecretID, cfg.COSSecretKey)
+	momentRepository := momentmysql.NewMySQLRepository(db)
+	photoStorage, err := cos.NewCOSStorage(cfg.COSBucketURL, cfg.COSSecretID, cfg.COSSecretKey)
 	if err != nil {
 		log.Fatal(err)
 	}
-	momentService := momentapplication.NewService(
-		momentinfrastructure.NewActiveRelationshipReader(getRelationship),
-		momentRepository,
-		momentRepository,
-		photoStorage,
-		infraClock.System{},
-	)
+	relationshipReader := momentmysql.NewActiveRelationshipReader(getRelationship)
+	momentUseCases := momenthttp.UseCases{
+		RequestPhotoUpload: momentapplication.NewRequestPhotoUploadUseCase(momentRepository, photoStorage, infraClock.System{}),
+		PublishMoment:      momentapplication.NewPublishMomentUseCase(relationshipReader, momentRepository, momentRepository, photoStorage, infraClock.System{}),
+		GetTimeline:        momentapplication.NewGetTimelineUseCase(relationshipReader, momentRepository, photoStorage, infraClock.System{}),
+		GetHome:            momentapplication.NewGetHomeUseCase(relationshipReader, momentRepository, photoStorage, infraClock.System{}),
+		DeleteMoment:       momentapplication.NewDeleteMomentUseCase(relationshipReader, momentRepository),
+	}
 	router := httpserver.NewRouter(httpserver.Dependencies{
 		Tokens: tokens,
 		Registrars: []httpserver.RouteRegistrar{
 			identityhttp.NewHandler(identityUseCases),
 			relationshiphttp.NewHandler(relationshipUseCases),
-			momenthttp.NewHandler(momentService),
+			momenthttp.NewHandler(momentUseCases),
 		},
 	})
 	server := &http.Server{

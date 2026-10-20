@@ -4,33 +4,45 @@ import (
 	"context"
 	"errors"
 	"github.com/gin-gonic/gin"
+	application "github.com/nanfang/just-for-you/server/internal/application/moment"
+	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
 	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
-	"github.com/nanfang/just-for-you/server/internal/moment/application"
-	"github.com/nanfang/just-for-you/server/internal/moment/domain"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
-type fakeUseCases struct {
-	publishErr error
-	deleteErr  error
-}
+type fakeUpload struct{}
 
-func (fakeUseCases) RequestPhotoUpload(context.Context, int64, application.UploadInput) (application.UploadGrant, error) {
+func (fakeUpload) Execute(context.Context, application.RequestPhotoUploadCommand) (application.UploadGrant, error) {
 	return application.UploadGrant{}, domain.ErrInvalidUpload
 }
-func (f fakeUseCases) PublishMoment(context.Context, int64, application.PublishInput) (domain.Moment, error) {
-	return domain.Moment{}, f.publishErr
+
+type fakePublish struct{ err error }
+
+func (f fakePublish) Execute(context.Context, application.PublishMomentCommand) (domain.Moment, error) {
+	return domain.Moment{}, f.err
 }
-func (fakeUseCases) GetTimeline(context.Context, int64, string, int) (application.TimelinePage, error) {
+
+type fakeTimeline struct{}
+
+func (fakeTimeline) Execute(context.Context, application.GetTimelineQuery) (application.TimelinePage, error) {
 	return application.TimelinePage{}, nil
 }
-func (fakeUseCases) GetHome(context.Context, int64) (application.Home, error) {
-	return application.Home{}, nil
+
+type fakeHome struct{}
+
+func (fakeHome) Execute(context.Context, application.GetHomeQuery) (application.HomeResult, error) {
+	return application.HomeResult{}, nil
 }
-func (f fakeUseCases) DeleteMoment(context.Context, int64, int64) error { return f.deleteErr }
+
+type fakeDelete struct{ err error }
+
+func (f fakeDelete) Execute(context.Context, application.DeleteMomentCommand) error { return f.err }
+func fakeUseCases(publishErr, deleteErr error) UseCases {
+	return UseCases{fakeUpload{}, fakePublish{publishErr}, fakeTimeline{}, fakeHome{}, fakeDelete{deleteErr}}
+}
 func routerFor(useCases UseCases) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -48,7 +60,7 @@ func TestPublishMapsDomainErrors(t *testing.T) {
 			response := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodPost, "/v1/moments", strings.NewReader(`{"text":"hello"}`))
 			request.Header.Set("Content-Type", "application/json")
-			routerFor(fakeUseCases{publishErr: item.err}).ServeHTTP(response, request)
+			routerFor(fakeUseCases(item.err, nil)).ServeHTTP(response, request)
 			if !strings.Contains(response.Body.String(), `"code":"`+item.code+`"`) {
 				t.Fatalf("body=%s", response.Body.String())
 			}
@@ -57,7 +69,7 @@ func TestPublishMapsDomainErrors(t *testing.T) {
 }
 func TestDeleteMapsNotAuthor(t *testing.T) {
 	response := httptest.NewRecorder()
-	routerFor(fakeUseCases{deleteErr: domain.ErrNotAuthor}).ServeHTTP(response, httptest.NewRequest(http.MethodDelete, "/v1/moments/9", nil))
+	routerFor(fakeUseCases(nil, domain.ErrNotAuthor)).ServeHTTP(response, httptest.NewRequest(http.MethodDelete, "/v1/moments/9", nil))
 	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"NOT_AUTHOR"`) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
@@ -66,7 +78,7 @@ func TestPublishMapsInfrastructureFailureToServerError(t *testing.T) {
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v1/moments", strings.NewReader(`{"text":"hello"}`))
 	request.Header.Set("Content-Type", "application/json")
-	routerFor(fakeUseCases{publishErr: errors.New("database unavailable")}).ServeHTTP(response, request)
+	routerFor(fakeUseCases(errors.New("database unavailable"), nil)).ServeHTTP(response, request)
 	if response.Code != http.StatusInternalServerError || !strings.Contains(response.Body.String(), `"code":"INTERNAL_ERROR"`) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}

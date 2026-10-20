@@ -1,8 +1,8 @@
-package application
+package moment
 
 import (
 	"context"
-	"github.com/nanfang/just-for-you/server/internal/moment/domain"
+	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
 	"time"
 )
 

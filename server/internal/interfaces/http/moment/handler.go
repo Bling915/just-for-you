@@ -7,18 +7,33 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	application "github.com/nanfang/just-for-you/server/internal/application/moment"
+	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
 	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
-	"github.com/nanfang/just-for-you/server/internal/moment/application"
-	"github.com/nanfang/just-for-you/server/internal/moment/domain"
 )
 
-type UseCases interface {
-	RequestPhotoUpload(context.Context, int64, application.UploadInput) (application.UploadGrant, error)
-	PublishMoment(context.Context, int64, application.PublishInput) (domain.Moment, error)
-	GetTimeline(context.Context, int64, string, int) (application.TimelinePage, error)
-	GetHome(context.Context, int64) (application.Home, error)
-	DeleteMoment(context.Context, int64, int64) error
+type RequestPhotoUploadExecutor interface {
+	Execute(context.Context, application.RequestPhotoUploadCommand) (application.UploadGrant, error)
+}
+type PublishMomentExecutor interface {
+	Execute(context.Context, application.PublishMomentCommand) (domain.Moment, error)
+}
+type GetTimelineExecutor interface {
+	Execute(context.Context, application.GetTimelineQuery) (application.TimelinePage, error)
+}
+type GetHomeExecutor interface {
+	Execute(context.Context, application.GetHomeQuery) (application.HomeResult, error)
+}
+type DeleteMomentExecutor interface {
+	Execute(context.Context, application.DeleteMomentCommand) error
+}
+type UseCases struct {
+	RequestPhotoUpload RequestPhotoUploadExecutor
+	PublishMoment      PublishMomentExecutor
+	GetTimeline        GetTimelineExecutor
+	GetHome            GetHomeExecutor
+	DeleteMoment       DeleteMomentExecutor
 }
 
 type Handler struct {
@@ -45,7 +60,7 @@ func (h *Handler) requestUpload(c *gin.Context) {
 		httpserver.WriteError(c, http.StatusBadRequest, "INVALID_UPLOAD", "照片信息无效")
 		return
 	}
-	grant, err := h.useCases.RequestPhotoUpload(c, httpserver.UserID(c), input)
+	grant, err := h.useCases.RequestPhotoUpload.Execute(c, application.RequestPhotoUploadCommand{UserID: httpserver.UserID(c), ContentType: input.ContentType, Size: input.Size})
 	if err != nil {
 		writeError(c, err)
 		return
@@ -54,12 +69,17 @@ func (h *Handler) requestUpload(c *gin.Context) {
 }
 
 func (h *Handler) publish(c *gin.Context) {
-	var input application.PublishInput
+	var input struct {
+		Text      string        `json:"text"`
+		Status    domain.Status `json:"status"`
+		PlaceName string        `json:"placeName"`
+		PhotoKeys []string      `json:"photoKeys"`
+	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		httpserver.WriteError(c, http.StatusBadRequest, "INVALID_ARGUMENT", "发布内容格式无效")
 		return
 	}
-	moment, err := h.useCases.PublishMoment(c, httpserver.UserID(c), input)
+	moment, err := h.useCases.PublishMoment.Execute(c, application.PublishMomentCommand{UserID: httpserver.UserID(c), Text: input.Text, Status: input.Status, PlaceName: input.PlaceName, PhotoKeys: input.PhotoKeys})
 	if err != nil {
 		writeError(c, err)
 		return
@@ -73,7 +93,7 @@ func (h *Handler) timeline(c *gin.Context) {
 		httpserver.WriteError(c, http.StatusBadRequest, "INVALID_ARGUMENT", "limit 必须是正整数")
 		return
 	}
-	page, err := h.useCases.GetTimeline(c, httpserver.UserID(c), c.Query("cursor"), limit)
+	page, err := h.useCases.GetTimeline.Execute(c, application.GetTimelineQuery{UserID: httpserver.UserID(c), Cursor: c.Query("cursor"), Limit: limit})
 	if err != nil {
 		writeError(c, err)
 		return
@@ -82,7 +102,7 @@ func (h *Handler) timeline(c *gin.Context) {
 }
 
 func (h *Handler) home(c *gin.Context) {
-	home, err := h.useCases.GetHome(c, httpserver.UserID(c))
+	home, err := h.useCases.GetHome.Execute(c, application.GetHomeQuery{UserID: httpserver.UserID(c)})
 	if err != nil {
 		writeError(c, err)
 		return
@@ -100,7 +120,7 @@ func (h *Handler) delete(c *gin.Context) {
 		httpserver.WriteError(c, http.StatusBadRequest, "INVALID_ARGUMENT", "动态编号无效")
 		return
 	}
-	if err := h.useCases.DeleteMoment(c, httpserver.UserID(c), momentID); err != nil {
+	if err := h.useCases.DeleteMoment.Execute(c, application.DeleteMomentCommand{UserID: httpserver.UserID(c), MomentID: momentID}); err != nil {
 		writeError(c, err)
 		return
 	}

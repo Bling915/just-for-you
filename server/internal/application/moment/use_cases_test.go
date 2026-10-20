@@ -1,10 +1,10 @@
-package application
+package moment
 
 import (
 	"context"
 	"errors"
+	momentdomain "github.com/nanfang/just-for-you/server/internal/domain/moment"
 	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
-	momentdomain "github.com/nanfang/just-for-you/server/internal/moment/domain"
 	"testing"
 	"time"
 )
@@ -65,6 +65,12 @@ type memoryMoments struct {
 	consumed bool
 	existing momentdomain.Moment
 }
+type PublishInput struct {
+	Text      string
+	Status    momentdomain.Status
+	PlaceName string
+	PhotoKeys []string
+}
 
 func (r *memoryMoments) SaveWithGrants(_ context.Context, m momentdomain.Moment, _ []UploadGrant) (momentdomain.Moment, error) {
 	if r.saveErr != nil {
@@ -87,8 +93,26 @@ func (r *memoryMoments) Find(context.Context, int64, int64) (momentdomain.Moment
 	return r.existing, nil
 }
 func (r *memoryMoments) Delete(context.Context, int64) error { return nil }
-func newMomentService(now time.Time, relationships fakeRelationships, uploads *fakeUploads, repository *memoryMoments) *Service {
-	return NewService(relationships, uploads, repository, fakeStorage{}, fixedClock{now})
+
+type testUseCases struct {
+	publish  *PublishMomentUseCase
+	timeline *GetTimelineUseCase
+	delete   *DeleteMomentUseCase
+}
+
+func (u testUseCases) PublishMoment(ctx context.Context, userID int64, input PublishInput) (momentdomain.Moment, error) {
+	return u.publish.Execute(ctx, PublishMomentCommand{userID, input.Text, input.Status, input.PlaceName, input.PhotoKeys})
+}
+func (u testUseCases) GetTimeline(ctx context.Context, userID int64, cursor string, limit int) (TimelinePage, error) {
+	return u.timeline.Execute(ctx, GetTimelineQuery{userID, cursor, limit})
+}
+func (u testUseCases) DeleteMoment(ctx context.Context, userID, momentID int64) error {
+	return u.delete.Execute(ctx, DeleteMomentCommand{userID, momentID})
+}
+func newMomentService(now time.Time, relationships fakeRelationships, uploads *fakeUploads, repository *memoryMoments) testUseCases {
+	clock := fixedClock{now}
+	storage := fakeStorage{}
+	return testUseCases{NewPublishMomentUseCase(relationships, uploads, repository, storage, clock), NewGetTimelineUseCase(relationships, repository, storage, clock), NewDeleteMomentUseCase(relationships, repository)}
 }
 func TestPublishMomentRejectsMissingRelationship(t *testing.T) {
 	service := newMomentService(time.Now(), fakeRelationships{err: relationshipdomain.ErrNoActiveRelationship}, &fakeUploads{grants: map[string]UploadGrant{}}, &memoryMoments{})
@@ -110,7 +134,7 @@ func TestPublishMomentRejectsMissingOrInvalidStoredObject(t *testing.T) {
 	uploads := &fakeUploads{grants: map[string]UploadGrant{
 		"photo": {ObjectKey: "photo", OwnerID: 1, ContentType: "image/jpeg", ExpiresAt: now.Add(time.Minute)},
 	}}
-	service := NewService(fakeRelationships{active: ActiveRelationship{ID: 9}}, uploads, &memoryMoments{}, fakeStorage{verifyErr: momentdomain.ErrInvalidUpload}, fixedClock{now})
+	service := testUseCases{publish: NewPublishMomentUseCase(fakeRelationships{active: ActiveRelationship{ID: 9}}, uploads, &memoryMoments{}, fakeStorage{verifyErr: momentdomain.ErrInvalidUpload}, fixedClock{now})}
 	_, err := service.PublishMoment(context.Background(), 1, PublishInput{PhotoKeys: []string{"photo"}})
 	if !errors.Is(err, momentdomain.ErrInvalidUpload) {
 		t.Fatalf("err=%v", err)

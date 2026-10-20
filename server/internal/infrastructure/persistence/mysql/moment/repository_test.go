@@ -3,8 +3,8 @@ package infrastructure
 import (
 	"context"
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/nanfang/just-for-you/server/internal/moment/application"
-	"github.com/nanfang/just-for-you/server/internal/moment/domain"
+	application "github.com/nanfang/just-for-you/server/internal/application/moment"
+	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
 	"regexp"
 	"testing"
 	"time"

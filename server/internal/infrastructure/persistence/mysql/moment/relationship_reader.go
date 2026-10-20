@@ -2,9 +2,9 @@ package infrastructure
 
 import (
 	"context"
+	application "github.com/nanfang/just-for-you/server/internal/application/moment"
 	relationshipapplication "github.com/nanfang/just-for-you/server/internal/application/relationship"
 	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
-	"github.com/nanfang/just-for-you/server/internal/moment/application"
 )
 
 type RelationshipService interface {
