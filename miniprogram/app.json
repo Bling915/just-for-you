@@ -24,6 +24,14 @@
     "backgroundColor": "#F8F5FB",
     "backgroundTextStyle": "dark"
   },
+  "permission": {
+    "scope.userLocation": {
+      "desc": "用于在情侣共同记录中添加发生地点"
+    }
+  },
+  "requiredPrivateInfos": [
+    "chooseLocation"
+  ],
   "tabBar": {
     "color": "#83798B",
     "selectedColor": "#806AA8",
