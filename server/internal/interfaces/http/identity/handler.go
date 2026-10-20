@@ -6,17 +6,32 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/nanfang/just-for-you/server/internal/identity/application"
-	"github.com/nanfang/just-for-you/server/internal/identity/domain"
+	application "github.com/nanfang/just-for-you/server/internal/application/identity"
+	domain "github.com/nanfang/just-for-you/server/internal/domain/identity"
 	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 )
 
-type UseCases interface {
-	LoginWithWeChat(context.Context, string) (application.Session, error)
-	RefreshSession(context.Context, string) (application.Session, error)
-	Logout(context.Context, string) error
-	GetMe(context.Context, int64) (domain.User, error)
-	UpdateProfile(context.Context, int64, string, string) (domain.User, error)
+type LoginExecutor interface {
+	Execute(context.Context, application.LoginCommand) (application.Session, error)
+}
+type RefreshSessionExecutor interface {
+	Execute(context.Context, application.RefreshSessionCommand) (application.Session, error)
+}
+type LogoutExecutor interface {
+	Execute(context.Context, application.LogoutCommand) error
+}
+type GetProfileExecutor interface {
+	Execute(context.Context, application.GetProfileQuery) (domain.User, error)
+}
+type UpdateProfileExecutor interface {
+	Execute(context.Context, application.UpdateProfileCommand) (domain.User, error)
+}
+type UseCases struct {
+	Login          LoginExecutor
+	RefreshSession RefreshSessionExecutor
+	Logout         LogoutExecutor
+	GetProfile     GetProfileExecutor
+	UpdateProfile  UpdateProfileExecutor
 }
 type Handler struct{ useCases UseCases }
 
@@ -38,7 +53,7 @@ func (h *Handler) login(c *gin.Context) {
 		httpserver.WriteError(c, 400, "INVALID_REQUEST", "请求格式错误")
 		return
 	}
-	session, err := h.useCases.LoginWithWeChat(c, input.Code)
+	session, err := h.useCases.Login.Execute(c, application.LoginCommand{Code: input.Code})
 	if err != nil {
 		if errors.Is(err, domain.ErrCodeRequired) {
 			httpserver.WriteError(c, http.StatusBadRequest, "LOGIN_FAILED", "登录凭证不能为空")
@@ -58,7 +73,7 @@ func (h *Handler) refresh(c *gin.Context) {
 		httpserver.WriteError(c, 400, "INVALID_REFRESH", "请重新登录")
 		return
 	}
-	session, err := h.useCases.RefreshSession(c, input.RefreshToken)
+	session, err := h.useCases.RefreshSession.Execute(c, application.RefreshSessionCommand{RefreshToken: input.RefreshToken})
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidRefreshToken) {
 			httpserver.WriteError(c, http.StatusUnauthorized, "INVALID_REFRESH", "请重新登录")
@@ -75,12 +90,12 @@ func (h *Handler) logout(c *gin.Context) {
 		RefreshToken string `json:"refreshToken"`
 	}
 	if c.ShouldBindJSON(&input) == nil {
-		_ = h.useCases.Logout(c, input.RefreshToken)
+		_ = h.useCases.Logout.Execute(c, application.LogoutCommand{RefreshToken: input.RefreshToken})
 	}
 	c.Status(http.StatusNoContent)
 }
 func (h *Handler) getMe(c *gin.Context) {
-	user, err := h.useCases.GetMe(c, httpserver.UserID(c))
+	user, err := h.useCases.GetProfile.Execute(c, application.GetProfileQuery{UserID: httpserver.UserID(c)})
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
 			httpserver.WriteError(c, http.StatusNotFound, "USER_NOT_FOUND", "用户不存在")
@@ -101,7 +116,7 @@ func (h *Handler) updateProfile(c *gin.Context) {
 		httpserver.WriteError(c, 400, "INVALID_REQUEST", "请求格式错误")
 		return
 	}
-	user, err := h.useCases.UpdateProfile(c, httpserver.UserID(c), input.DisplayName, input.AvatarRef)
+	user, err := h.useCases.UpdateProfile.Execute(c, application.UpdateProfileCommand{UserID: httpserver.UserID(c), DisplayName: input.DisplayName, AvatarRef: input.AvatarRef})
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidNickname) {
 			httpserver.WriteError(c, http.StatusBadRequest, "INVALID_PROFILE", "昵称需为 1 至 30 个字符")

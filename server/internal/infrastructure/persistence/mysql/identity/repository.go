@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/nanfang/just-for-you/server/internal/identity/domain"
+	domain "github.com/nanfang/just-for-you/server/internal/domain/identity"
 )
 
 type MySQLRepository struct{ DB *sql.DB }

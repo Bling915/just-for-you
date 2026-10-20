@@ -5,12 +5,14 @@ import (
 	"net/http"
 	"time"
 
-	identityapplication "github.com/nanfang/just-for-you/server/internal/identity/application"
-	identityinfrastructure "github.com/nanfang/just-for-you/server/internal/identity/infrastructure"
-	identityhttp "github.com/nanfang/just-for-you/server/internal/identity/interfaces/http"
+	identityapplication "github.com/nanfang/just-for-you/server/internal/application/identity"
 	infraClock "github.com/nanfang/just-for-you/server/internal/infrastructure/clock"
 	"github.com/nanfang/just-for-you/server/internal/infrastructure/config"
+	wechat "github.com/nanfang/just-for-you/server/internal/infrastructure/identity/wechat"
+	identitymysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/identity"
 	database "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/shared"
+	jwt "github.com/nanfang/just-for-you/server/internal/infrastructure/security/jwt"
+	identityhttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/identity"
 	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 	momentapplication "github.com/nanfang/just-for-you/server/internal/moment/application"
 	momentinfrastructure "github.com/nanfang/just-for-you/server/internal/moment/infrastructure"
@@ -30,8 +32,16 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
-	tokens := identityinfrastructure.NewJWTManager([]byte(cfg.JWTSecret))
-	identityService := identityapplication.NewService(identityinfrastructure.WeChatIdentityProvider{AppID: cfg.WeChatAppID, Secret: cfg.WeChatSecret, Client: &http.Client{Timeout: 5 * time.Second}}, identityinfrastructure.MySQLRepository{DB: db}, tokens, infraClock.System{}, identityinfrastructure.GenerateRefreshToken)
+	tokens := jwt.NewJWTManager([]byte(cfg.JWTSecret))
+	identityRepository := identitymysql.MySQLRepository{DB: db}
+	identityProvider := wechat.WeChatIdentityProvider{AppID: cfg.WeChatAppID, Secret: cfg.WeChatSecret, Client: &http.Client{Timeout: 5 * time.Second}}
+	identityUseCases := identityhttp.UseCases{
+		Login:          identityapplication.NewLoginUseCase(identityProvider, identityRepository, tokens, infraClock.System{}, jwt.GenerateRefreshToken),
+		RefreshSession: identityapplication.NewRefreshSessionUseCase(identityRepository, tokens, infraClock.System{}, jwt.GenerateRefreshToken),
+		Logout:         identityapplication.NewLogoutUseCase(identityRepository, infraClock.System{}),
+		GetProfile:     identityapplication.NewGetProfileUseCase(identityRepository),
+		UpdateProfile:  identityapplication.NewUpdateProfileUseCase(identityRepository),
+	}
 	relationshipService := relationshipapplication.NewService(relationshipinfrastructure.NewMySQLRepository(db), infraClock.System{}, relationshipinfrastructure.GenerateInvitationCode)
 	momentRepository := momentinfrastructure.NewMySQLRepository(db)
 	photoStorage, err := momentinfrastructure.NewCOSStorage(cfg.COSBucketURL, cfg.COSSecretID, cfg.COSSecretKey)
@@ -48,7 +58,7 @@ func main() {
 	router := httpserver.NewRouter(httpserver.Dependencies{
 		Tokens: tokens,
 		Registrars: []httpserver.RouteRegistrar{
-			identityhttp.NewHandler(identityService),
+			identityhttp.NewHandler(identityUseCases),
 			relationshiphttp.NewHandler(relationshipService),
 			momenthttp.NewHandler(momentService),
 		},

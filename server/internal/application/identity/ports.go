@@ -1,10 +1,10 @@
-package application
+package identity
 
 import (
 	"context"
 	"time"
 
-	"github.com/nanfang/just-for-you/server/internal/identity/domain"
+	domain "github.com/nanfang/just-for-you/server/internal/domain/identity"
 )
 
 type ExternalIdentity struct {
@@ -28,4 +28,7 @@ type Repository interface {
 type AccessTokenIssuer interface {
 	IssueAccess(int64, time.Time) (string, time.Time, error)
 }
-type AccessTokenVerifier interface{ ParseAccess(string) (int64, error) }
+
+type AccessTokenVerifier interface {
+	ParseAccess(string) (int64, error)
+}

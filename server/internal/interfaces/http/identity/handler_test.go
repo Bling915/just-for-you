@@ -9,30 +9,49 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/nanfang/just-for-you/server/internal/identity/application"
-	"github.com/nanfang/just-for-you/server/internal/identity/domain"
+	application "github.com/nanfang/just-for-you/server/internal/application/identity"
+	domain "github.com/nanfang/just-for-you/server/internal/domain/identity"
 )
 
-type fakeUseCases struct{ loginErr error }
+type fakeLogin struct{ err error }
 
-func (f fakeUseCases) LoginWithWeChat(context.Context, string) (application.Session, error) {
-	return application.Session{}, f.loginErr
+func (f fakeLogin) Execute(context.Context, application.LoginCommand) (application.Session, error) {
+	return application.Session{}, f.err
 }
-func (f fakeUseCases) RefreshSession(context.Context, string) (application.Session, error) {
+
+type fakeRefresh struct{}
+
+func (fakeRefresh) Execute(context.Context, application.RefreshSessionCommand) (application.Session, error) {
 	return application.Session{}, domain.ErrInvalidRefreshToken
 }
-func (f fakeUseCases) Logout(context.Context, string) error { return nil }
-func (f fakeUseCases) GetMe(context.Context, int64) (domain.User, error) {
+
+type fakeLogout struct{}
+
+func (fakeLogout) Execute(context.Context, application.LogoutCommand) error { return nil }
+
+type fakeGetProfile struct{}
+
+func (fakeGetProfile) Execute(context.Context, application.GetProfileQuery) (domain.User, error) {
 	return domain.NewUser(1, "open"), nil
 }
-func (f fakeUseCases) UpdateProfile(context.Context, int64, string, string) (domain.User, error) {
+
+type fakeUpdateProfile struct{}
+
+func (fakeUpdateProfile) Execute(context.Context, application.UpdateProfileCommand) (domain.User, error) {
 	return domain.User{}, domain.ErrInvalidNickname
+}
+
+func fakeUseCases(loginErr error) UseCases {
+	return UseCases{
+		Login: fakeLogin{err: loginErr}, RefreshSession: fakeRefresh{}, Logout: fakeLogout{},
+		GetProfile: fakeGetProfile{}, UpdateProfile: fakeUpdateProfile{},
+	}
 }
 
 func TestLoginKeepsStableErrorEnvelopeWithoutEchoingCode(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	handler := NewHandler(fakeUseCases{loginErr: domain.ErrCodeRequired})
+	handler := NewHandler(fakeUseCases(domain.ErrCodeRequired))
 	handler.RegisterPublic(router)
 	secret := "sensitive-code"
 	request := httptest.NewRequest(http.MethodPost, "/v1/auth/wechat", bytes.NewBufferString(`{"code":"`+secret+`"}`))
@@ -51,7 +70,7 @@ func TestUpdateProfileMapsInvalidNickname(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	group := router.Group("/v1", func(c *gin.Context) { c.Set("userID", int64(1)) })
-	NewHandler(fakeUseCases{}).RegisterProtected(group)
+	NewHandler(fakeUseCases(nil)).RegisterProtected(group)
 	request := httptest.NewRequest(http.MethodPut, "/v1/users/me", bytes.NewBufferString(`{"displayName":" ","avatarRef":""}`))
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
