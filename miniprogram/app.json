@@ -5,6 +5,7 @@
     "pages/bind/index",
     "pages/invitation/index",
     "pages/home/index",
+    "pages/status-editor/index",
     "pages/compose/index",
     "pages/timeline/index",
     "pages/me/index"
