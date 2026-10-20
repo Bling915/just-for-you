@@ -1,87 +1,22 @@
 package main
 
 import (
+	"context"
 	"log"
-	"net/http"
-	"time"
+	"os/signal"
+	"syscall"
 
-	identityapplication "github.com/nanfang/just-for-you/server/internal/application/identity"
-	momentapplication "github.com/nanfang/just-for-you/server/internal/application/moment"
-	relationshipapplication "github.com/nanfang/just-for-you/server/internal/application/relationship"
-	infraClock "github.com/nanfang/just-for-you/server/internal/infrastructure/clock"
-	"github.com/nanfang/just-for-you/server/internal/infrastructure/config"
-	wechat "github.com/nanfang/just-for-you/server/internal/infrastructure/identity/wechat"
-	identitymysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/identity"
-	momentmysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/moment"
-	relationshipmysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/relationship"
-	database "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/shared"
-	jwt "github.com/nanfang/just-for-you/server/internal/infrastructure/security/jwt"
-	cos "github.com/nanfang/just-for-you/server/internal/infrastructure/storage/cos"
-	identityhttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/identity"
-	momenthttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/moment"
-	relationshiphttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/relationship"
-	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
+	"github.com/nanfang/just-for-you/server/internal/bootstrap"
 )
 
 func main() {
-	cfg, err := config.Load()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	app, err := bootstrap.New()
 	if err != nil {
 		log.Fatal(err)
 	}
-	db, err := database.OpenMySQL(cfg.MySQLDSN)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
-	tokens := jwt.NewJWTManager([]byte(cfg.JWTSecret))
-	identityRepository := identitymysql.MySQLRepository{DB: db}
-	identityProvider := wechat.WeChatIdentityProvider{AppID: cfg.WeChatAppID, Secret: cfg.WeChatSecret, Client: &http.Client{Timeout: 5 * time.Second}}
-	identityUseCases := identityhttp.UseCases{
-		Login:          identityapplication.NewLoginUseCase(identityProvider, identityRepository, tokens, infraClock.System{}, jwt.GenerateRefreshToken),
-		RefreshSession: identityapplication.NewRefreshSessionUseCase(identityRepository, tokens, infraClock.System{}, jwt.GenerateRefreshToken),
-		Logout:         identityapplication.NewLogoutUseCase(identityRepository, infraClock.System{}),
-		GetProfile:     identityapplication.NewGetProfileUseCase(identityRepository),
-		UpdateProfile:  identityapplication.NewUpdateProfileUseCase(identityRepository),
-	}
-	relationshipRepository := relationshipmysql.NewMySQLRepository(db)
-	getRelationship := relationshipapplication.NewGetRelationshipUseCase(relationshipRepository)
-	relationshipUseCases := relationshiphttp.UseCases{
-		CreateInvitation:  relationshipapplication.NewCreateInvitationUseCase(relationshipRepository, infraClock.System{}, relationshipmysql.GenerateInvitationCode),
-		PreviewInvitation: relationshipapplication.NewPreviewInvitationUseCase(relationshipRepository, infraClock.System{}),
-		BindRelationship:  relationshipapplication.NewBindRelationshipUseCase(relationshipRepository, infraClock.System{}),
-		GetRelationship:   getRelationship,
-		EndRelationship:   relationshipapplication.NewEndRelationshipUseCase(relationshipRepository, infraClock.System{}),
-	}
-	momentRepository := momentmysql.NewMySQLRepository(db)
-	photoStorage, err := cos.NewCOSStorage(cfg.COSBucketURL, cfg.COSSecretID, cfg.COSSecretKey)
-	if err != nil {
-		log.Fatal(err)
-	}
-	relationshipReader := momentmysql.NewActiveRelationshipReader(getRelationship)
-	momentUseCases := momenthttp.UseCases{
-		RequestPhotoUpload: momentapplication.NewRequestPhotoUploadUseCase(momentRepository, photoStorage, infraClock.System{}),
-		PublishMoment:      momentapplication.NewPublishMomentUseCase(relationshipReader, momentRepository, momentRepository, photoStorage, infraClock.System{}),
-		GetTimeline:        momentapplication.NewGetTimelineUseCase(relationshipReader, momentRepository, photoStorage, infraClock.System{}),
-		GetHome:            momentapplication.NewGetHomeUseCase(relationshipReader, momentRepository, photoStorage, infraClock.System{}),
-		DeleteMoment:       momentapplication.NewDeleteMomentUseCase(relationshipReader, momentRepository),
-	}
-	router := httpserver.NewRouter(httpserver.Dependencies{
-		Tokens: tokens,
-		Registrars: []httpserver.RouteRegistrar{
-			identityhttp.NewHandler(identityUseCases),
-			relationshiphttp.NewHandler(relationshipUseCases),
-			momenthttp.NewHandler(momentUseCases),
-		},
-	})
-	server := &http.Server{
-		Addr:              cfg.HTTPAddr,
-		Handler:           router,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      15 * time.Second,
-		IdleTimeout:       60 * time.Second,
-	}
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := app.Run(ctx); err != nil {
 		log.Fatal(err)
 	}
 }

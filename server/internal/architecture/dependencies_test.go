@@ -63,8 +63,7 @@ func listInternalPackages(t *testing.T) []goPackage {
 
 func allowedTopLevel(name string) bool {
 	switch name {
-	case "application", "architecture", "bootstrap", "domain", "infrastructure", "interfaces",
-		"identity", "relationship", "moment":
+	case "application", "architecture", "bootstrap", "domain", "infrastructure", "interfaces":
 		return true
 	default:
 		return false
@@ -75,11 +74,7 @@ func layerOf(importPath string) string {
 	if !strings.HasPrefix(importPath, internalPrefix) {
 		return "external"
 	}
-	parts := strings.Split(strings.TrimPrefix(importPath, internalPrefix), "/")
-	if len(parts) > 1 && (parts[0] == "identity" || parts[0] == "relationship" || parts[0] == "moment") {
-		return parts[1]
-	}
-	return parts[0]
+	return strings.Split(strings.TrimPrefix(importPath, internalPrefix), "/")[0]
 }
 
 func dependencyAllowed(from, to string) bool {
