@@ -26,14 +26,48 @@ type UseCases struct {
 	SendNudge      SendNudgeExecutor
 	GetSnapshot    GetSnapshotExecutor
 }
-type Handler struct{ useCases UseCases }
+type Handler struct {
+	useCases          UseCases
+	preferenceService *application.NotificationPreferencesService
+}
 
-func NewHandler(useCases UseCases) *Handler { return &Handler{useCases} }
+func (h *Handler) SetNotificationPreferences(service *application.NotificationPreferencesService) {
+	h.preferenceService = service
+}
+
+func NewHandler(useCases UseCases) *Handler { return &Handler{useCases: useCases} }
 func (*Handler) RegisterPublic(*gin.Engine) {}
 func (h *Handler) RegisterProtected(group *gin.RouterGroup) {
 	group.PUT("/presence", h.updatePresence)
 	group.GET("/presence", h.snapshot)
 	group.POST("/nudges", h.sendNudge)
+	group.GET("/notification-preferences", h.getPreferences)
+	group.PUT("/notification-preferences", h.updatePreferences)
+}
+func (h *Handler) getPreferences(c *gin.Context) {
+	if h.preferenceService == nil {
+		httpserver.WriteError(c, 503, "NOTIFICATION_UNAVAILABLE", "通知暂不可用")
+		return
+	}
+	v, e := h.preferenceService.Get(c, httpserver.UserID(c))
+	if e != nil {
+		writeError(c, e)
+		return
+	}
+	httpserver.WriteData(c, 200, v)
+}
+func (h *Handler) updatePreferences(c *gin.Context) {
+	var v application.NotificationPreferences
+	if c.ShouldBindJSON(&v) != nil {
+		httpserver.WriteError(c, 400, "INVALID_ARGUMENT", "通知设置无效")
+		return
+	}
+	out, e := h.preferenceService.Update(c, httpserver.UserID(c), v)
+	if e != nil {
+		writeError(c, e)
+		return
+	}
+	httpserver.WriteData(c, 200, out)
 }
 func (h *Handler) updatePresence(c *gin.Context) {
 	var input struct {

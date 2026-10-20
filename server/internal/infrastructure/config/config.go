@@ -7,15 +7,18 @@ import (
 )
 
 type Config struct {
-	HTTPAddr       string
-	MySQLDSN       string
-	JWTSecret      string
-	WeChatAppID    string
-	WeChatSecret   string
-	COSBucketURL   string
-	COSSecretID    string
-	COSSecretKey   string
-	EnableSoloTest bool
+	HTTPAddr                 string
+	MySQLDSN                 string
+	JWTSecret                string
+	WeChatAppID              string
+	WeChatSecret             string
+	COSBucketURL             string
+	COSSecretID              string
+	COSSecretKey             string
+	EnableSoloTest           bool
+	WeChatMomentTemplateID   string
+	WeChatPresenceTemplateID string
+	WeChatNudgeTemplateID    string
 }
 
 func Load() (Config, error) {
@@ -24,7 +27,8 @@ func Load() (Config, error) {
 		JWTSecret: os.Getenv("JWT_SECRET"), WeChatAppID: os.Getenv("WECHAT_APP_ID"),
 		WeChatSecret: os.Getenv("WECHAT_APP_SECRET"), COSBucketURL: os.Getenv("COS_BUCKET_URL"),
 		COSSecretID: os.Getenv("COS_SECRET_ID"), COSSecretKey: os.Getenv("COS_SECRET_KEY"),
-		EnableSoloTest: strings.EqualFold(strings.TrimSpace(os.Getenv("ENABLE_SOLO_TEST")), "true"),
+		EnableSoloTest:         strings.EqualFold(strings.TrimSpace(os.Getenv("ENABLE_SOLO_TEST")), "true"),
+		WeChatMomentTemplateID: strings.TrimSpace(os.Getenv("WECHAT_TEMPLATE_MOMENT_ID")), WeChatPresenceTemplateID: strings.TrimSpace(os.Getenv("WECHAT_TEMPLATE_PRESENCE_ID")), WeChatNudgeTemplateID: strings.TrimSpace(os.Getenv("WECHAT_TEMPLATE_NUDGE_ID")),
 	}
 	if cfg.HTTPAddr == "" {
 		cfg.HTTPAddr = ":8080"

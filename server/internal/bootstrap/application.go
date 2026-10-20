@@ -28,7 +28,7 @@ func New() (*Application, error) {
 	}
 	identity, tokens := buildIdentity(cfg, db)
 	relationship, getRelationship := buildRelationship(db, cfg.EnableSoloTest)
-	companionship := buildCompanionship(db)
+	companionship := buildCompanionship(db, cfg)
 	together := buildTogether(db)
 	moment, err := buildMoment(cfg, db, getRelationship)
 	if err != nil {

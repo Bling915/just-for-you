@@ -15,6 +15,7 @@
     "pages/day-moments/index",
     "pages/memory-map/index",
     "pages/monthly-report/index",
+    "pages/notification-settings/index",
     "pages/timeline/index",
     "pages/me/index"
   ],
