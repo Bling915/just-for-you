@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	appshared "github.com/nanfang/just-for-you/server/internal/application/shared"
 	"github.com/nanfang/just-for-you/server/internal/identity/domain"
-	platformclock "github.com/nanfang/just-for-you/server/internal/platform/clock"
 )
 
 type Session struct {
@@ -21,11 +21,11 @@ type Service struct {
 	provider        IdentityProvider
 	repository      Repository
 	tokens          AccessTokenIssuer
-	clock           platformclock.Clock
+	clock           appshared.Clock
 	generateRefresh func() (string, error)
 }
 
-func NewService(provider IdentityProvider, repository Repository, tokens AccessTokenIssuer, clock platformclock.Clock, generator func() (string, error)) *Service {
+func NewService(provider IdentityProvider, repository Repository, tokens AccessTokenIssuer, clock appshared.Clock, generator func() (string, error)) *Service {
 	return &Service{provider: provider, repository: repository, tokens: tokens, clock: clock, generateRefresh: generator}
 }
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/gin-gonic/gin"
-	"github.com/nanfang/just-for-you/server/internal/platform/httpserver"
+	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 	"github.com/nanfang/just-for-you/server/internal/relationship/domain"
 	"net/http"
 )

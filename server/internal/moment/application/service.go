@@ -2,8 +2,8 @@ package application
 
 import (
 	"context"
+	appshared "github.com/nanfang/just-for-you/server/internal/application/shared"
 	"github.com/nanfang/just-for-you/server/internal/moment/domain"
-	platformclock "github.com/nanfang/just-for-you/server/internal/platform/clock"
 	"time"
 )
 
@@ -23,10 +23,10 @@ type Service struct {
 	uploads       UploadAuthorizer
 	moments       MomentRepository
 	photos        PhotoStorage
-	clock         platformclock.Clock
+	clock         appshared.Clock
 }
 
-func NewService(relationships ActiveRelationshipReader, uploads UploadAuthorizer, moments MomentRepository, photos PhotoStorage, clock platformclock.Clock) *Service {
+func NewService(relationships ActiveRelationshipReader, uploads UploadAuthorizer, moments MomentRepository, photos PhotoStorage, clock appshared.Clock) *Service {
 	return &Service{relationships: relationships, uploads: uploads, moments: moments, photos: photos, clock: clock}
 }
 func (s *Service) RequestPhotoUpload(ctx context.Context, userID int64, input UploadInput) (UploadGrant, error) {

@@ -7,9 +7,9 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 	"github.com/nanfang/just-for-you/server/internal/moment/application"
 	"github.com/nanfang/just-for-you/server/internal/moment/domain"
-	"github.com/nanfang/just-for-you/server/internal/platform/httpserver"
 	relationshipdomain "github.com/nanfang/just-for-you/server/internal/relationship/domain"
 )
 

@@ -2,7 +2,7 @@ package application
 
 import (
 	"context"
-	platformclock "github.com/nanfang/just-for-you/server/internal/platform/clock"
+	appshared "github.com/nanfang/just-for-you/server/internal/application/shared"
 	"github.com/nanfang/just-for-you/server/internal/relationship/domain"
 	"strings"
 	"time"
@@ -10,11 +10,11 @@ import (
 
 type Service struct {
 	repository   Repository
-	clock        platformclock.Clock
+	clock        appshared.Clock
 	generateCode func() (string, error)
 }
 
-func NewService(repository Repository, clock platformclock.Clock, generator func() (string, error)) *Service {
+func NewService(repository Repository, clock appshared.Clock, generator func() (string, error)) *Service {
 	return &Service{repository: repository, clock: clock, generateCode: generator}
 }
 func (s *Service) CreateInvitation(ctx context.Context, userID int64) (domain.Invitation, error) {

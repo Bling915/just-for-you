@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/nanfang/just-for-you/server/internal/identity/application"
 	"github.com/nanfang/just-for-you/server/internal/identity/domain"
-	"github.com/nanfang/just-for-you/server/internal/platform/httpserver"
+	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 )
 
 type UseCases interface {
