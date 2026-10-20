@@ -1,0 +1,219 @@
+package togetherhttp
+
+import (
+	"errors"
+	"github.com/gin-gonic/gin"
+	app "github.com/nanfang/just-for-you/server/internal/application/together"
+	relationship "github.com/nanfang/just-for-you/server/internal/domain/relationship"
+	domain "github.com/nanfang/just-for-you/server/internal/domain/together"
+	shared "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
+	"net/http"
+	"strconv"
+	"time"
+)
+
+type Handler struct{ s *app.Service }
+
+func NewHandler(s *app.Service) *Handler    { return &Handler{s: s} }
+func (*Handler) RegisterPublic(*gin.Engine) {}
+func (h *Handler) RegisterProtected(g *gin.RouterGroup) {
+	g.GET("/anniversaries", h.listAnniversaries)
+	g.POST("/anniversaries", h.createAnniversary)
+	g.DELETE("/anniversaries/:id", h.deleteAnniversary)
+	g.GET("/todos", h.listTodos)
+	g.POST("/todos", h.createTodo)
+	g.PATCH("/todos/:id", h.updateTodo)
+	g.DELETE("/todos/:id", h.deleteTodo)
+	g.GET("/wishes", h.listWishes)
+	g.POST("/wishes", h.createWish)
+	g.PATCH("/wishes/:id", h.updateWish)
+	g.DELETE("/wishes/:id", h.deleteWish)
+}
+func id(c *gin.Context) (int64, error) { return strconv.ParseInt(c.Param("id"), 10, 64) }
+func (h *Handler) listAnniversaries(c *gin.Context) {
+	v, e := h.s.ListAnniversaries(c, shared.UserID(c))
+	if e != nil {
+		fail(c, e)
+		return
+	}
+	shared.WriteData(c, 200, anniversariesDTO(v))
+}
+func (h *Handler) createAnniversary(c *gin.Context) {
+	var x struct {
+		Title   string    `json:"title"`
+		Date    time.Time `json:"date"`
+		Repeats bool      `json:"repeatsYearly"`
+	}
+	if c.ShouldBindJSON(&x) != nil {
+		shared.WriteError(c, 400, "INVALID_ARGUMENT", "纪念日内容不正确")
+		return
+	}
+	v, e := h.s.CreateAnniversary(c, shared.UserID(c), x.Title, x.Date, x.Repeats)
+	if e != nil {
+		fail(c, e)
+		return
+	}
+	shared.WriteData(c, 201, anniversaryDTO(v))
+}
+func (h *Handler) deleteAnniversary(c *gin.Context) {
+	v, e := id(c)
+	if e == nil {
+		e = h.s.DeleteAnniversary(c, shared.UserID(c), v)
+	}
+	finish(c, e)
+}
+func (h *Handler) listTodos(c *gin.Context) {
+	v, e := h.s.ListTodos(c, shared.UserID(c))
+	if e != nil {
+		fail(c, e)
+		return
+	}
+	shared.WriteData(c, 200, todosDTO(v))
+}
+func (h *Handler) createTodo(c *gin.Context) {
+	var x struct {
+		Title string     `json:"title"`
+		DueAt *time.Time `json:"dueAt"`
+	}
+	if c.ShouldBindJSON(&x) != nil {
+		shared.WriteError(c, 400, "INVALID_ARGUMENT", "待办内容不正确")
+		return
+	}
+	v, e := h.s.CreateTodo(c, shared.UserID(c), x.Title, x.DueAt)
+	if e != nil {
+		fail(c, e)
+		return
+	}
+	shared.WriteData(c, 201, todoDTO(v))
+}
+func (h *Handler) updateTodo(c *gin.Context) {
+	var x struct {
+		Completed bool `json:"completed"`
+	}
+	v, e := id(c)
+	if c.ShouldBindJSON(&x) != nil {
+		e = domain.ErrInvalidTitle
+	}
+	if e == nil {
+		var out domain.Todo
+		out, e = h.s.SetTodoCompleted(c, shared.UserID(c), v, x.Completed)
+		if e == nil {
+			shared.WriteData(c, 200, todoDTO(out))
+			return
+		}
+	}
+	fail(c, e)
+}
+func (h *Handler) deleteTodo(c *gin.Context) {
+	v, e := id(c)
+	if e == nil {
+		e = h.s.DeleteTodo(c, shared.UserID(c), v)
+	}
+	finish(c, e)
+}
+func (h *Handler) listWishes(c *gin.Context) {
+	v, e := h.s.ListWishes(c, shared.UserID(c))
+	if e != nil {
+		fail(c, e)
+		return
+	}
+	shared.WriteData(c, 200, wishesDTO(v))
+}
+func (h *Handler) createWish(c *gin.Context) {
+	var x struct {
+		Title       string `json:"title"`
+		Description string `json:"description"`
+	}
+	if c.ShouldBindJSON(&x) != nil {
+		shared.WriteError(c, 400, "INVALID_ARGUMENT", "愿望内容不正确")
+		return
+	}
+	v, e := h.s.CreateWish(c, shared.UserID(c), x.Title, x.Description)
+	if e != nil {
+		fail(c, e)
+		return
+	}
+	shared.WriteData(c, 201, wishDTO(v))
+}
+func (h *Handler) updateWish(c *gin.Context) {
+	var x struct {
+		Completed      bool   `json:"completed"`
+		LinkedMomentID *int64 `json:"linkedMomentId"`
+	}
+	v, e := id(c)
+	if c.ShouldBindJSON(&x) != nil {
+		e = domain.ErrInvalidTitle
+	}
+	if e == nil {
+		var out domain.Wish
+		out, e = h.s.SetWishCompleted(c, shared.UserID(c), v, x.Completed, x.LinkedMomentID)
+		if e == nil {
+			shared.WriteData(c, 200, wishDTO(out))
+			return
+		}
+	}
+	fail(c, e)
+}
+func (h *Handler) deleteWish(c *gin.Context) {
+	v, e := id(c)
+	if e == nil {
+		e = h.s.DeleteWish(c, shared.UserID(c), v)
+	}
+	finish(c, e)
+}
+func finish(c *gin.Context, e error) {
+	if e != nil {
+		fail(c, e)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+func fail(c *gin.Context, e error) {
+	status, code, msg := 500, "INTERNAL_ERROR", "服务暂时不可用"
+	switch {
+	case errors.Is(e, domain.ErrInvalidTitle), errors.Is(e, domain.ErrInvalidDate), errors.Is(e, domain.ErrInvalidDescription):
+		status, code, msg = 400, "INVALID_ARGUMENT", "内容不正确"
+	case errors.Is(e, domain.ErrInvalidMoment):
+		status, code, msg = 400, "INVALID_MOMENT", "关联动态不正确"
+	case errors.Is(e, domain.ErrNotCreator):
+		status, code, msg = 403, "NOT_CREATOR", "只能删除自己创建的内容"
+	case errors.Is(e, domain.ErrNotFound):
+		status, code, msg = 404, "NOT_FOUND", "内容不存在"
+	case errors.Is(e, relationship.ErrNoActiveRelationship):
+		status, code, msg = 404, "NO_ACTIVE_COUPLE", "还没有绑定关系"
+	default:
+		_ = c.Error(e)
+	}
+	shared.WriteError(c, status, code, msg)
+}
+
+func anniversaryDTO(v domain.Anniversary) gin.H {
+	return gin.H{"id": v.ID(), "creatorUserId": v.CreatorID(), "title": v.Title(), "date": v.Date(), "repeatsYearly": v.RepeatsYearly(), "systemKind": v.SystemKind()}
+}
+func anniversariesDTO(values []domain.Anniversary) []gin.H {
+	out := make([]gin.H, 0, len(values))
+	for _, v := range values {
+		out = append(out, anniversaryDTO(v))
+	}
+	return out
+}
+func todoDTO(v domain.Todo) gin.H {
+	return gin.H{"id": v.ID(), "creatorUserId": v.CreatorID(), "completedByUserId": v.CompletedBy(), "title": v.Title(), "dueAt": v.DueAt(), "status": v.Status(), "completedAt": v.CompletedAt(), "createdAt": v.CreatedAt(), "updatedAt": v.UpdatedAt()}
+}
+func todosDTO(values []domain.Todo) []gin.H {
+	out := make([]gin.H, 0, len(values))
+	for _, v := range values {
+		out = append(out, todoDTO(v))
+	}
+	return out
+}
+func wishDTO(v domain.Wish) gin.H {
+	return gin.H{"id": v.ID(), "creatorUserId": v.CreatorID(), "completedByUserId": v.CompletedBy(), "linkedMomentId": v.LinkedMomentID(), "title": v.Title(), "description": v.Description(), "status": v.Status(), "completedAt": v.CompletedAt(), "createdAt": v.CreatedAt(), "updatedAt": v.UpdatedAt()}
+}
+func wishesDTO(values []domain.Wish) []gin.H {
+	out := make([]gin.H, 0, len(values))
+	for _, v := range values {
+		out = append(out, wishDTO(v))
+	}
+	return out
+}

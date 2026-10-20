@@ -13,3 +13,5 @@ page {
   min-height: 100vh;
   padding: calc(env(safe-area-inset-top) + 32rpx) 32rpx calc(env(safe-area-inset-bottom) + 40rpx);
 }
+
+.together-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14rpx;margin-top:24rpx}.together-grid view{padding:24rpx 8rpx;border-radius:24rpx;color:var(--color-primary-deep);background:var(--color-card);box-shadow:var(--shadow-card);font-size:34rpx;text-align:center}.together-grid text{display:block;margin-top:8rpx;color:var(--color-text);font-size:21rpx}

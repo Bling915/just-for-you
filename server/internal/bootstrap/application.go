@@ -29,12 +29,13 @@ func New() (*Application, error) {
 	identity, tokens := buildIdentity(cfg, db)
 	relationship, getRelationship := buildRelationship(db, cfg.EnableSoloTest)
 	companionship := buildCompanionship(db)
+	together := buildTogether(db)
 	moment, err := buildMoment(cfg, db, getRelationship)
 	if err != nil {
 		_ = db.Close()
 		return nil, err
 	}
-	router := httpserver.NewRouter(httpserver.Dependencies{Tokens: tokens, Registrars: []httpserver.RouteRegistrar{identity, relationship, companionship, moment}})
+	router := httpserver.NewRouter(httpserver.Dependencies{Tokens: tokens, Registrars: []httpserver.RouteRegistrar{identity, relationship, companionship, together, moment}})
 	return &Application{server: newHTTPServer(cfg.HTTPAddr, router), database: db}, nil
 }
 

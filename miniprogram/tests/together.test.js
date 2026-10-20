@@ -1,0 +1,2 @@
+const test=require('node:test');const assert=require('node:assert/strict');const {splitCompleted}=require('../services/together')
+test('shared lists keep active items visible and completed items collapsible',()=>{const result=splitCompleted([{id:1,status:'completed'},{id:2,status:'open'},{id:3,status:'planned'}]);assert.deepEqual(result.active.map(x=>x.id),[2,3]);assert.deepEqual(result.completed.map(x=>x.id),[1])})

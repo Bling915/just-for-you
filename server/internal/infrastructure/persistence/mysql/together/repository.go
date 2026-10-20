@@ -1,0 +1,190 @@
+package togethermysql
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	app "github.com/nanfang/just-for-you/server/internal/application/together"
+	relationship "github.com/nanfang/just-for-you/server/internal/domain/relationship"
+	domain "github.com/nanfang/just-for-you/server/internal/domain/together"
+	"time"
+)
+
+type Repository struct{ db *sql.DB }
+
+func NewRepository(db *sql.DB) Repository { return Repository{db: db} }
+func (r Repository) GetActiveRelationship(ctx context.Context, userID int64) (app.ActiveRelationship, error) {
+	var v app.ActiveRelationship
+	err := r.db.QueryRowContext(ctx, "SELECT id,user_a_id,user_b_id,bound_at FROM couples WHERE status='active' AND (user_a_id=? OR user_b_id=?)", userID, userID).Scan(&v.ID, &v.UserAID, &v.UserBID, &v.BoundAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = relationship.ErrNoActiveRelationship
+	}
+	return v, err
+}
+func (r Repository) ListAnniversaries(ctx context.Context, coupleID int64) ([]domain.Anniversary, error) {
+	rows, e := r.db.QueryContext(ctx, "SELECT id,couple_id,creator_user_id,title,anniversary_date,repeats_yearly,system_kind,created_at,updated_at FROM anniversaries WHERE couple_id=? ORDER BY anniversary_date,id", coupleID)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	out := []domain.Anniversary{}
+	for rows.Next() {
+		var id, cid, uid int64
+		var title, kind string
+		var date, created, updated time.Time
+		var repeats bool
+		if e = rows.Scan(&id, &cid, &uid, &title, &date, &repeats, &kind, &created, &updated); e != nil {
+			return nil, e
+		}
+		out = append(out, domain.RestoreAnniversary(id, cid, uid, title, date, repeats, kind, created, updated))
+	}
+	return out, rows.Err()
+}
+func (r Repository) SaveAnniversary(ctx context.Context, v domain.Anniversary) (domain.Anniversary, error) {
+	res, e := r.db.ExecContext(ctx, "INSERT INTO anniversaries(couple_id,creator_user_id,title,anniversary_date,repeats_yearly,system_kind,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)", v.CoupleID(), v.CreatorID(), v.Title(), v.Date(), v.RepeatsYearly(), v.SystemKind(), v.CreatedAt(), v.UpdatedAt())
+	if e != nil {
+		return v, e
+	}
+	id, e := res.LastInsertId()
+	return domain.RestoreAnniversary(id, v.CoupleID(), v.CreatorID(), v.Title(), v.Date(), v.RepeatsYearly(), v.SystemKind(), v.CreatedAt(), v.UpdatedAt()), e
+}
+func (r Repository) DeleteAnniversary(ctx context.Context, coupleID, id, userID int64) error {
+	return deleteOwned(ctx, r.db, "anniversaries", coupleID, id, userID, " AND system_kind='none'")
+}
+func (r Repository) ListTodos(ctx context.Context, coupleID int64) ([]domain.Todo, error) {
+	rows, e := r.db.QueryContext(ctx, "SELECT id,couple_id,creator_user_id,completed_by_user_id,title,due_at,status,completed_at,created_at,updated_at FROM todos WHERE couple_id=? ORDER BY status,due_at IS NULL,due_at,id DESC", coupleID)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	out := []domain.Todo{}
+	for rows.Next() {
+		v, e := scanTodo(rows.Scan)
+		if e != nil {
+			return nil, e
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+func (r Repository) SaveTodo(ctx context.Context, v domain.Todo) (domain.Todo, error) {
+	res, e := r.db.ExecContext(ctx, "INSERT INTO todos(couple_id,creator_user_id,title,due_at,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)", v.CoupleID(), v.CreatorID(), v.Title(), v.DueAt(), v.Status(), v.CreatedAt(), v.UpdatedAt())
+	if e != nil {
+		return v, e
+	}
+	id, e := res.LastInsertId()
+	return domain.RestoreTodo(id, v.CoupleID(), v.CreatorID(), nil, v.Title(), v.DueAt(), v.Status(), nil, v.CreatedAt(), v.UpdatedAt()), e
+}
+func (r Repository) FindTodo(ctx context.Context, coupleID, id int64) (domain.Todo, error) {
+	v, e := scanTodo(r.db.QueryRowContext(ctx, "SELECT id,couple_id,creator_user_id,completed_by_user_id,title,due_at,status,completed_at,created_at,updated_at FROM todos WHERE couple_id=? AND id=?", coupleID, id).Scan)
+	if errors.Is(e, sql.ErrNoRows) {
+		e = domain.ErrNotFound
+	}
+	return v, e
+}
+func (r Repository) UpdateTodo(ctx context.Context, v domain.Todo) (domain.Todo, error) {
+	_, e := r.db.ExecContext(ctx, "UPDATE todos SET status=?,completed_by_user_id=?,completed_at=?,updated_at=? WHERE couple_id=? AND id=?", v.Status(), v.CompletedBy(), v.CompletedAt(), v.UpdatedAt(), v.CoupleID(), v.ID())
+	return v, e
+}
+func (r Repository) DeleteTodo(ctx context.Context, coupleID, id, userID int64) error {
+	return deleteOwned(ctx, r.db, "todos", coupleID, id, userID, "")
+}
+func (r Repository) ListWishes(ctx context.Context, coupleID int64) ([]domain.Wish, error) {
+	rows, e := r.db.QueryContext(ctx, "SELECT id,couple_id,creator_user_id,completed_by_user_id,linked_moment_id,title,description,status,completed_at,created_at,updated_at FROM wishes WHERE couple_id=? ORDER BY status,id DESC", coupleID)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	out := []domain.Wish{}
+	for rows.Next() {
+		v, e := scanWish(rows.Scan)
+		if e != nil {
+			return nil, e
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+func (r Repository) SaveWish(ctx context.Context, v domain.Wish) (domain.Wish, error) {
+	res, e := r.db.ExecContext(ctx, "INSERT INTO wishes(couple_id,creator_user_id,title,description,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)", v.CoupleID(), v.CreatorID(), v.Title(), v.Description(), v.Status(), v.CreatedAt(), v.UpdatedAt())
+	if e != nil {
+		return v, e
+	}
+	id, e := res.LastInsertId()
+	return domain.RestoreWish(id, v.CoupleID(), v.CreatorID(), nil, nil, v.Title(), v.Description(), v.Status(), nil, v.CreatedAt(), v.UpdatedAt()), e
+}
+func (r Repository) FindWish(ctx context.Context, coupleID, id int64) (domain.Wish, error) {
+	v, e := scanWish(r.db.QueryRowContext(ctx, "SELECT id,couple_id,creator_user_id,completed_by_user_id,linked_moment_id,title,description,status,completed_at,created_at,updated_at FROM wishes WHERE couple_id=? AND id=?", coupleID, id).Scan)
+	if errors.Is(e, sql.ErrNoRows) {
+		e = domain.ErrNotFound
+	}
+	return v, e
+}
+func (r Repository) UpdateWish(ctx context.Context, v domain.Wish) (domain.Wish, error) {
+	_, e := r.db.ExecContext(ctx, "UPDATE wishes SET status=?,completed_by_user_id=?,linked_moment_id=?,completed_at=?,updated_at=? WHERE couple_id=? AND id=?", v.Status(), v.CompletedBy(), v.LinkedMomentID(), v.CompletedAt(), v.UpdatedAt(), v.CoupleID(), v.ID())
+	return v, e
+}
+func (r Repository) DeleteWish(ctx context.Context, coupleID, id, userID int64) error {
+	return deleteOwned(ctx, r.db, "wishes", coupleID, id, userID, "")
+}
+func (r Repository) MomentCoupleID(ctx context.Context, id int64) (int64, error) {
+	var cid int64
+	e := r.db.QueryRowContext(ctx, "SELECT couple_id FROM moments WHERE id=? AND deleted_at IS NULL", id).Scan(&cid)
+	if errors.Is(e, sql.ErrNoRows) {
+		e = domain.ErrInvalidMoment
+	}
+	return cid, e
+}
+
+type scanner func(...any) error
+
+func scanTodo(scan scanner) (domain.Todo, error) {
+	var id, cid, uid int64
+	var by sql.NullInt64
+	var title, status string
+	var due, done sql.NullTime
+	var created, updated time.Time
+	e := scan(&id, &cid, &uid, &by, &title, &due, &status, &done, &created, &updated)
+	if e != nil {
+		return domain.Todo{}, e
+	}
+	return domain.RestoreTodo(id, cid, uid, intPtr(by), title, timePtr(due), status, timePtr(done), created, updated), nil
+}
+func scanWish(scan scanner) (domain.Wish, error) {
+	var id, cid, uid int64
+	var by, moment sql.NullInt64
+	var title, description, status string
+	var done sql.NullTime
+	var created, updated time.Time
+	e := scan(&id, &cid, &uid, &by, &moment, &title, &description, &status, &done, &created, &updated)
+	if e != nil {
+		return domain.Wish{}, e
+	}
+	return domain.RestoreWish(id, cid, uid, intPtr(by), intPtr(moment), title, description, status, timePtr(done), created, updated), nil
+}
+func intPtr(v sql.NullInt64) *int64 {
+	if !v.Valid {
+		return nil
+	}
+	x := v.Int64
+	return &x
+}
+func timePtr(v sql.NullTime) *time.Time {
+	if !v.Valid {
+		return nil
+	}
+	x := v.Time
+	return &x
+}
+func deleteOwned(ctx context.Context, db *sql.DB, table string, coupleID, id, userID int64, suffix string) error {
+	q := "DELETE FROM " + table + " WHERE couple_id=? AND id=? AND creator_user_id=?" + suffix
+	res, e := db.ExecContext(ctx, q, coupleID, id, userID)
+	if e != nil {
+		return e
+	}
+	n, e := res.RowsAffected()
+	if e == nil && n == 0 {
+		return domain.ErrNotCreator
+	}
+	return e
+}

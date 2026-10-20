@@ -8,6 +8,9 @@
     "pages/status-editor/index",
     "pages/compose/index",
     "pages/moment-edit/index",
+    "pages/anniversaries/index",
+    "pages/todos/index",
+    "pages/wishes/index",
     "pages/timeline/index",
     "pages/me/index"
   ],
