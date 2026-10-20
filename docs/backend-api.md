@@ -26,6 +26,7 @@ Content-Type: application/json
 | `POST /v1/couples/invitations` | 无 | `201`，邀请码和过期时间 |
 | `GET /v1/couples/invitations/:code` | 路径邀请码 | 邀请预览 |
 | `POST /v1/couples/bind` | `{"code":"ABC123"}` | `201`，情侣关系 |
+| `POST /v1/couples/solo-test` | 无 | 仅 `ENABLE_SOLO_TEST=true` 时注册；创建虚拟搭子并返回 `201` |
 | `GET /v1/couples/me` | 无 | 当前情侣关系 |
 | `DELETE /v1/couples/me` | 无 | `204` |
 

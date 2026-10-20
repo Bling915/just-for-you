@@ -8,6 +8,11 @@
     <view class="divider"><text>或者</text></view>
     <input class="code" maxlength="6" value="{{code}}" placeholder="输入六位邀请码" bindinput="inputCode" />
     <button class="secondary" disabled="{{checking}}" bindtap="preview">查看邀请</button>
+    <block wx:if="{{soloTestEnabled}}">
+      <view class="test-divider"><text>开发测试</text></view>
+      <button class="solo-test" loading="{{soloTesting}}" disabled="{{soloTesting}}" bindtap="enableSoloTest">一个人先体验完整功能</button>
+      <view class="solo-hint">自动创建虚拟搭子，之后可在“我的”中解除关系。</view>
+    </block>
   </block>
   <view wx:if="{{error}}" class="error">{{error}}</view>
 </view>

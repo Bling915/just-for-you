@@ -34,3 +34,29 @@ func TestAcceptInvitationUsesLockAndTransaction(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCreateSoloRelationshipCreatesDedicatedPartnerInTransaction(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT id FROM users WHERE id=? FOR UPDATE")).WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(7))
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\) FROM couples").WithArgs(int64(7), int64(7)).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectExec("INSERT INTO users").WithArgs("solo-test-partner:7", "测试搭子").WillReturnResult(sqlmock.NewResult(1007, 1))
+	mock.ExpectExec("INSERT INTO couples").WithArgs(int64(7), int64(1007), now).WillReturnResult(sqlmock.NewResult(9, 1))
+	mock.ExpectCommit()
+
+	relationship, err := NewMySQLRepository(db).CreateSoloRelationship(context.Background(), 7, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if relationship.ID() != 9 || relationship.UserAID() != 7 || relationship.UserBID() != 1007 {
+		t.Fatalf("relationship=%+v", relationship)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}

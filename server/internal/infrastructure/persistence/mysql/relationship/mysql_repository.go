@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"errors"
+	"fmt"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	"time"
 )
@@ -102,6 +103,47 @@ func (r MySQLRepository) AcceptInvitation(ctx context.Context, code string, user
 		return domain.Relationship{}, err
 	}
 	return domain.NewRelationship(id, creator, userID, now), nil
+}
+
+func (r MySQLRepository) CreateSoloRelationship(ctx context.Context, userID int64, now time.Time) (domain.Relationship, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.Relationship{}, err
+	}
+	defer tx.Rollback()
+	var lockedUserID int64
+	if err = tx.QueryRowContext(ctx, "SELECT id FROM users WHERE id=? FOR UPDATE", userID).Scan(&lockedUserID); err != nil {
+		return domain.Relationship{}, err
+	}
+	var active int
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM couples WHERE status='active' AND (user_a_id=? OR user_b_id=?) FOR UPDATE", userID, userID).Scan(&active); err != nil {
+		return domain.Relationship{}, err
+	}
+	if active > 0 {
+		return domain.Relationship{}, domain.ErrAlreadyBound
+	}
+	openid := fmt.Sprintf("solo-test-partner:%d", userID)
+	result, err := tx.ExecContext(ctx, "INSERT INTO users(wechat_openid,display_name) VALUES(?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id),display_name=VALUES(display_name)", openid, "测试搭子")
+	if err != nil {
+		return domain.Relationship{}, err
+	}
+	partnerID, err := result.LastInsertId()
+	if err != nil {
+		return domain.Relationship{}, err
+	}
+	relationship := domain.NewRelationship(0, userID, partnerID, now)
+	result, err = tx.ExecContext(ctx, "INSERT INTO couples(user_a_id,user_b_id,status,bound_at) VALUES(?,?,'active',?)", relationship.UserAID(), relationship.UserBID(), now)
+	if err != nil {
+		return domain.Relationship{}, err
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return domain.Relationship{}, err
+	}
+	if err = tx.Commit(); err != nil {
+		return domain.Relationship{}, err
+	}
+	return domain.NewRelationship(id, userID, partnerID, now), nil
 }
 func (r MySQLRepository) GetActive(ctx context.Context, userID int64) (domain.Relationship, error) {
 	var id, a, b int64

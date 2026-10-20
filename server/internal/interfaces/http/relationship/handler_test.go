@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 type fakeCreate struct{}
@@ -40,8 +41,14 @@ func (fakeGet) Execute(context.Context, application.GetRelationshipQuery) (domai
 type fakeEnd struct{}
 
 func (fakeEnd) Execute(context.Context, application.EndRelationshipCommand) error { return nil }
+
+type fakeSoloTest struct{}
+
+func (fakeSoloTest) Execute(_ context.Context, command application.EnableSoloTestCommand) (domain.Relationship, error) {
+	return domain.NewRelationship(12, command.UserID, 1007, time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)), nil
+}
 func fakeUseCases(bindErr error) UseCases {
-	return UseCases{fakeCreate{}, fakePreview{}, fakeBind{bindErr}, fakeGet{}, fakeEnd{}}
+	return UseCases{CreateInvitation: fakeCreate{}, PreviewInvitation: fakePreview{}, BindRelationship: fakeBind{bindErr}, GetRelationship: fakeGet{}, EndRelationship: fakeEnd{}}
 }
 func TestBindMapsStableErrorCodes(t *testing.T) {
 	cases := []struct {
@@ -73,6 +80,29 @@ func TestGetMapsNoActiveRelationship(t *testing.T) {
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/couples/me", nil))
 	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"NO_ACTIVE_COUPLE"`) {
 		t.Fatalf("body=%s", response.Body.String())
+	}
+}
+
+func TestSoloTestRouteIsRegisteredOnlyWhenEnabled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	request := func(useCases UseCases) *httptest.ResponseRecorder {
+		router := gin.New()
+		group := router.Group("/v1", func(c *gin.Context) { c.Set("userID", int64(7)) })
+		NewHandler(useCases).RegisterProtected(group)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1/couples/solo-test", nil))
+		return response
+	}
+
+	disabled := request(fakeUseCases(nil))
+	if disabled.Code != http.StatusNotFound {
+		t.Fatalf("disabled status=%d", disabled.Code)
+	}
+	enabledUseCases := fakeUseCases(nil)
+	enabledUseCases.EnableSoloTest = fakeSoloTest{}
+	enabled := request(enabledUseCases)
+	if enabled.Code != http.StatusCreated || !strings.Contains(enabled.Body.String(), `"userAId":7`) || !strings.Contains(enabled.Body.String(), `"userBId":1007`) {
+		t.Fatalf("enabled status=%d body=%s", enabled.Code, enabled.Body.String())
 	}
 }
 

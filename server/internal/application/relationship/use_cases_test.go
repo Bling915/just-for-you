@@ -19,6 +19,19 @@ type memoryRepository struct {
 	active     map[int64]domain.Relationship
 }
 
+func (r *memoryRepository) CreateSoloRelationship(_ context.Context, userID int64, now time.Time) (domain.Relationship, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.active[userID]; ok {
+		return domain.Relationship{}, domain.ErrAlreadyBound
+	}
+	partnerID := userID + 1000
+	relationship := domain.NewRelationship(2, userID, partnerID, now)
+	r.active[userID] = relationship
+	r.active[partnerID] = relationship
+	return relationship, nil
+}
+
 func (r *memoryRepository) SaveInvitation(_ context.Context, i domain.Invitation) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -117,6 +130,32 @@ func TestEndRelationshipRemovesAccess(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := get.Execute(context.Background(), GetRelationshipQuery{UserID: 2}); !errors.Is(err, domain.ErrNoActiveRelationship) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestEnableSoloTestCreatesRelationshipForCurrentUser(t *testing.T) {
+	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	repo := &memoryRepository{active: map[int64]domain.Relationship{}}
+	useCase := NewEnableSoloTestUseCase(repo, fixedClock{now})
+
+	relationship, err := useCase.Execute(context.Background(), EnableSoloTestCommand{UserID: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if relationship.UserAID() != 7 || relationship.UserBID() != 1007 || !relationship.BoundAt().Equal(now) {
+		t.Fatalf("relationship=%+v", relationship)
+	}
+}
+
+func TestEnableSoloTestRejectsAlreadyBoundUser(t *testing.T) {
+	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	existing := domain.NewRelationship(1, 7, 8, now)
+	repo := &memoryRepository{active: map[int64]domain.Relationship{7: existing, 8: existing}}
+	useCase := NewEnableSoloTestUseCase(repo, fixedClock{now})
+
+	_, err := useCase.Execute(context.Background(), EnableSoloTestCommand{UserID: 7})
+	if !errors.Is(err, domain.ErrAlreadyBound) {
 		t.Fatalf("err=%v", err)
 	}
 }

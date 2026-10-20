@@ -27,7 +27,7 @@ func New() (*Application, error) {
 		return nil, err
 	}
 	identity, tokens := buildIdentity(cfg, db)
-	relationship, getRelationship := buildRelationship(db)
+	relationship, getRelationship := buildRelationship(db, cfg.EnableSoloTest)
 	moment, err := buildMoment(cfg, db, getRelationship)
 	if err != nil {
 		_ = db.Close()

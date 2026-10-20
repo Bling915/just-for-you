@@ -25,12 +25,16 @@ type GetRelationshipExecutor interface {
 type EndRelationshipExecutor interface {
 	Execute(context.Context, application.EndRelationshipCommand) error
 }
+type EnableSoloTestExecutor interface {
+	Execute(context.Context, application.EnableSoloTestCommand) (domain.Relationship, error)
+}
 type UseCases struct {
 	CreateInvitation  CreateInvitationExecutor
 	PreviewInvitation PreviewInvitationExecutor
 	BindRelationship  BindRelationshipExecutor
 	GetRelationship   GetRelationshipExecutor
 	EndRelationship   EndRelationshipExecutor
+	EnableSoloTest    EnableSoloTestExecutor
 }
 type Handler struct{ useCases UseCases }
 
@@ -42,6 +46,9 @@ func (h *Handler) RegisterProtected(group *gin.RouterGroup) {
 	group.POST("/couples/bind", h.bind)
 	group.GET("/couples/me", h.get)
 	group.DELETE("/couples/me", h.end)
+	if h.useCases.EnableSoloTest != nil {
+		group.POST("/couples/solo-test", h.enableSoloTest)
+	}
 }
 func (h *Handler) create(c *gin.Context) {
 	x, err := h.useCases.CreateInvitation.Execute(c, application.CreateInvitationCommand{UserID: httpserver.UserID(c)})
@@ -88,6 +95,14 @@ func (h *Handler) end(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+func (h *Handler) enableSoloTest(c *gin.Context) {
+	x, err := h.useCases.EnableSoloTest.Execute(c, application.EnableSoloTestCommand{UserID: httpserver.UserID(c)})
+	if err != nil {
+		writeDomainError(c, err)
+		return
+	}
+	httpserver.WriteData(c, http.StatusCreated, relationshipDTO(x))
 }
 func writeDomainError(c *gin.Context, err error) {
 	status := http.StatusInternalServerError

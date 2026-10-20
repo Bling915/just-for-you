@@ -34,3 +34,24 @@ func TestLoadRejectsShortJWTSecret(t *testing.T) {
 		t.Fatalf("Load() error = %v, want minimum-length error", err)
 	}
 }
+
+func TestLoadEnablesSoloTestOnlyWhenExplicitlyTrue(t *testing.T) {
+	setValidEnvironment(t)
+	t.Setenv("ENABLE_SOLO_TEST", "true")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.EnableSoloTest {
+		t.Fatal("EnableSoloTest=false, want true")
+	}
+
+	t.Setenv("ENABLE_SOLO_TEST", "")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.EnableSoloTest {
+		t.Fatal("EnableSoloTest=true without explicit opt-in")
+	}
+}
