@@ -1,4 +1,4 @@
 const test=require('node:test');const assert=require('node:assert/strict');const {createAppState}=require('../store/app-state')
 function fixtures(){const calls=[];return{calls,deps:{session:{clear:()=>calls.push('session')},draft:{clear:()=>calls.push('draft')},timeline:{reset:()=>calls.push('timeline')},cache:{remove:key=>calls.push(key)}}}}
-test('logout clears all private state',()=>{const {calls,deps}=fixtures();createAppState(deps).clearPrivateData();assert.deepEqual(calls,['timeline','draft','homeSnapshot','relationshipSnapshot','session'])})
-test('ending a relationship keeps session but clears couple data',()=>{const {calls,deps}=fixtures();createAppState(deps).clearRelationshipData();assert.deepEqual(calls,['timeline','draft','homeSnapshot','relationshipSnapshot'])})
+test('logout clears all private state',()=>{const {calls,deps}=fixtures();createAppState(deps).clearPrivateData();assert.deepEqual(calls,['timeline','draft','homeSnapshot','relationshipSnapshot','editingMoment','session'])})
+test('ending a relationship keeps session but clears couple data',()=>{const {calls,deps}=fixtures();createAppState(deps).clearRelationshipData();assert.deepEqual(calls,['timeline','draft','homeSnapshot','relationshipSnapshot','editingMoment'])})

@@ -1,0 +1,2 @@
+const routes={home:'/pages/home/index',timeline:'/pages/timeline/index',me:'/pages/me/index',compose:'/pages/compose/index',calendar:'/pages/calendar/index',map:'/pages/memory-map/index',report:'/pages/monthly-report/index',anniversaries:'/pages/anniversaries/index',todos:'/pages/todos/index',wishes:'/pages/wishes/index',notifications:'/pages/notification-settings/index'}
+module.exports={routes}

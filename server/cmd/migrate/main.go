@@ -13,9 +13,14 @@ import (
 
 func main() {
 	direction := flag.String("direction", "up", "up or down")
+	version := flag.Int("version", 2, "migration version")
 	flag.Parse()
-	name := "000001_init." + *direction + ".sql"
-	contents, err := os.ReadFile(filepath.Join("migrations", name))
+	prefix := fmt.Sprintf("%06d_", *version)
+	matches, err := filepath.Glob(filepath.Join("migrations", prefix+"*."+*direction+".sql"))
+	if err != nil || len(matches) != 1 {
+		log.Fatalf("migration version %d not found", *version)
+	}
+	contents, err := os.ReadFile(matches[0])
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -31,5 +36,5 @@ func main() {
 	if _, err := db.Exec(string(contents)); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("applied", name)
+	fmt.Println("applied", filepath.Base(matches[0]))
 }
