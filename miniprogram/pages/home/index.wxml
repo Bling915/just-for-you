@@ -7,7 +7,7 @@
       <view class="partner-avatar"><image wx:if="{{relationship.partner.avatarUrl}}" src="{{relationship.partner.avatarUrl}}" mode="aspectFill"/><text wx:else>{{partnerInitial}}</text></view>
       <view class="partner-copy"><view><text>{{relationship.partner.displayName || '你的搭子'}}</text><text wx:if="{{relationship.soloTest}}" class="solo-badge">单人测试</text></view><view>牵手第 {{relationshipDays}} 天</view></view>
     </view>
-    <view class="hero"><view class="hero-caption">TA 的此刻</view><status-orb moment="{{presenceMoment || home.partnerLatestStatus}}"/><view class="companion-actions"><button bindtap="editStatus">更新我的状态</button><button data-kind="miss_you" bindtap="sendNudge">♡ 想你了</button><button data-kind="hug" bindtap="sendNudge">抱抱</button><button data-kind="cheer_up" bindtap="sendNudge">加油</button></view></view>
+    <view class="hero"><view class="hero-caption">TA 的此刻</view><status-orb moment="{{presenceMoment}}"/><view class="companion-actions"><button bindtap="editStatus">更新我的状态</button><button data-kind="miss_you" bindtap="sendNudge">♡ 想你了</button><button data-kind="hug" bindtap="sendNudge">抱抱</button><button data-kind="cheer_up" bindtap="sendNudge">加油</button></view></view>
     <view class="section-head"><view>最近的小事</view><text>{{moments.length ? '慢慢收藏每个今天' : '从今天开始'}}</text></view>
     <empty-state wx:if="{{state === 'empty'}}"/>
     <empty-state wx:elif="{{state === 'error-empty'}}" title="暂时没有连上" description="可能只是网络打了个盹，等一下再看看。" action="重新加载" bind:action="retry"/>
