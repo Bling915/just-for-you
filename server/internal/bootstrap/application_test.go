@@ -25,6 +25,9 @@ func (testRegistrar) RegisterProtected(r *gin.RouterGroup) {
 
 func TestApplicationBuildsRegisteredRoutes(t *testing.T) {
 	app := newApplicationForTest(httpserver.Dependencies{Tokens: testTokens{}, Registrars: []httpserver.RouteRegistrar{testRegistrar{}}})
+	if app.server.MaxHeaderBytes != 1<<20 {
+		t.Fatalf("expected bounded headers, got %d", app.server.MaxHeaderBytes)
+	}
 	for _, path := range []string{"/healthz", "/test-public", "/v1/test-protected"} {
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, path, nil)
