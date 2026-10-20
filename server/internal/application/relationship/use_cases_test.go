@@ -1,9 +1,9 @@
-package application
+package relationship
 
 import (
 	"context"
 	"errors"
-	"github.com/nanfang/just-for-you/server/internal/relationship/domain"
+	domain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	"sync"
 	"testing"
 	"time"
@@ -77,8 +77,8 @@ func (r *memoryRepository) End(_ context.Context, userID int64, now time.Time) e
 func TestCreateInvitationExpiresInTenMinutes(t *testing.T) {
 	now := time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)
 	repo := &memoryRepository{active: map[int64]domain.Relationship{}}
-	service := NewService(repo, fixedClock{now}, func() (string, error) { return "AB3K9Z", nil })
-	invitation, err := service.CreateInvitation(context.Background(), 1)
+	useCase := NewCreateInvitationUseCase(repo, fixedClock{now}, func() (string, error) { return "AB3K9Z", nil })
+	invitation, err := useCase.Execute(context.Background(), CreateInvitationCommand{UserID: 1})
 	if err != nil || !invitation.ExpiresAt().Equal(now.Add(10*time.Minute)) {
 		t.Fatalf("invitation=%+v err=%v", invitation, err)
 	}
@@ -87,7 +87,7 @@ func TestConcurrentBindOnlyOneSucceeds(t *testing.T) {
 	now := time.Now()
 	invitation, _ := domain.NewInvitation("AB3K9Z", 1, now.Add(time.Minute))
 	repo := &memoryRepository{invitation: invitation, active: map[int64]domain.Relationship{}}
-	service := NewService(repo, fixedClock{now}, func() (string, error) { return "AB3K9Z", nil })
+	useCase := NewBindRelationshipUseCase(repo, fixedClock{now})
 	var wg sync.WaitGroup
 	success := 0
 	var mu sync.Mutex
@@ -95,7 +95,7 @@ func TestConcurrentBindOnlyOneSucceeds(t *testing.T) {
 		wg.Add(1)
 		go func(userID int64) {
 			defer wg.Done()
-			if _, err := service.BindRelationship(context.Background(), userID, "AB3K9Z"); err == nil {
+			if _, err := useCase.Execute(context.Background(), BindRelationshipCommand{UserID: userID, Code: "AB3K9Z"}); err == nil {
 				mu.Lock()
 				success++
 				mu.Unlock()
@@ -111,11 +111,12 @@ func TestEndRelationshipRemovesAccess(t *testing.T) {
 	now := time.Now()
 	relationship := domain.NewRelationship(1, 1, 2, now)
 	repo := &memoryRepository{active: map[int64]domain.Relationship{1: relationship, 2: relationship}}
-	service := NewService(repo, fixedClock{now}, func() (string, error) { return "AB3K9Z", nil })
-	if err := service.EndRelationship(context.Background(), 1); err != nil {
+	end := NewEndRelationshipUseCase(repo, fixedClock{now})
+	get := NewGetRelationshipUseCase(repo)
+	if err := end.Execute(context.Background(), EndRelationshipCommand{UserID: 1}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.GetRelationship(context.Background(), 2); !errors.Is(err, domain.ErrNoActiveRelationship) {
+	if _, err := get.Execute(context.Background(), GetRelationshipQuery{UserID: 2}); !errors.Is(err, domain.ErrNoActiveRelationship) {
 		t.Fatalf("err=%v", err)
 	}
 }

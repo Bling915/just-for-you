@@ -4,17 +4,33 @@ import (
 	"context"
 	"errors"
 	"github.com/gin-gonic/gin"
+	application "github.com/nanfang/just-for-you/server/internal/application/relationship"
+	domain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
-	"github.com/nanfang/just-for-you/server/internal/relationship/domain"
 	"net/http"
 )
 
-type UseCases interface {
-	CreateInvitation(context.Context, int64) (domain.Invitation, error)
-	PreviewInvitation(context.Context, int64, string) (domain.Invitation, error)
-	BindRelationship(context.Context, int64, string) (domain.Relationship, error)
-	GetRelationship(context.Context, int64) (domain.Relationship, error)
-	EndRelationship(context.Context, int64) error
+type CreateInvitationExecutor interface {
+	Execute(context.Context, application.CreateInvitationCommand) (domain.Invitation, error)
+}
+type PreviewInvitationExecutor interface {
+	Execute(context.Context, application.PreviewInvitationQuery) (domain.Invitation, error)
+}
+type BindRelationshipExecutor interface {
+	Execute(context.Context, application.BindRelationshipCommand) (domain.Relationship, error)
+}
+type GetRelationshipExecutor interface {
+	Execute(context.Context, application.GetRelationshipQuery) (domain.Relationship, error)
+}
+type EndRelationshipExecutor interface {
+	Execute(context.Context, application.EndRelationshipCommand) error
+}
+type UseCases struct {
+	CreateInvitation  CreateInvitationExecutor
+	PreviewInvitation PreviewInvitationExecutor
+	BindRelationship  BindRelationshipExecutor
+	GetRelationship   GetRelationshipExecutor
+	EndRelationship   EndRelationshipExecutor
 }
 type Handler struct{ useCases UseCases }
 
@@ -28,7 +44,7 @@ func (h *Handler) RegisterProtected(group *gin.RouterGroup) {
 	group.DELETE("/couples/me", h.end)
 }
 func (h *Handler) create(c *gin.Context) {
-	x, err := h.useCases.CreateInvitation(c, httpserver.UserID(c))
+	x, err := h.useCases.CreateInvitation.Execute(c, application.CreateInvitationCommand{UserID: httpserver.UserID(c)})
 	if err != nil {
 		writeDomainError(c, err)
 		return
@@ -36,7 +52,7 @@ func (h *Handler) create(c *gin.Context) {
 	httpserver.WriteData(c, 201, invitationDTO(x))
 }
 func (h *Handler) preview(c *gin.Context) {
-	x, err := h.useCases.PreviewInvitation(c, httpserver.UserID(c), c.Param("code"))
+	x, err := h.useCases.PreviewInvitation.Execute(c, application.PreviewInvitationQuery{UserID: httpserver.UserID(c), Code: c.Param("code")})
 	if err != nil {
 		writeDomainError(c, err)
 		return
@@ -51,7 +67,7 @@ func (h *Handler) bind(c *gin.Context) {
 		httpserver.WriteError(c, 400, "INVITE_INVALID", "邀请码无效")
 		return
 	}
-	x, err := h.useCases.BindRelationship(c, httpserver.UserID(c), input.Code)
+	x, err := h.useCases.BindRelationship.Execute(c, application.BindRelationshipCommand{UserID: httpserver.UserID(c), Code: input.Code})
 	if err != nil {
 		writeDomainError(c, err)
 		return
@@ -59,7 +75,7 @@ func (h *Handler) bind(c *gin.Context) {
 	httpserver.WriteData(c, 201, relationshipDTO(x))
 }
 func (h *Handler) get(c *gin.Context) {
-	x, err := h.useCases.GetRelationship(c, httpserver.UserID(c))
+	x, err := h.useCases.GetRelationship.Execute(c, application.GetRelationshipQuery{UserID: httpserver.UserID(c)})
 	if err != nil {
 		writeDomainError(c, err)
 		return
@@ -67,7 +83,7 @@ func (h *Handler) get(c *gin.Context) {
 	httpserver.WriteData(c, 200, relationshipDTO(x))
 }
 func (h *Handler) end(c *gin.Context) {
-	if err := h.useCases.EndRelationship(c, httpserver.UserID(c)); err != nil {
+	if err := h.useCases.EndRelationship.Execute(c, application.EndRelationshipCommand{UserID: httpserver.UserID(c)}); err != nil {
 		writeDomainError(c, err)
 		return
 	}

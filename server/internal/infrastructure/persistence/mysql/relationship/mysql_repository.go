@@ -5,7 +5,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"errors"
-	"github.com/nanfang/just-for-you/server/internal/relationship/domain"
+	domain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	"time"
 )
 

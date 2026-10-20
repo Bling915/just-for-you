@@ -7,10 +7,10 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 	"github.com/nanfang/just-for-you/server/internal/moment/application"
 	"github.com/nanfang/just-for-you/server/internal/moment/domain"
-	relationshipdomain "github.com/nanfang/just-for-you/server/internal/relationship/domain"
 )
 
 type UseCases interface {

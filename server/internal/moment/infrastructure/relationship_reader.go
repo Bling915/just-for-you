@@ -2,12 +2,13 @@ package infrastructure
 
 import (
 	"context"
+	relationshipapplication "github.com/nanfang/just-for-you/server/internal/application/relationship"
+	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	"github.com/nanfang/just-for-you/server/internal/moment/application"
-	relationshipdomain "github.com/nanfang/just-for-you/server/internal/relationship/domain"
 )
 
 type RelationshipService interface {
-	GetRelationship(context.Context, int64) (relationshipdomain.Relationship, error)
+	Execute(context.Context, relationshipapplication.GetRelationshipQuery) (relationshipdomain.Relationship, error)
 }
 type ActiveRelationshipReader struct{ service RelationshipService }
 
@@ -15,7 +16,7 @@ func NewActiveRelationshipReader(service RelationshipService) ActiveRelationship
 	return ActiveRelationshipReader{service: service}
 }
 func (r ActiveRelationshipReader) GetActiveRelationship(ctx context.Context, userID int64) (application.ActiveRelationship, error) {
-	relationship, err := r.service.GetRelationship(ctx, userID)
+	relationship, err := r.service.Execute(ctx, relationshipapplication.GetRelationshipQuery{UserID: userID})
 	if err != nil {
 		return application.ActiveRelationship{}, err
 	}

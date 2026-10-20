@@ -6,20 +6,20 @@ import (
 	"time"
 
 	identityapplication "github.com/nanfang/just-for-you/server/internal/application/identity"
+	relationshipapplication "github.com/nanfang/just-for-you/server/internal/application/relationship"
 	infraClock "github.com/nanfang/just-for-you/server/internal/infrastructure/clock"
 	"github.com/nanfang/just-for-you/server/internal/infrastructure/config"
 	wechat "github.com/nanfang/just-for-you/server/internal/infrastructure/identity/wechat"
 	identitymysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/identity"
+	relationshipmysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/relationship"
 	database "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/shared"
 	jwt "github.com/nanfang/just-for-you/server/internal/infrastructure/security/jwt"
 	identityhttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/identity"
+	relationshiphttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/relationship"
 	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 	momentapplication "github.com/nanfang/just-for-you/server/internal/moment/application"
 	momentinfrastructure "github.com/nanfang/just-for-you/server/internal/moment/infrastructure"
 	momenthttp "github.com/nanfang/just-for-you/server/internal/moment/interfaces/http"
-	relationshipapplication "github.com/nanfang/just-for-you/server/internal/relationship/application"
-	relationshipinfrastructure "github.com/nanfang/just-for-you/server/internal/relationship/infrastructure"
-	relationshiphttp "github.com/nanfang/just-for-you/server/internal/relationship/interfaces/http"
 )
 
 func main() {
@@ -42,14 +42,22 @@ func main() {
 		GetProfile:     identityapplication.NewGetProfileUseCase(identityRepository),
 		UpdateProfile:  identityapplication.NewUpdateProfileUseCase(identityRepository),
 	}
-	relationshipService := relationshipapplication.NewService(relationshipinfrastructure.NewMySQLRepository(db), infraClock.System{}, relationshipinfrastructure.GenerateInvitationCode)
+	relationshipRepository := relationshipmysql.NewMySQLRepository(db)
+	getRelationship := relationshipapplication.NewGetRelationshipUseCase(relationshipRepository)
+	relationshipUseCases := relationshiphttp.UseCases{
+		CreateInvitation:  relationshipapplication.NewCreateInvitationUseCase(relationshipRepository, infraClock.System{}, relationshipmysql.GenerateInvitationCode),
+		PreviewInvitation: relationshipapplication.NewPreviewInvitationUseCase(relationshipRepository, infraClock.System{}),
+		BindRelationship:  relationshipapplication.NewBindRelationshipUseCase(relationshipRepository, infraClock.System{}),
+		GetRelationship:   getRelationship,
+		EndRelationship:   relationshipapplication.NewEndRelationshipUseCase(relationshipRepository, infraClock.System{}),
+	}
 	momentRepository := momentinfrastructure.NewMySQLRepository(db)
 	photoStorage, err := momentinfrastructure.NewCOSStorage(cfg.COSBucketURL, cfg.COSSecretID, cfg.COSSecretKey)
 	if err != nil {
 		log.Fatal(err)
 	}
 	momentService := momentapplication.NewService(
-		momentinfrastructure.NewActiveRelationshipReader(relationshipService),
+		momentinfrastructure.NewActiveRelationshipReader(getRelationship),
 		momentRepository,
 		momentRepository,
 		photoStorage,
@@ -59,7 +67,7 @@ func main() {
 		Tokens: tokens,
 		Registrars: []httpserver.RouteRegistrar{
 			identityhttp.NewHandler(identityUseCases),
-			relationshiphttp.NewHandler(relationshipService),
+			relationshiphttp.NewHandler(relationshipUseCases),
 			momenthttp.NewHandler(momentService),
 		},
 	})

@@ -3,8 +3,8 @@ package application
 import (
 	"context"
 	"errors"
+	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	momentdomain "github.com/nanfang/just-for-you/server/internal/moment/domain"
-	relationshipdomain "github.com/nanfang/just-for-you/server/internal/relationship/domain"
 	"testing"
 	"time"
 )

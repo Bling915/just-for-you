@@ -5,28 +5,44 @@ import (
 	"context"
 	"errors"
 	"github.com/gin-gonic/gin"
-	"github.com/nanfang/just-for-you/server/internal/relationship/domain"
+	application "github.com/nanfang/just-for-you/server/internal/application/relationship"
+	domain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
-type fakeUseCases struct{ bindErr error }
+type fakeCreate struct{}
 
-func (fakeUseCases) CreateInvitation(context.Context, int64) (domain.Invitation, error) {
+func (fakeCreate) Execute(context.Context, application.CreateInvitationCommand) (domain.Invitation, error) {
 	return domain.Invitation{}, nil
 }
-func (fakeUseCases) PreviewInvitation(context.Context, int64, string) (domain.Invitation, error) {
+
+type fakePreview struct{}
+
+func (fakePreview) Execute(context.Context, application.PreviewInvitationQuery) (domain.Invitation, error) {
 	return domain.Invitation{}, nil
 }
-func (f fakeUseCases) BindRelationship(context.Context, int64, string) (domain.Relationship, error) {
-	return domain.Relationship{}, f.bindErr
+
+type fakeBind struct{ err error }
+
+func (f fakeBind) Execute(context.Context, application.BindRelationshipCommand) (domain.Relationship, error) {
+	return domain.Relationship{}, f.err
 }
-func (fakeUseCases) GetRelationship(context.Context, int64) (domain.Relationship, error) {
+
+type fakeGet struct{}
+
+func (fakeGet) Execute(context.Context, application.GetRelationshipQuery) (domain.Relationship, error) {
 	return domain.Relationship{}, domain.ErrNoActiveRelationship
 }
-func (fakeUseCases) EndRelationship(context.Context, int64) error { return nil }
+
+type fakeEnd struct{}
+
+func (fakeEnd) Execute(context.Context, application.EndRelationshipCommand) error { return nil }
+func fakeUseCases(bindErr error) UseCases {
+	return UseCases{fakeCreate{}, fakePreview{}, fakeBind{bindErr}, fakeGet{}, fakeEnd{}}
+}
 func TestBindMapsStableErrorCodes(t *testing.T) {
 	cases := []struct {
 		err  error
@@ -37,7 +53,7 @@ func TestBindMapsStableErrorCodes(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 			router := gin.New()
 			group := router.Group("/v1", func(c *gin.Context) { c.Set("userID", int64(2)) })
-			NewHandler(fakeUseCases{bindErr: item.err}).RegisterProtected(group)
+			NewHandler(fakeUseCases(item.err)).RegisterProtected(group)
 			request := httptest.NewRequest(http.MethodPost, "/v1/couples/bind", bytes.NewBufferString(`{"code":"AB3K9Z"}`))
 			request.Header.Set("Content-Type", "application/json")
 			response := httptest.NewRecorder()
@@ -52,7 +68,7 @@ func TestGetMapsNoActiveRelationship(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	group := router.Group("/v1", func(c *gin.Context) { c.Set("userID", int64(2)) })
-	NewHandler(fakeUseCases{}).RegisterProtected(group)
+	NewHandler(fakeUseCases(nil)).RegisterProtected(group)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/couples/me", nil))
 	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), `"code":"NO_ACTIVE_COUPLE"`) {
