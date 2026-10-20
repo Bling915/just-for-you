@@ -59,7 +59,7 @@ func (r MySQLRepository) SaveWithGrants(ctx context.Context, moment domain.Momen
 			return domain.Moment{}, domain.ErrInvalidUpload
 		}
 	}
-	result, err := tx.ExecContext(ctx, "INSERT INTO moments(couple_id,author_user_id,body,status_code,place_name,created_at) VALUES(?,?,?,?,?,?)", moment.RelationshipID(), moment.AuthorID(), moment.Text(), string(moment.Status()), moment.Place(), moment.CreatedAt())
+	result, err := tx.ExecContext(ctx, "INSERT INTO moments(couple_id,author_user_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)", moment.RelationshipID(), moment.AuthorID(), moment.Text(), string(moment.Status()), moment.Place(), moment.Latitude(), moment.Longitude(), moment.OccurredAt(), moment.CreatedAt(), moment.UpdatedAt())
 	if err != nil {
 		return domain.Moment{}, err
 	}
@@ -80,20 +80,63 @@ func (r MySQLRepository) SaveWithGrants(ctx context.Context, moment domain.Momen
 	if err = tx.Commit(); err != nil {
 		return domain.Moment{}, err
 	}
-	return domain.RestoreMoment(id, moment.AuthorID(), moment.RelationshipID(), moment.Text(), moment.Status(), moment.Place(), moment.Photos(), moment.CreatedAt(), nil), nil
+	return domain.RestoreMomentDetails(id, moment.AuthorID(), moment.RelationshipID(), moment.Text(), moment.Status(), moment.Place(), moment.Latitude(), moment.Longitude(), moment.Photos(), moment.OccurredAt(), moment.CreatedAt(), moment.UpdatedAt(), nil), nil
+}
+func (r MySQLRepository) UpdateWithGrants(ctx context.Context, moment domain.Moment, version time.Time, grants []application.UploadGrant) (domain.Moment, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.Moment{}, err
+	}
+	defer tx.Rollback()
+	for _, grant := range grants {
+		var owner int64
+		var expires time.Time
+		var consumed sql.NullTime
+		if err = tx.QueryRowContext(ctx, "SELECT user_id,expires_at,consumed_at FROM upload_grants WHERE object_key=? FOR UPDATE", grant.ObjectKey).Scan(&owner, &expires, &consumed); err != nil || owner != moment.AuthorID() || consumed.Valid || !expires.After(moment.UpdatedAt()) {
+			return domain.Moment{}, domain.ErrInvalidUpload
+		}
+	}
+	result, err := tx.ExecContext(ctx, "UPDATE moments SET body=?,status_code=?,place_name=?,latitude=?,longitude=?,occurred_at=?,updated_at=? WHERE id=? AND couple_id=? AND updated_at=? AND deleted_at IS NULL", moment.Text(), string(moment.Status()), moment.Place(), moment.Latitude(), moment.Longitude(), moment.OccurredAt(), moment.UpdatedAt(), moment.ID(), moment.RelationshipID(), version)
+	if err != nil {
+		return domain.Moment{}, err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return domain.Moment{}, err
+	}
+	if count != 1 {
+		return domain.Moment{}, domain.ErrMomentConflict
+	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM moment_photos WHERE moment_id=?", moment.ID()); err != nil {
+		return domain.Moment{}, err
+	}
+	for _, photo := range moment.Photos() {
+		if _, err = tx.ExecContext(ctx, "INSERT INTO moment_photos(moment_id,object_key,sort_order) VALUES(?,?,?)", moment.ID(), photo.ObjectKey(), photo.Order()); err != nil {
+			return domain.Moment{}, err
+		}
+	}
+	for _, grant := range grants {
+		if _, err = tx.ExecContext(ctx, "UPDATE upload_grants SET consumed_at=? WHERE object_key=?", moment.UpdatedAt(), grant.ObjectKey); err != nil {
+			return domain.Moment{}, err
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		return domain.Moment{}, err
+	}
+	return moment, nil
 }
 func (r MySQLRepository) List(ctx context.Context, relationshipID int64, cursor string, limit int) (application.TimelinePage, error) {
-	query := "SELECT id,author_user_id,body,status_code,place_name,created_at,deleted_at FROM moments WHERE couple_id=? AND deleted_at IS NULL"
+	query := "SELECT id,author_user_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at,deleted_at FROM moments WHERE couple_id=? AND deleted_at IS NULL"
 	args := []any{relationshipID}
 	if cursor != "" {
 		at, id, err := decodeCursor(cursor)
 		if err != nil {
 			return application.TimelinePage{}, err
 		}
-		query += " AND (created_at < ? OR (created_at = ? AND id < ?))"
+		query += " AND (occurred_at < ? OR (occurred_at = ? AND id < ?))"
 		args = append(args, at, at, id)
 	}
-	query += " ORDER BY created_at DESC,id DESC LIMIT ?"
+	query += " ORDER BY occurred_at DESC,id DESC LIMIT ?"
 	args = append(args, limit+1)
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -111,7 +154,7 @@ func (r MySQLRepository) List(ctx context.Context, relationshipID int64, cursor 
 	page := application.TimelinePage{Moments: moments}
 	if len(moments) > limit {
 		last := moments[limit-1]
-		page.NextCursor = encodeCursor(last.CreatedAt(), last.ID())
+		page.NextCursor = encodeCursor(last.OccurredAt(), last.ID())
 		page.Moments = moments[:limit]
 	}
 	return page, rows.Err()
@@ -122,9 +165,10 @@ type scanner interface{ Scan(...any) error }
 func (r MySQLRepository) scanMoment(ctx context.Context, row scanner, relationshipID int64) (domain.Moment, error) {
 	var id, author int64
 	var text, status, place string
-	var created time.Time
+	var latitude, longitude sql.NullFloat64
+	var occurred, created, updated time.Time
 	var deleted sql.NullTime
-	if err := row.Scan(&id, &author, &text, &status, &place, &created, &deleted); err != nil {
+	if err := row.Scan(&id, &author, &text, &status, &place, &latitude, &longitude, &occurred, &created, &updated, &deleted); err != nil {
 		return domain.Moment{}, err
 	}
 	photoRows, err := r.db.QueryContext(ctx, "SELECT object_key,sort_order FROM moment_photos WHERE moment_id=? ORDER BY sort_order", id)
@@ -145,14 +189,21 @@ func (r MySQLRepository) scanMoment(ctx context.Context, row scanner, relationsh
 	if deleted.Valid {
 		deletedAt = &deleted.Time
 	}
-	return domain.RestoreMoment(id, author, relationshipID, text, domain.Status(status), place, photos, created, deletedAt), nil
+	var latitudeValue, longitudeValue *float64
+	if latitude.Valid {
+		latitudeValue = &latitude.Float64
+	}
+	if longitude.Valid {
+		longitudeValue = &longitude.Float64
+	}
+	return domain.RestoreMomentDetails(id, author, relationshipID, text, domain.Status(status), place, latitudeValue, longitudeValue, photos, occurred, created, updated, deletedAt), nil
 }
 func (r MySQLRepository) Recent(ctx context.Context, relationshipID int64, limit int) ([]domain.Moment, error) {
 	page, err := r.List(ctx, relationshipID, "", limit)
 	return page.Moments, err
 }
 func (r MySQLRepository) LatestStatusByAuthor(ctx context.Context, relationshipID, authorID int64) (*domain.Moment, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT id,author_user_id,body,status_code,place_name,created_at,deleted_at FROM moments WHERE couple_id=? AND author_user_id=? AND status_code<>'' AND deleted_at IS NULL ORDER BY created_at DESC,id DESC LIMIT 1", relationshipID, authorID)
+	row := r.db.QueryRowContext(ctx, "SELECT id,author_user_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at,deleted_at FROM moments WHERE couple_id=? AND author_user_id=? AND status_code<>'' AND deleted_at IS NULL ORDER BY occurred_at DESC,id DESC LIMIT 1", relationshipID, authorID)
 	moment, err := r.scanMoment(ctx, row, relationshipID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -160,7 +211,7 @@ func (r MySQLRepository) LatestStatusByAuthor(ctx context.Context, relationshipI
 	return &moment, err
 }
 func (r MySQLRepository) Find(ctx context.Context, relationshipID, momentID int64) (domain.Moment, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT id,author_user_id,body,status_code,place_name,created_at,deleted_at FROM moments WHERE couple_id=? AND id=? AND deleted_at IS NULL", relationshipID, momentID)
+	row := r.db.QueryRowContext(ctx, "SELECT id,author_user_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at,deleted_at FROM moments WHERE couple_id=? AND id=? AND deleted_at IS NULL", relationshipID, momentID)
 	moment, err := r.scanMoment(ctx, row, relationshipID)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = domain.ErrMomentNotFound

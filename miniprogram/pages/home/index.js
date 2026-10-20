@@ -21,6 +21,7 @@ Page({
   async sendNudge(event){const kind=event.currentTarget.dataset.kind;if(this.data.sendingNudge)return;this.setData({sendingNudge:kind});try{await companionshipService.sendNudge(kind);wx.showToast({title:kind==='hug'?'抱抱送到啦':kind==='cheer_up'?'给 TA 加油啦':'想念送到啦',icon:'none'})}catch(error){wx.showToast({title:error.code==='NUDGE_THROTTLED'?'慢一点，让心意先飞一会儿':'发送失败，稍后再试',icon:'none'})}finally{this.setData({sendingNudge:''})}},
   compose(){wx.navigateTo({url:'/pages/compose/index'})},
   preview(event){wx.previewImage(event.detail)},
+  edit(event){storage.set('editingMoment',event.detail.moment);wx.navigateTo({url:'/pages/moment-edit/index'})},
   remove(event){
     const id=event.detail.id
     wx.showModal({title:'删除这件小事？',content:'删除后不能恢复。',confirmText:'删除',confirmColor:'#C87580',success:async(result)=>{if(!result.confirm)return;try{await momentService.deleteMoment(id);this.setData({moments:this.data.moments.filter((item)=>item.id!==id)});wx.showToast({title:'已删除',icon:'none'})}catch(_){wx.showToast({title:'删除失败，请稍后再试',icon:'none'})}}})

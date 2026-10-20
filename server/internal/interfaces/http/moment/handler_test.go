@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 type fakeUpload struct{}
@@ -40,8 +41,41 @@ func (fakeHome) Execute(context.Context, application.GetHomeQuery) (application.
 type fakeDelete struct{ err error }
 
 func (f fakeDelete) Execute(context.Context, application.DeleteMomentCommand) error { return f.err }
+
+type fakeUpdate struct {
+	result domain.Moment
+	err    error
+}
+
+func (f fakeUpdate) Execute(context.Context, application.UpdateMomentCommand) (domain.Moment, error) {
+	return f.result, f.err
+}
 func fakeUseCases(publishErr, deleteErr error) UseCases {
-	return UseCases{fakeUpload{}, fakePublish{publishErr}, fakeTimeline{}, fakeHome{}, fakeDelete{deleteErr}}
+	return UseCases{RequestPhotoUpload: fakeUpload{}, PublishMoment: fakePublish{publishErr}, UpdateMoment: fakeUpdate{}, GetTimeline: fakeTimeline{}, GetHome: fakeHome{}, DeleteMoment: fakeDelete{deleteErr}}
+}
+func TestUpdateMapsConflictAndReturnsOccurrenceVersion(t *testing.T) {
+	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	conflict := fakeUseCases(nil, nil)
+	conflict.UpdateMoment = fakeUpdate{err: domain.ErrMomentConflict}
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPatch, "/v1/moments/5", strings.NewReader(`{"text":"更新","occurredAt":"2026-10-20T11:00:00Z","version":"2026-10-20T10:00:00Z"}`))
+	request.Header.Set("Content-Type", "application/json")
+	routerFor(conflict).ServeHTTP(response, request)
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), `"code":"MOMENT_CONFLICT"`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	result := domain.RestoreMomentDetails(5, 1, 9, "更新", domain.StatusNone, "", nil, nil, nil, now.Add(-time.Hour), now.Add(-2*time.Hour), now, nil)
+	success := fakeUseCases(nil, nil)
+	success.UpdateMoment = fakeUpdate{result: result}
+	response = httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodPatch, "/v1/moments/5", strings.NewReader(`{"text":"更新","occurredAt":"2026-10-20T11:00:00Z","version":"2026-10-20T10:00:00Z"}`))
+	request.Header.Set("Content-Type", "application/json")
+	routerFor(success).ServeHTTP(response, request)
+	body := response.Body.String()
+	if response.Code != http.StatusOK || !strings.Contains(body, `"occurredAt":"2026-10-20T11:00:00Z"`) || !strings.Contains(body, `"updatedAt":"2026-10-20T12:00:00Z"`) {
+		t.Fatalf("status=%d body=%s", response.Code, body)
+	}
 }
 func routerFor(useCases UseCases) *gin.Engine {
 	gin.SetMode(gin.TestMode)

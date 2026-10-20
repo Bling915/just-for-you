@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	application "github.com/nanfang/just-for-you/server/internal/application/moment"
@@ -19,6 +20,9 @@ type RequestPhotoUploadExecutor interface {
 type PublishMomentExecutor interface {
 	Execute(context.Context, application.PublishMomentCommand) (domain.Moment, error)
 }
+type UpdateMomentExecutor interface {
+	Execute(context.Context, application.UpdateMomentCommand) (domain.Moment, error)
+}
 type GetTimelineExecutor interface {
 	Execute(context.Context, application.GetTimelineQuery) (application.TimelinePage, error)
 }
@@ -31,6 +35,7 @@ type DeleteMomentExecutor interface {
 type UseCases struct {
 	RequestPhotoUpload RequestPhotoUploadExecutor
 	PublishMoment      PublishMomentExecutor
+	UpdateMoment       UpdateMomentExecutor
 	GetTimeline        GetTimelineExecutor
 	GetHome            GetHomeExecutor
 	DeleteMoment       DeleteMomentExecutor
@@ -49,6 +54,7 @@ func (*Handler) RegisterPublic(*gin.Engine) {}
 func (h *Handler) RegisterProtected(group *gin.RouterGroup) {
 	group.POST("/uploads", h.requestUpload)
 	group.POST("/moments", h.publish)
+	group.PATCH("/moments/:id", h.update)
 	group.GET("/moments", h.timeline)
 	group.GET("/home", h.home)
 	group.DELETE("/moments/:id", h.delete)
@@ -70,21 +76,52 @@ func (h *Handler) requestUpload(c *gin.Context) {
 
 func (h *Handler) publish(c *gin.Context) {
 	var input struct {
-		Text      string        `json:"text"`
-		Status    domain.Status `json:"status"`
-		PlaceName string        `json:"placeName"`
-		PhotoKeys []string      `json:"photoKeys"`
+		Text       string        `json:"text"`
+		Status     domain.Status `json:"status"`
+		PlaceName  string        `json:"placeName"`
+		Latitude   *float64      `json:"latitude"`
+		Longitude  *float64      `json:"longitude"`
+		PhotoKeys  []string      `json:"photoKeys"`
+		OccurredAt time.Time     `json:"occurredAt"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		httpserver.WriteError(c, http.StatusBadRequest, "INVALID_ARGUMENT", "发布内容格式无效")
 		return
 	}
-	moment, err := h.useCases.PublishMoment.Execute(c, application.PublishMomentCommand{UserID: httpserver.UserID(c), Text: input.Text, Status: input.Status, PlaceName: input.PlaceName, PhotoKeys: input.PhotoKeys})
+	moment, err := h.useCases.PublishMoment.Execute(c, application.PublishMomentCommand{UserID: httpserver.UserID(c), Text: input.Text, Status: input.Status, PlaceName: input.PlaceName, Latitude: input.Latitude, Longitude: input.Longitude, PhotoKeys: input.PhotoKeys, OccurredAt: input.OccurredAt})
 	if err != nil {
 		writeError(c, err)
 		return
 	}
 	httpserver.WriteData(c, http.StatusCreated, momentDTO(moment))
+}
+
+func (h *Handler) update(c *gin.Context) {
+	momentID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || momentID <= 0 {
+		httpserver.WriteError(c, http.StatusBadRequest, "INVALID_ARGUMENT", "动态编号无效")
+		return
+	}
+	var input struct {
+		Text       string        `json:"text"`
+		Status     domain.Status `json:"status"`
+		PlaceName  string        `json:"placeName"`
+		Latitude   *float64      `json:"latitude"`
+		Longitude  *float64      `json:"longitude"`
+		PhotoKeys  []string      `json:"photoKeys"`
+		OccurredAt time.Time     `json:"occurredAt"`
+		Version    time.Time     `json:"version"`
+	}
+	if c.ShouldBindJSON(&input) != nil || input.OccurredAt.IsZero() || input.Version.IsZero() {
+		httpserver.WriteError(c, http.StatusBadRequest, "INVALID_ARGUMENT", "更新内容格式无效")
+		return
+	}
+	moment, err := h.useCases.UpdateMoment.Execute(c, application.UpdateMomentCommand{UserID: httpserver.UserID(c), MomentID: momentID, Text: input.Text, Status: input.Status, PlaceName: input.PlaceName, Latitude: input.Latitude, Longitude: input.Longitude, PhotoKeys: input.PhotoKeys, OccurredAt: input.OccurredAt, Version: input.Version})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpserver.WriteData(c, http.StatusOK, momentDTO(moment))
 }
 
 func (h *Handler) timeline(c *gin.Context) {
@@ -153,6 +190,12 @@ func writeError(c *gin.Context, err error) {
 		status, code, message = http.StatusBadRequest, "PLACE_TOO_LONG", "位置名称不能超过 80 个字"
 	case errors.Is(err, domain.ErrInvalidStatus):
 		status, code, message = http.StatusBadRequest, "INVALID_STATUS", "状态无效"
+	case errors.Is(err, domain.ErrInvalidOccurredAt):
+		status, code, message = http.StatusBadRequest, "INVALID_OCCURRED_AT", "记录时间无效"
+	case errors.Is(err, domain.ErrInvalidCoordinates):
+		status, code, message = http.StatusBadRequest, "INVALID_COORDINATES", "位置坐标无效"
+	case errors.Is(err, domain.ErrMomentConflict):
+		status, code, message = http.StatusConflict, "MOMENT_CONFLICT", "这条记录已在别处更新，请重新加载"
 	case errors.Is(err, domain.ErrNotAuthor):
 		status, code, message = http.StatusForbidden, "NOT_AUTHOR", "只能删除自己的动态"
 	case errors.Is(err, domain.ErrMomentNotFound):
@@ -177,8 +220,8 @@ func momentDTO(moment domain.Moment, photoURLs ...map[string]string) gin.H {
 	}
 	return gin.H{
 		"id": moment.ID(), "authorId": moment.AuthorID(), "text": moment.Text(),
-		"status": moment.Status(), "placeName": moment.Place(), "photos": photos,
-		"createdAt": moment.CreatedAt(),
+		"status": moment.Status(), "placeName": moment.Place(), "latitude": moment.Latitude(), "longitude": moment.Longitude(), "photos": photos,
+		"occurredAt": moment.OccurredAt(), "createdAt": moment.CreatedAt(), "updatedAt": moment.UpdatedAt(),
 	}
 }
 

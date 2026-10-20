@@ -8,6 +8,7 @@ const momentService = {
     return http.get(`/v1/moments?${query.join('&')}`)
   },
   publish: (input) => http.post('/v1/moments', input),
+  updateMoment: (id, input) => http.patch(`/v1/moments/${encodeURIComponent(id)}`, input),
   deleteMoment: (id) => http.delete(`/v1/moments/${encodeURIComponent(id)}`),
 }
 

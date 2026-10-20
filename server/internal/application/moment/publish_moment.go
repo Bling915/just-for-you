@@ -4,14 +4,17 @@ import (
 	"context"
 	appshared "github.com/nanfang/just-for-you/server/internal/application/shared"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
+	"time"
 )
 
 type PublishMomentCommand struct {
-	UserID    int64
-	Text      string
-	Status    domain.Status
-	PlaceName string
-	PhotoKeys []string
+	UserID              int64
+	Text                string
+	Status              domain.Status
+	PlaceName           string
+	Latitude, Longitude *float64
+	PhotoKeys           []string
+	OccurredAt          time.Time
 }
 type PublishMomentUseCase struct {
 	relationships ActiveRelationshipReader
@@ -38,7 +41,12 @@ func (u *PublishMomentUseCase) Execute(ctx context.Context, c PublishMomentComma
 			return domain.Moment{}, err
 		}
 	}
-	m, err := domain.NewMoment(c.UserID, rel.ID, c.Text, c.Status, c.PlaceName, c.PhotoKeys, u.clock.Now())
+	now := u.clock.Now()
+	occurredAt := c.OccurredAt
+	if occurredAt.IsZero() {
+		occurredAt = now
+	}
+	m, err := domain.NewMomentDetails(c.UserID, rel.ID, c.Text, c.Status, c.PlaceName, c.Latitude, c.Longitude, c.PhotoKeys, occurredAt, now)
 	if err != nil {
 		return domain.Moment{}, err
 	}

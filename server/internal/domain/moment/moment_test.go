@@ -59,3 +59,47 @@ func TestNewMomentRejectsDuplicatePhotoKeys(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+func TestMomentUpdateRequiresAuthorAndPreservesIdentity(t *testing.T) {
+	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	moment := RestoreMomentDetails(5, 7, 9, "旧内容", StatusNone, "", nil, nil, []Photo{NewPhoto("old", 1)}, now, now, now, nil)
+	occurred := now.Add(-time.Hour)
+	latitude, longitude := 31.2304, 121.4737
+
+	if _, err := moment.Update(8, UpdateInput{Text: "新内容", OccurredAt: occurred}, now); !errors.Is(err, ErrNotAuthor) {
+		t.Fatalf("non-author err=%v", err)
+	}
+	updated, err := moment.Update(7, UpdateInput{Text: "新内容", Status: StatusMissYou, Place: "外滩", Latitude: &latitude, Longitude: &longitude, PhotoKeys: []string{"new-b", "new-a"}, OccurredAt: occurred}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ID() != 5 || updated.AuthorID() != 7 || updated.RelationshipID() != 9 {
+		t.Fatalf("identity changed: %+v", updated)
+	}
+	if !updated.OccurredAt().Equal(occurred) || updated.Latitude() == nil || updated.Longitude() == nil || updated.Photos()[0].ObjectKey() != "new-b" || updated.Photos()[1].Order() != 2 {
+		t.Fatalf("updated=%+v photos=%+v", updated, updated.Photos())
+	}
+}
+
+func TestMomentUpdateValidatesOccurrenceAndCoordinates(t *testing.T) {
+	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	moment, _ := NewMoment(7, 9, "内容", StatusNone, "", nil, now)
+	validLatitude, invalidLatitude, longitude := 31.0, 91.0, 121.0
+	cases := []struct {
+		name  string
+		input UpdateInput
+		want  error
+	}{
+		{"future occurrence", UpdateInput{Text: "内容", OccurredAt: now.Add(time.Second)}, ErrInvalidOccurredAt},
+		{"before product epoch", UpdateInput{Text: "内容", OccurredAt: time.Date(1999, 12, 31, 0, 0, 0, 0, time.UTC)}, ErrInvalidOccurredAt},
+		{"latitude without longitude", UpdateInput{Text: "内容", OccurredAt: now, Latitude: &validLatitude}, ErrInvalidCoordinates},
+		{"latitude out of range", UpdateInput{Text: "内容", OccurredAt: now, Latitude: &invalidLatitude, Longitude: &longitude}, ErrInvalidCoordinates},
+	}
+	for _, item := range cases {
+		t.Run(item.name, func(t *testing.T) {
+			if _, err := moment.Update(7, item.input, now); !errors.Is(err, item.want) {
+				t.Fatalf("err=%v want=%v", err, item.want)
+			}
+		})
+	}
+}

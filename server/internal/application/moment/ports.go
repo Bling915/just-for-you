@@ -40,6 +40,7 @@ type TimelinePage struct {
 }
 type MomentRepository interface {
 	SaveWithGrants(context.Context, domain.Moment, []UploadGrant) (domain.Moment, error)
+	UpdateWithGrants(context.Context, domain.Moment, time.Time, []UploadGrant) (domain.Moment, error)
 	List(context.Context, int64, string, int) (TimelinePage, error)
 	Recent(context.Context, int64, int) ([]domain.Moment, error)
 	LatestStatusByAuthor(context.Context, int64, int64) (*domain.Moment, error)

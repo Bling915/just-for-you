@@ -11,7 +11,7 @@
     <view class="section-head"><view>最近的小事</view><text>{{moments.length ? '慢慢收藏每个今天' : '从今天开始'}}</text></view>
     <empty-state wx:if="{{state === 'empty'}}"/>
     <empty-state wx:elif="{{state === 'error-empty'}}" title="暂时没有连上" description="可能只是网络打了个盹，等一下再看看。" action="重新加载" bind:action="retry"/>
-    <view wx:else class="feed"><moment-card wx:for="{{moments}}" wx:key="id" moment="{{item}}" current-user-id="{{currentUserId}}" bind:delete="remove" bind:previewphotos="preview"/></view>
+    <view wx:else class="feed"><moment-card wx:for="{{moments}}" wx:key="id" moment="{{item}}" current-user-id="{{currentUserId}}" bind:edit="edit" bind:delete="remove" bind:previewphotos="preview"/></view>
   </block>
   <floating-compose-button bind:compose="compose"/>
 </view>

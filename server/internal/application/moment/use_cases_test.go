@@ -80,6 +80,13 @@ func (r *memoryMoments) SaveWithGrants(_ context.Context, m momentdomain.Moment,
 	r.saved = append(r.saved, m)
 	return m, nil
 }
+func (r *memoryMoments) UpdateWithGrants(_ context.Context, m momentdomain.Moment, version time.Time, _ []UploadGrant) (momentdomain.Moment, error) {
+	if !r.existing.UpdatedAt().Equal(version) {
+		return momentdomain.Moment{}, momentdomain.ErrMomentConflict
+	}
+	r.existing = m
+	return m, nil
+}
 func (r *memoryMoments) List(context.Context, int64, string, int) (TimelinePage, error) {
 	return TimelinePage{Moments: r.saved}, nil
 }
@@ -101,7 +108,7 @@ type testUseCases struct {
 }
 
 func (u testUseCases) PublishMoment(ctx context.Context, userID int64, input PublishInput) (momentdomain.Moment, error) {
-	return u.publish.Execute(ctx, PublishMomentCommand{userID, input.Text, input.Status, input.PlaceName, input.PhotoKeys})
+	return u.publish.Execute(ctx, PublishMomentCommand{UserID: userID, Text: input.Text, Status: input.Status, PlaceName: input.PlaceName, PhotoKeys: input.PhotoKeys})
 }
 func (u testUseCases) GetTimeline(ctx context.Context, userID int64, cursor string, limit int) (TimelinePage, error) {
 	return u.timeline.Execute(ctx, GetTimelineQuery{userID, cursor, limit})
@@ -205,5 +212,25 @@ func TestTimelineReturnsSignedReadURLs(t *testing.T) {
 	}
 	if page.PhotoURLs["users/1/photo.jpg"] != "https://read.test" {
 		t.Fatalf("photo URL was not signed: %#v", page.PhotoURLs)
+	}
+}
+
+func TestUpdateMomentChecksRelationshipAuthorAndNewPhotoGrant(t *testing.T) {
+	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	existing := momentdomain.RestoreMomentDetails(5, 7, 9, "旧内容", momentdomain.StatusNone, "", nil, nil, []momentdomain.Photo{momentdomain.NewPhoto("existing", 1)}, now.Add(-time.Hour), now.Add(-time.Hour), now.Add(-time.Hour), nil)
+	repository := &memoryMoments{existing: existing}
+	uploads := &fakeUploads{grants: map[string]UploadGrant{"new": {ObjectKey: "new", OwnerID: 7, ContentType: "image/jpeg", ExpiresAt: now.Add(time.Hour)}}}
+	useCase := NewUpdateMomentUseCase(fakeRelationships{active: ActiveRelationship{ID: 9}}, uploads, repository, fakeStorage{}, fixedClock{now})
+
+	updated, err := useCase.Execute(context.Background(), UpdateMomentCommand{UserID: 7, MomentID: 5, Text: "新内容", PhotoKeys: []string{"new", "existing"}, OccurredAt: now.Add(-time.Minute), Version: existing.UpdatedAt()})
+	if err != nil || updated.Text() != "新内容" || updated.Photos()[0].ObjectKey() != "new" {
+		t.Fatalf("updated=%+v err=%v", updated, err)
+	}
+	if _, err = useCase.Execute(context.Background(), UpdateMomentCommand{UserID: 8, MomentID: 5, Text: "越权", OccurredAt: now, Version: existing.UpdatedAt()}); !errors.Is(err, momentdomain.ErrNotAuthor) {
+		t.Fatalf("non-author err=%v", err)
+	}
+	ended := NewUpdateMomentUseCase(fakeRelationships{err: relationshipdomain.ErrNoActiveRelationship}, uploads, repository, fakeStorage{}, fixedClock{now})
+	if _, err = ended.Execute(context.Background(), UpdateMomentCommand{UserID: 7, MomentID: 5, Text: "内容", OccurredAt: now, Version: existing.UpdatedAt()}); !errors.Is(err, relationshipdomain.ErrNoActiveRelationship) {
+		t.Fatalf("ended err=%v", err)
 	}
 }

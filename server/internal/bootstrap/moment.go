@@ -18,6 +18,6 @@ func buildMoment(cfg config.Config, db *sql.DB, get *relationshipapp.GetRelation
 		return nil, err
 	}
 	relationships := momentmysql.NewActiveRelationshipReader(get)
-	useCases := momenthttp.UseCases{RequestPhotoUpload: momentapp.NewRequestPhotoUploadUseCase(repo, photos, clock.System{}), PublishMoment: momentapp.NewPublishMomentUseCase(relationships, repo, repo, photos, clock.System{}), GetTimeline: momentapp.NewGetTimelineUseCase(relationships, repo, photos, clock.System{}), GetHome: momentapp.NewGetHomeUseCase(relationships, repo, photos, clock.System{}), DeleteMoment: momentapp.NewDeleteMomentUseCase(relationships, repo)}
+	useCases := momenthttp.UseCases{RequestPhotoUpload: momentapp.NewRequestPhotoUploadUseCase(repo, photos, clock.System{}), PublishMoment: momentapp.NewPublishMomentUseCase(relationships, repo, repo, photos, clock.System{}), UpdateMoment: momentapp.NewUpdateMomentUseCase(relationships, repo, repo, photos, clock.System{}), GetTimeline: momentapp.NewGetTimelineUseCase(relationships, repo, photos, clock.System{}), GetHome: momentapp.NewGetHomeUseCase(relationships, repo, photos, clock.System{}), DeleteMoment: momentapp.NewDeleteMomentUseCase(relationships, repo)}
 	return momenthttp.NewHandler(useCases), nil
 }
