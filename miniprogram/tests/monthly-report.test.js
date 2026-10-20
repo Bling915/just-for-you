@@ -1,0 +1,2 @@
+const test=require('node:test');const assert=require('node:assert/strict');const {reportHighlights}=require('../utils/calendar')
+test('monthly report has an empty state and deterministic highlights',()=>{assert.deepEqual(reportHighlights({momentCount:0}),[]);assert.deepEqual(reportHighlights({momentCount:3,photoCount:5,topPlace:'操场',commonStatus:'想你了'}),['3 件小事','5 张照片','最常去 · 操场','这个月常常 · 想你了'])})

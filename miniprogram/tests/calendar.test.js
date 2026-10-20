@@ -1,0 +1,3 @@
+const test=require('node:test');const assert=require('node:assert/strict');const {monthGrid,groupByDay}=require('../utils/calendar')
+test('month grid handles leap day and markers deterministically',()=>{const cells=monthGrid('2024-02',{'2024-02-29':2},'2024-02-29','2024-02-29');const leap=cells.find(x=>x&&x.day===29);assert.equal(leap.count,2);assert.equal(leap.today,true);assert.equal(leap.selected,true);assert.equal(cells.length%7,0)})
+test('moments group by occurrence day',()=>{const groups=groupByDay([{id:1,occurredAt:'2026-10-01T15:00:00+08:00'},{id:2,occurredAt:'2026-10-01T18:00:00+08:00'}]);assert.deepEqual(groups['2026-10-01'].map(x=>x.id),[1,2])})

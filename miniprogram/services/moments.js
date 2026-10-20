@@ -10,6 +10,9 @@ const momentService = {
   publish: (input) => http.post('/v1/moments', input),
   updateMoment: (id, input) => http.patch(`/v1/moments/${encodeURIComponent(id)}`, input),
   deleteMoment: (id) => http.delete(`/v1/moments/${encodeURIComponent(id)}`),
+  getCalendar: month => http.get(`/v1/moments/calendar?month=${encodeURIComponent(month)}`),
+  getMap: ({from,to}) => http.get(`/v1/moments/map?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
+  getMonthlyReport: month => http.get(`/v1/reports/monthly?month=${encodeURIComponent(month)}`),
 }
 
 module.exports = { momentService }

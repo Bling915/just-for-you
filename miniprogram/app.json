@@ -11,6 +11,10 @@
     "pages/anniversaries/index",
     "pages/todos/index",
     "pages/wishes/index",
+    "pages/calendar/index",
+    "pages/day-moments/index",
+    "pages/memory-map/index",
+    "pages/monthly-report/index",
     "pages/timeline/index",
     "pages/me/index"
   ],

@@ -1,0 +1,5 @@
+const pad=value=>String(value).padStart(2,'0')
+function monthGrid(month,counts={},today='',selected=''){const [year,number]=month.split('-').map(Number);const first=new Date(year,number-1,1);const days=new Date(year,number,0).getDate();const offset=(first.getDay()+6)%7;const cells=Array(offset).fill(null);for(let day=1;day<=days;day++){const date=`${year}-${pad(number)}-${pad(day)}`;cells.push({day,date,count:Number(counts[date]||0),today:date===today,selected:date===selected})}while(cells.length%7)cells.push(null);return cells}
+function groupByDay(moments=[]){return moments.reduce((result,item)=>{const key=(item.occurredAt||item.createdAt||'').slice(0,10);if(key)(result[key]||(result[key]=[])).push(item);return result},{})}
+function reportHighlights(report){if(!report||!report.momentCount)return[];const values=[`${report.momentCount} 件小事`,`${report.photoCount||0} 张照片`];if(report.topPlace)values.push(`最常去 · ${report.topPlace}`);if(report.commonStatus)values.push(`这个月常常 · ${report.commonStatus}`);return values}
+module.exports={monthGrid,groupByDay,reportHighlights}

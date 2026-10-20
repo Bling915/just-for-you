@@ -39,6 +39,7 @@ type UseCases struct {
 	GetTimeline        GetTimelineExecutor
 	GetHome            GetHomeExecutor
 	DeleteMoment       DeleteMomentExecutor
+	ReadModels         *application.ReadModels
 }
 
 type Handler struct {
@@ -57,7 +58,57 @@ func (h *Handler) RegisterProtected(group *gin.RouterGroup) {
 	group.PATCH("/moments/:id", h.update)
 	group.GET("/moments", h.timeline)
 	group.GET("/home", h.home)
+	group.GET("/moments/calendar", h.calendar)
+	group.GET("/moments/map", h.memoryMap)
+	group.GET("/reports/monthly", h.monthlyReport)
 	group.DELETE("/moments/:id", h.delete)
+}
+
+func (h *Handler) calendar(c *gin.Context) {
+	if h.useCases.ReadModels == nil {
+		httpserver.WriteError(c, 500, "INTERNAL_ERROR", "服务暂时不可用")
+		return
+	}
+	items, err := h.useCases.ReadModels.Calendar(c, httpserver.UserID(c), c.Query("month"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpserver.WriteData(c, 200, gin.H{"days": items})
+}
+func (h *Handler) memoryMap(c *gin.Context) {
+	if h.useCases.ReadModels == nil {
+		httpserver.WriteError(c, 500, "INTERNAL_ERROR", "服务暂时不可用")
+		return
+	}
+	from, err := time.Parse(time.RFC3339, c.Query("from"))
+	if err != nil {
+		httpserver.WriteError(c, 400, "INVALID_ARGUMENT", "时间范围无效")
+		return
+	}
+	to, err := time.Parse(time.RFC3339, c.Query("to"))
+	if err != nil || !to.After(from) {
+		httpserver.WriteError(c, 400, "INVALID_ARGUMENT", "时间范围无效")
+		return
+	}
+	items, err := h.useCases.ReadModels.Map(c, httpserver.UserID(c), from, to)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpserver.WriteData(c, 200, gin.H{"points": items})
+}
+func (h *Handler) monthlyReport(c *gin.Context) {
+	if h.useCases.ReadModels == nil {
+		httpserver.WriteError(c, 500, "INTERNAL_ERROR", "服务暂时不可用")
+		return
+	}
+	report, err := h.useCases.ReadModels.Report(c, httpserver.UserID(c), c.Query("month"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpserver.WriteData(c, 200, report)
 }
 
 func (h *Handler) requestUpload(c *gin.Context) {

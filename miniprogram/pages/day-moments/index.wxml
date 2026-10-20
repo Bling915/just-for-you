@@ -1,0 +1,1 @@
+<view class="page safe-page"><view class="title">{{date}}</view><view wx:if="{{!items.length}}">这一天还没有记录。</view><moment-card wx:for="{{items}}" wx:key="id" moment="{{item}}" current-user-id="{{currentUserId}}"/></view>

@@ -8,6 +8,6 @@ Page({
  sync(){this.setData(timelineStore.snapshot())},
  async refresh(){timelineStore.reset();this.setData({loading:true,error:''});try{await timelineStore.loadFirst()}catch(_){}this.sync();this.setData({loading:false})},
  async more(){this.setData({loadingMore:true});try{await timelineStore.loadMore()}catch(_){wx.showToast({title:'加载失败，稍后再试',icon:'none'})}this.sync();this.setData({loadingMore:false})},
- retry(){this.refresh()},compose(){wx.navigateTo({url:'/pages/compose/index'})},preview(event){wx.previewImage(event.detail)},edit(event){storage.set('editingMoment',event.detail.moment);wx.navigateTo({url:'/pages/moment-edit/index'})},
+ retry(){this.refresh()},compose(){wx.navigateTo({url:'/pages/compose/index'})},openView(event){wx.navigateTo({url:event.currentTarget.dataset.url})},preview(event){wx.previewImage(event.detail)},edit(event){storage.set('editingMoment',event.detail.moment);wx.navigateTo({url:'/pages/moment-edit/index'})},
  remove(event){const id=event.detail.id;wx.showModal({title:'删除这件小事？',content:'删除后不能恢复。',confirmText:'删除',confirmColor:'#C87580',success:async result=>{if(!result.confirm)return;try{await momentService.deleteMoment(id);timelineStore.remove(id);this.sync();wx.showToast({title:'已删除',icon:'none'})}catch(error){if(error.code==='NOT_AUTHOR'||error.code==='MOMENT_NOT_FOUND'){await this.refresh();wx.showToast({title:error.code==='NOT_AUTHOR'?'只能删除自己的记录':'这条记录已经不存在了',icon:'none'})}else wx.showToast({title:'删除失败，请稍后再试',icon:'none'})}}})},
 })

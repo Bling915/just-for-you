@@ -16,6 +16,49 @@ import (
 
 type MySQLRepository struct{ db *sql.DB }
 
+func (r MySQLRepository) Calendar(ctx context.Context, coupleID int64, from, to time.Time) ([]application.CalendarDay, error) {
+	rows, e := r.db.QueryContext(ctx, "SELECT DATE_FORMAT(CONVERT_TZ(occurred_at,'+00:00','+08:00'),'%Y-%m-%d'),COUNT(*) FROM moments WHERE couple_id=? AND occurred_at>=? AND occurred_at<? AND deleted_at IS NULL GROUP BY 1 ORDER BY 1", coupleID, from.UTC(), to.UTC())
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	out := []application.CalendarDay{}
+	for rows.Next() {
+		var v application.CalendarDay
+		if e = rows.Scan(&v.Date, &v.Count); e != nil {
+			return nil, e
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+func (r MySQLRepository) Map(ctx context.Context, coupleID int64, from, to time.Time, limit int) ([]application.MapPoint, error) {
+	rows, e := r.db.QueryContext(ctx, "SELECT id,latitude,longitude,occurred_at,place_name FROM moments WHERE couple_id=? AND occurred_at>=? AND occurred_at<? AND latitude IS NOT NULL AND longitude IS NOT NULL AND deleted_at IS NULL ORDER BY occurred_at DESC LIMIT ?", coupleID, from.UTC(), to.UTC(), limit)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	out := []application.MapPoint{}
+	for rows.Next() {
+		var v application.MapPoint
+		if e = rows.Scan(&v.MomentID, &v.Latitude, &v.Longitude, &v.OccurredAt, &v.PlaceName); e != nil {
+			return nil, e
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+func (r MySQLRepository) MonthlyReport(ctx context.Context, coupleID int64, from, to time.Time) (application.MonthlyReport, error) {
+	var v application.MonthlyReport
+	e := r.db.QueryRowContext(ctx, "SELECT COUNT(*),(SELECT COUNT(*) FROM moment_photos p JOIN moments m2 ON m2.id=p.moment_id WHERE m2.couple_id=? AND m2.occurred_at>=? AND m2.occurred_at<? AND m2.deleted_at IS NULL) FROM moments WHERE couple_id=? AND occurred_at>=? AND occurred_at<? AND deleted_at IS NULL", coupleID, from.UTC(), to.UTC(), coupleID, from.UTC(), to.UTC()).Scan(&v.MomentCount, &v.PhotoCount)
+	if e != nil {
+		return v, e
+	}
+	_ = r.db.QueryRowContext(ctx, "SELECT place_name FROM moments WHERE couple_id=? AND occurred_at>=? AND occurred_at<? AND deleted_at IS NULL AND place_name<>'' GROUP BY place_name ORDER BY COUNT(*) DESC,place_name LIMIT 1", coupleID, from.UTC(), to.UTC()).Scan(&v.TopPlace)
+	_ = r.db.QueryRowContext(ctx, "SELECT status_code FROM moments WHERE couple_id=? AND occurred_at>=? AND occurred_at<? AND deleted_at IS NULL AND status_code<>'' GROUP BY status_code ORDER BY COUNT(*) DESC,status_code LIMIT 1", coupleID, from.UTC(), to.UTC()).Scan(&v.CommonStatus)
+	return v, nil
+}
+
 func NewMySQLRepository(db *sql.DB) MySQLRepository { return MySQLRepository{db: db} }
 func (r MySQLRepository) CreateGrant(ctx context.Context, userID int64, input application.UploadInput, now time.Time) (application.UploadGrant, error) {
 	extension := map[string]string{"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}[input.ContentType]

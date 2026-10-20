@@ -1,0 +1,1 @@
+<view class="page"><map class="map" latitude="{{latitude}}" longitude="{{longitude}}" markers="{{markers}}" show-location/><view class="caption">地图上只显示位置和日期，不公开记录正文</view></view>
