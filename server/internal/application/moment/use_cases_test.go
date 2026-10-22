@@ -161,17 +161,26 @@ func (f *fakeHighlights) ListPinned(_ context.Context, _ int64, limit int) ([]An
 func TestGetHomeLimitsHighlightsAndDegradesReaderFailure(t *testing.T) {
 	now := time.Date(2026, 10, 22, 10, 0, 0, 0, time.UTC)
 	moments := &memoryMoments{saved: []momentdomain.Moment{}}
+	// 恰好等于展示上限：不触发「还有更多」。
 	reader := &fakeHighlights{items: []AnniversaryHighlight{{ID: 1}, {ID: 2}, {ID: 3}}}
 	u := NewGetHomeUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, moments, fakeStorage{}, fixedClock{now}, reader)
 	got, err := u.Execute(context.Background(), GetHomeQuery{UserID: 1})
-	if err != nil || reader.limit != 3 || len(got.PinnedAnniversaries) != 3 {
-		t.Fatalf("got=%+v limit=%d err=%v", got, reader.limit, err)
+	if err != nil || reader.limit != pinnedDisplayLimit+1 || len(got.PinnedAnniversaries) != pinnedDisplayLimit || got.HasMorePinned {
+		t.Fatalf("正好上限时 got=%+v limit=%d err=%v", got, reader.limit, err)
 	}
+	// 超出上限：只展示前 3 个，并置 HasMorePinned 告知前端。
+	reader = &fakeHighlights{items: []AnniversaryHighlight{{ID: 1}, {ID: 2}, {ID: 3}, {ID: 4}}}
+	u = NewGetHomeUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, moments, fakeStorage{}, fixedClock{now}, reader)
+	got, err = u.Execute(context.Background(), GetHomeQuery{UserID: 1})
+	if err != nil || len(got.PinnedAnniversaries) != pinnedDisplayLimit || !got.HasMorePinned {
+		t.Fatalf("超出上限时 got=%+v err=%v", got, err)
+	}
+	// 读取器故障：降级为空，不影响其余数据。
 	reader = &fakeHighlights{err: errors.New("anniversary unavailable")}
 	u = NewGetHomeUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, moments, fakeStorage{}, fixedClock{now}, reader)
 	got, err = u.Execute(context.Background(), GetHomeQuery{UserID: 1})
 	if err != nil || len(got.PinnedAnniversaries) != 0 || got.Recent == nil {
-		t.Fatalf("got=%+v err=%v", got, err)
+		t.Fatalf("读取降级 got=%+v err=%v", got, err)
 	}
 }
 func TestPublishMomentKeepsNinePhotoOrder(t *testing.T) {

@@ -1,1 +1,17 @@
-<swiper class="swiper" wx:if="{{items.length}}" indicator-dots="{{items.length>1}}" circular="{{items.length>1}}"><swiper-item wx:for="{{items}}" wx:key="id"><view class="card" data-id="{{item.id}}" bindtap="open"><image wx:if="{{item.coverUrl}}" src="{{item.coverUrl}}" mode="aspectFill"/><view class="shade"></view><view class="copy"><view class="label">置顶纪念 · {{item.title}}</view><view class="days">{{item.days}}<text>天</text></view><view class="headline">{{item.mode==='elapsed'?'我们已经一起走过':'距离这一天'}} · {{item.targetDate}}</view></view><view class="arrow">›</view></view></swiper-item></swiper>
+<view class="swiper" wx:if="{{items.length}}">
+  <swiper indicator-dots="{{items.length>1}}" circular="{{items.length>1}}">
+    <swiper-item wx:for="{{items}}" wx:key="id">
+      <view class="card" data-id="{{item.id}}" bindtap="open">
+        <image wx:if="{{item.coverUrl}}" src="{{item.coverUrl}}" mode="aspectFill"/>
+        <view class="shade"></view>
+        <view class="copy">
+          <view class="label">置顶纪念 · {{item.title}}{{item.mode==='elapsed'?'已经':'还有'}}</view>
+          <view class="days">{{item.days}}<text>天</text></view>
+          <view class="headline">{{item.mode==='elapsed'?'from':'to'}} {{item.targetDate}}</view>
+        </view>
+        <view class="arrow">›</view>
+      </view>
+    </swiper-item>
+  </swiper>
+  <view wx:if="{{hasMore}}" class="more" bindtap="openAll">还有更多置顶纪念 ›</view>
+</view>

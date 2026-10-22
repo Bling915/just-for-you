@@ -59,6 +59,7 @@ function createHttpClient({ request, storage, onSessionExpired, baseURL }) {
     get: (path) => execute('GET', path),
     post: (path, data) => execute('POST', path, data),
     put: (path, data) => execute('PUT', path, data),
+    patch: (path, data) => execute('PATCH', path, data),
     delete: (path, data) => execute('DELETE', path, data),
   };
 }

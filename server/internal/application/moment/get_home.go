@@ -8,11 +8,16 @@ import (
 )
 
 type GetHomeQuery struct{ UserID int64 }
+// pinnedDisplayLimit 是首页最多展示的置顶纪念日数量。
+// 超出部分不丢弃，通过 HasMorePinned 告知前端去「纪念日」页查看。
+const pinnedDisplayLimit = 3
+
 type HomeResult struct {
 	PartnerLatestStatus *domain.Moment
 	Recent              []domain.Moment
 	PhotoURLs           map[string]string
 	PinnedAnniversaries []AnniversaryHighlight
+	HasMorePinned       bool
 }
 type GetHomeUseCase struct {
 	relationships ActiveRelationshipReader
@@ -51,8 +56,14 @@ func (u *GetHomeUseCase) Execute(ctx context.Context, q GetHomeQuery) (HomeResul
 		return HomeResult{}, err
 	}
 	highlights := []AnniversaryHighlight{}
+	hasMore := false
 	if u.highlights != nil {
-		if values, readErr := u.highlights.ListPinned(ctx, rel.ID, 3); readErr == nil {
+		// 多取一个用于判断是否还有更多置顶，避免第 4 个被静默丢弃而用户无感知。
+		if values, readErr := u.highlights.ListPinned(ctx, rel.ID, pinnedDisplayLimit+1); readErr == nil {
+			if len(values) > pinnedDisplayLimit {
+				hasMore = true
+				values = values[:pinnedDisplayLimit]
+			}
 			highlights = values
 			for i := range highlights {
 				if highlights[i].CoverRef != "" {
@@ -63,5 +74,5 @@ func (u *GetHomeUseCase) Execute(ctx context.Context, q GetHomeQuery) (HomeResul
 			}
 		}
 	}
-	return HomeResult{PartnerLatestStatus: latest, Recent: recent, PhotoURLs: urls, PinnedAnniversaries: highlights}, nil
+	return HomeResult{PartnerLatestStatus: latest, Recent: recent, PhotoURLs: urls, PinnedAnniversaries: highlights, HasMorePinned: hasMore}, nil
 }

@@ -1,1 +1,8 @@
-<view class="page"><map class="map" latitude="{{latitude}}" longitude="{{longitude}}" markers="{{markers}}" show-location/><view class="caption">地图上只显示位置和日期，不公开记录正文</view></view>
+<view class="page">
+  <map class="map" latitude="{{latitude}}" longitude="{{longitude}}" markers="{{markers}}" include-points="{{includePoints}}" show-location/>
+  <view wx:if="{{empty}}" class="empty">
+    <view class="empty-title">还没有带地点的回忆</view>
+    <view class="empty-desc">发布小事时点「选择位置」，这里就会亮起你们走过的点</view>
+  </view>
+  <view wx:else class="caption">地图上只显示位置和日期，不公开记录正文 · 点标记看日期</view>
+</view>

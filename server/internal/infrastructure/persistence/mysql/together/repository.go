@@ -34,17 +34,18 @@ func (r Repository) ListAnniversaries(ctx context.Context, coupleID int64) ([]do
 	for rows.Next() {
 		var id, cid, uid int64
 		var title, kind, countMode, coverRef, message string
-		var date, created, updated time.Time
+		var date anniversaryDate
+		var created, updated time.Time
 		var repeats, pinned bool
 		if e = rows.Scan(&id, &cid, &uid, &title, &date, &repeats, &countMode, &pinned, &coverRef, &message, &kind, &created, &updated); e != nil {
 			return nil, e
 		}
-		out = append(out, domain.RestoreAnniversary(id, cid, uid, title, date, repeats, domain.CountMode(countMode), pinned, coverRef, message, kind, created, updated))
+		out = append(out, domain.RestoreAnniversary(id, cid, uid, title, date.Time, repeats, domain.CountMode(countMode), pinned, coverRef, message, kind, created, updated))
 	}
 	return out, rows.Err()
 }
 func (r Repository) SaveAnniversary(ctx context.Context, v domain.Anniversary) (domain.Anniversary, error) {
-	res, e := r.db.ExecContext(ctx, "INSERT INTO anniversaries(couple_id,creator_user_id,title,anniversary_date,repeats_yearly,count_mode,pinned,cover_ref,message,system_kind,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", v.CoupleID(), v.CreatorID(), v.Title(), v.Date(), v.RepeatsYearly(), v.CountMode(), v.Pinned(), v.CoverRef(), v.Message(), v.SystemKind(), v.CreatedAt(), v.UpdatedAt())
+	res, e := r.db.ExecContext(ctx, "INSERT INTO anniversaries(couple_id,creator_user_id,title,anniversary_date,repeats_yearly,count_mode,pinned,cover_ref,message,system_kind,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", v.CoupleID(), v.CreatorID(), v.Title(), toAnniversaryDate(v.Date()), v.RepeatsYearly(), v.CountMode(), v.Pinned(), v.CoverRef(), v.Message(), v.SystemKind(), v.CreatedAt(), v.UpdatedAt())
 	if e != nil {
 		return v, e
 	}
@@ -54,7 +55,8 @@ func (r Repository) SaveAnniversary(ctx context.Context, v domain.Anniversary) (
 func (r Repository) FindAnniversary(ctx context.Context, coupleID, id int64) (domain.Anniversary, error) {
 	var aid, cid, uid int64
 	var title, mode, cover, message, kind string
-	var date, created, updated time.Time
+	var date anniversaryDate
+	var created, updated time.Time
 	var repeats, pinned bool
 	err := r.db.QueryRowContext(ctx, "SELECT "+anniversaryColumns+" FROM anniversaries WHERE couple_id=? AND id=?", coupleID, id).Scan(&aid, &cid, &uid, &title, &date, &repeats, &mode, &pinned, &cover, &message, &kind, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -63,10 +65,10 @@ func (r Repository) FindAnniversary(ctx context.Context, coupleID, id int64) (do
 	if err != nil {
 		return domain.Anniversary{}, err
 	}
-	return domain.RestoreAnniversary(aid, cid, uid, title, date, repeats, domain.CountMode(mode), pinned, cover, message, kind, created, updated), nil
+	return domain.RestoreAnniversary(aid, cid, uid, title, date.Time, repeats, domain.CountMode(mode), pinned, cover, message, kind, created, updated), nil
 }
 func (r Repository) UpdateAnniversary(ctx context.Context, v domain.Anniversary) (domain.Anniversary, error) {
-	res, err := r.db.ExecContext(ctx, "UPDATE anniversaries SET title=?,anniversary_date=?,repeats_yearly=?,count_mode=?,pinned=?,cover_ref=?,message=?,updated_at=? WHERE couple_id=? AND id=?", v.Title(), v.Date(), v.RepeatsYearly(), v.CountMode(), v.Pinned(), v.CoverRef(), v.Message(), v.UpdatedAt(), v.CoupleID(), v.ID())
+	res, err := r.db.ExecContext(ctx, "UPDATE anniversaries SET title=?,anniversary_date=?,repeats_yearly=?,count_mode=?,pinned=?,cover_ref=?,message=?,updated_at=? WHERE couple_id=? AND id=?", v.Title(), toAnniversaryDate(v.Date()), v.RepeatsYearly(), v.CountMode(), v.Pinned(), v.CoverRef(), v.Message(), v.UpdatedAt(), v.CoupleID(), v.ID())
 	if err != nil {
 		return domain.Anniversary{}, err
 	}
@@ -108,7 +110,7 @@ func (r Repository) UpdateAnniversaryWithCoverGrant(ctx context.Context, v domai
 	if err = tx.QueryRowContext(ctx, "SELECT user_id,resource_id,purpose,expires_at,consumed_at FROM upload_grants WHERE object_key=? FOR UPDATE", key).Scan(&owner, &resource, &purpose, &expires, &consumed); err != nil || owner == 0 || resource != v.ID() || purpose != "anniversary_cover" || consumed.Valid || !expires.After(now) {
 		return domain.Anniversary{}, domain.ErrInvalidCover
 	}
-	res, err := tx.ExecContext(ctx, "UPDATE anniversaries SET title=?,anniversary_date=?,repeats_yearly=?,count_mode=?,pinned=?,cover_ref=?,message=?,updated_at=? WHERE couple_id=? AND id=?", v.Title(), v.Date(), v.RepeatsYearly(), v.CountMode(), v.Pinned(), v.CoverRef(), v.Message(), v.UpdatedAt(), v.CoupleID(), v.ID())
+	res, err := tx.ExecContext(ctx, "UPDATE anniversaries SET title=?,anniversary_date=?,repeats_yearly=?,count_mode=?,pinned=?,cover_ref=?,message=?,updated_at=? WHERE couple_id=? AND id=?", v.Title(), toAnniversaryDate(v.Date()), v.RepeatsYearly(), v.CountMode(), v.Pinned(), v.CoverRef(), v.Message(), v.UpdatedAt(), v.CoupleID(), v.ID())
 	if err != nil {
 		return domain.Anniversary{}, err
 	}
