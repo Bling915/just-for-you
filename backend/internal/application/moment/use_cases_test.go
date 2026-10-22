@@ -60,12 +60,15 @@ func (f fakeStorage) VerifyUploaded(context.Context, string, string, int64) erro
 }
 
 type memoryMoments struct {
-	saved    []momentdomain.Moment
-	saveErr  error
-	consumed bool
-	existing momentdomain.Moment
-	filter   TimelineFilter
-	lookup   MomentLookup
+	saved             []momentdomain.Moment
+	saveErr           error
+	consumed          bool
+	existing          momentdomain.Moment
+	filter            TimelineFilter
+	lookup            MomentLookup
+	sharedCopy        momentdomain.Moment
+	reaction          momentdomain.Reaction
+	deletedReactionID int64
 }
 type PublishInput struct {
 	Text      string
@@ -105,6 +108,36 @@ func (r *memoryMoments) Find(_ context.Context, lookup MomentLookup) (momentdoma
 	return r.existing, nil
 }
 func (r *memoryMoments) Delete(context.Context, int64) error { return nil }
+func (r *memoryMoments) ShareToCouple(_ context.Context, sourceID, authorID, relationshipID int64, message string, now time.Time) (momentdomain.Moment, error) {
+	source := r.existing
+	copy, err := momentdomain.NewMomentDetails(momentdomain.CreateInput{AuthorID: authorID, RelationshipID: relationshipID, Text: message, PhotoKeys: photoKeys(source.Photos()), OccurredAt: source.OccurredAt(), CreatedAt: now, SpaceType: momentdomain.SpaceShared, Visibility: momentdomain.VisibilityCouple, Kind: momentdomain.KindStandard, SourceMomentID: &sourceID})
+	if err == nil {
+		r.sharedCopy = copy
+	}
+	return copy, err
+}
+func (r *memoryMoments) UpsertReaction(_ context.Context, reaction momentdomain.Reaction) (momentdomain.Reaction, error) {
+	r.reaction = reaction
+	return reaction, nil
+}
+func (r *memoryMoments) DeleteReaction(_ context.Context, reactionID, userID int64) error {
+	r.deletedReactionID = reactionID
+	if r.reaction.UserID() != 0 && r.reaction.UserID() != userID {
+		return momentdomain.ErrNotAuthor
+	}
+	return nil
+}
+func (r *memoryMoments) ListReactions(context.Context, []int64) (map[int64][]momentdomain.Reaction, error) {
+	return map[int64][]momentdomain.Reaction{}, nil
+}
+
+func photoKeys(photos []momentdomain.Photo) []string {
+	keys := make([]string, len(photos))
+	for i, photo := range photos {
+		keys[i] = photo.ObjectKey()
+	}
+	return keys
+}
 
 type testUseCases struct {
 	publish  *PublishMomentUseCase
@@ -419,5 +452,61 @@ func TestUpdatePrivateMomentWorksWithoutRelationship(t *testing.T) {
 	updated, err := useCase.Execute(context.Background(), UpdateMomentCommand{UserID: 1, MomentID: 5, Text: "新内容", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPrivate, OccurredAt: now.Add(-time.Minute), Version: private.UpdatedAt()})
 	if err != nil || updated.Text() != "新内容" {
 		t.Fatalf("updated=%+v err=%v", updated, err)
+	}
+}
+
+func TestShareToCoupleCopiesPersonalMomentWithoutChangingSource(t *testing.T) {
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	source, err := momentdomain.NewMomentDetails(momentdomain.CreateInput{AuthorID: 1, Text: "私密原稿", PhotoKeys: []string{"users/1/a.jpg"}, OccurredAt: now.Add(-time.Hour), CreatedAt: now.Add(-time.Hour), SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPrivate, Kind: momentdomain.KindStandard})
+	if err != nil {
+		t.Fatal(err)
+	}
+	source = momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 7, AuthorID: source.AuthorID(), Text: source.Text(), Photos: source.Photos(), OccurredAt: source.OccurredAt(), CreatedAt: source.CreatedAt(), UpdatedAt: source.UpdatedAt(), SpaceType: source.SpaceType(), Visibility: source.Visibility(), Kind: source.Kind()})
+	repository := &memoryMoments{existing: source}
+	useCase := NewShareToCoupleUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, repository, fixedClock{now})
+	shared, err := useCase.Execute(context.Background(), ShareToCoupleCommand{UserID: 1, MomentID: 7, Message: "也放进我们的故事"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shared.SpaceType() != momentdomain.SpaceShared || shared.Visibility() != momentdomain.VisibilityCouple || shared.SourceMomentID() == nil || *shared.SourceMomentID() != 7 || shared.Photos()[0].ObjectKey() != "users/1/a.jpg" {
+		t.Fatalf("shared=%+v photos=%+v", shared, shared.Photos())
+	}
+	if repository.existing.SpaceType() != momentdomain.SpacePersonal || repository.existing.Visibility() != momentdomain.VisibilityPrivate {
+		t.Fatalf("source mutated=%+v", repository.existing)
+	}
+}
+
+func TestShareToCoupleRequiresPersonalAuthorAndRelationship(t *testing.T) {
+	now := time.Now()
+	personal := momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 7, AuthorID: 2, RelationshipID: 9, Text: "TA 的", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPartner, Kind: momentdomain.KindStandard, OccurredAt: now, CreatedAt: now, UpdatedAt: now})
+	repository := &memoryMoments{existing: personal}
+	useCase := NewShareToCoupleUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, repository, fixedClock{now})
+	if _, err := useCase.Execute(context.Background(), ShareToCoupleCommand{UserID: 1, MomentID: 7}); !errors.Is(err, momentdomain.ErrNotAuthor) {
+		t.Fatalf("non-author err=%v", err)
+	}
+	ended := NewShareToCoupleUseCase(fakeRelationships{err: relationshipdomain.ErrNoActiveRelationship}, repository, fixedClock{now})
+	if _, err := ended.Execute(context.Background(), ShareToCoupleCommand{UserID: 2, MomentID: 7}); !errors.Is(err, relationshipdomain.ErrNoActiveRelationship) {
+		t.Fatalf("ended err=%v", err)
+	}
+}
+
+func TestReactToMomentUsesVisibilityPolicyAndDeleteOwnOnly(t *testing.T) {
+	now := time.Now()
+	visible := momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 7, AuthorID: 2, RelationshipID: 9, Text: "给你看", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPartner, Kind: momentdomain.KindStandard, OccurredAt: now, CreatedAt: now, UpdatedAt: now})
+	repository := &memoryMoments{existing: visible}
+	useCase := NewReactToMomentUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, repository, fixedClock{now})
+	reaction, err := useCase.Execute(context.Background(), ReactToMomentCommand{UserID: 1, MomentID: 7, Type: momentdomain.ReactionHug})
+	if err != nil || reaction.Type() != momentdomain.ReactionHug {
+		t.Fatalf("reaction=%+v err=%v", reaction, err)
+	}
+	repository.reaction = momentdomain.RestoreReaction(12, 7, 2, momentdomain.ReactionHug, "", now, now)
+	if err := useCase.Delete(context.Background(), DeleteReactionCommand{UserID: 1, MomentID: 7, ReactionID: 12}); !errors.Is(err, momentdomain.ErrNotAuthor) {
+		t.Fatalf("delete other's err=%v", err)
+	}
+
+	private := momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 8, AuthorID: 2, Text: "秘密", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPrivate, Kind: momentdomain.KindStandard, OccurredAt: now, CreatedAt: now, UpdatedAt: now})
+	repository.existing = private
+	if _, err := useCase.Execute(context.Background(), ReactToMomentCommand{UserID: 1, MomentID: 8, Type: momentdomain.ReactionSeen}); !errors.Is(err, ErrMomentNotVisible) {
+		t.Fatalf("private err=%v", err)
 	}
 }

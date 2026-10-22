@@ -17,6 +17,7 @@ type HomeResult struct {
 	PartnerLatestStatus *domain.Moment
 	Recent              []domain.Moment
 	PhotoURLs           map[string]string
+	Reactions           map[int64][]domain.Reaction
 	PinnedAnniversaries []AnniversaryHighlight
 	HasMorePinned       bool
 }
@@ -56,6 +57,14 @@ func (u *GetHomeUseCase) Execute(ctx context.Context, q GetHomeQuery) (HomeResul
 	if err != nil {
 		return HomeResult{}, err
 	}
+	ids := make([]int64, 0, len(all))
+	for _, value := range all {
+		ids = append(ids, value.ID())
+	}
+	reactions, err := u.moments.ListReactions(ctx, ids)
+	if err != nil {
+		return HomeResult{}, err
+	}
 	highlights := []AnniversaryHighlight{}
 	hasMore := false
 	if u.highlights != nil {
@@ -75,5 +84,5 @@ func (u *GetHomeUseCase) Execute(ctx context.Context, q GetHomeQuery) (HomeResul
 			}
 		}
 	}
-	return HomeResult{PartnerLatestStatus: latest, Recent: recent, PhotoURLs: urls, PinnedAnniversaries: highlights, HasMorePinned: hasMore}, nil
+	return HomeResult{PartnerLatestStatus: latest, Recent: recent, PhotoURLs: urls, Reactions: reactions, PinnedAnniversaries: highlights, HasMorePinned: hasMore}, nil
 }

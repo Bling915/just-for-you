@@ -4,4 +4,6 @@
   <view wx:if="{{moment.text}}" class="body">{{moment.text}}</view>
   <photo-grid wx:if="{{moment.photos.length}}" photos="{{moment.photos}}" bind:preview="preview"/>
   <view wx:if="{{moment.placeName}}" class="place">⌖ {{moment.placeName}}</view>
+  <button wx:if="{{canShare}}" class="share" bindtap="share">分享给我们 ✦</button>
+  <reaction-bar reactions="{{moment.reactions || []}}" current-user-id="{{currentUserId}}" bind:toggle="react" bind:text="textReaction"/>
 </view>

@@ -3,6 +3,7 @@ const { momentService } = require('../../services/moments')
 const { sessionStore } = require('../../store/session')
 const { relationshipService } = require('../../services/relationships')
 const { storage } = require('../../utils/storage')
+const { reactOptimistically, promptTextReaction, shareToCouple } = require('../../utils/moment-page-actions')
 
 const store = createTimelineStore(momentService, { space: 'personal', owner: 'me' })
 
@@ -43,4 +44,7 @@ Page({
       catch (_) { wx.showToast({ title: '删除失败，请稍后再试', icon: 'none' }) }
     } })
   },
+  react(event) { reactOptimistically(event, this.data.currentUserId, moment => { store.replace(moment); this.sync() }) },
+  textReaction(event) { promptTextReaction(event, moment => { store.replace(moment); this.sync() }) },
+  share(event) { shareToCouple(event) },
 })

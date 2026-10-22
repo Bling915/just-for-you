@@ -323,6 +323,148 @@ func (r MySQLRepository) Delete(ctx context.Context, momentID int64) error {
 	}
 	return nil
 }
+
+func (r MySQLRepository) ShareToCouple(ctx context.Context, sourceID, authorID, relationshipID int64, message string, now time.Time) (domain.Moment, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.Moment{}, err
+	}
+	defer tx.Rollback()
+	var sourceAuthor int64
+	var spaceType, kind, body, status, place string
+	var latitude, longitude sql.NullFloat64
+	var occurredAt time.Time
+	err = tx.QueryRowContext(ctx, "SELECT author_user_id,space_type,kind,body,status_code,place_name,latitude,longitude,occurred_at FROM moments WHERE id=? AND author_user_id=? AND deleted_at IS NULL FOR UPDATE", sourceID, authorID).Scan(&sourceAuthor, &spaceType, &kind, &body, &status, &place, &latitude, &longitude, &occurredAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Moment{}, domain.ErrMomentNotFound
+	}
+	if err != nil {
+		return domain.Moment{}, err
+	}
+	if spaceType != string(domain.SpacePersonal) || kind != string(domain.KindStandard) {
+		return domain.Moment{}, application.ErrCannotShareMoment
+	}
+	photoRows, err := tx.QueryContext(ctx, "SELECT object_key,sort_order FROM moment_photos WHERE moment_id=? ORDER BY sort_order", sourceID)
+	if err != nil {
+		return domain.Moment{}, err
+	}
+	photos := []domain.Photo{}
+	for photoRows.Next() {
+		var key string
+		var order int
+		if err = photoRows.Scan(&key, &order); err != nil {
+			photoRows.Close()
+			return domain.Moment{}, err
+		}
+		photos = append(photos, domain.NewPhoto(key, order))
+	}
+	if err = photoRows.Close(); err != nil {
+		return domain.Moment{}, err
+	}
+	var activeID int64
+	err = tx.QueryRowContext(ctx, "SELECT id FROM couples WHERE id=? AND status='active' AND (user_a_id=? OR user_b_id=?) FOR UPDATE", relationshipID, authorID, authorID).Scan(&activeID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Moment{}, relationshipdomain.ErrNoActiveRelationship
+	}
+	if err != nil {
+		return domain.Moment{}, err
+	}
+	text := strings.TrimSpace(message)
+	if text == "" {
+		text = body
+	}
+	latitudeValue, longitudeValue := nullFloatPointer(latitude), nullFloatPointer(longitude)
+	copyMoment, err := domain.NewMomentDetails(domain.CreateInput{AuthorID: authorID, RelationshipID: relationshipID, Text: text, Status: domain.Status(status), Place: place, Latitude: latitudeValue, Longitude: longitudeValue, PhotoKeys: photoObjectKeys(photos), OccurredAt: occurredAt, CreatedAt: now, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard, SourceMomentID: &sourceID})
+	if err != nil {
+		return domain.Moment{}, err
+	}
+	result, err := tx.ExecContext(ctx, "INSERT INTO moments(couple_id,author_user_id,space_type,visibility,kind,source_moment_id,daily_question_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", relationshipID, authorID, "shared", "couple", "standard", sourceID, nil, copyMoment.Text(), string(copyMoment.Status()), copyMoment.Place(), copyMoment.Latitude(), copyMoment.Longitude(), copyMoment.OccurredAt(), now, now)
+	if err != nil {
+		return domain.Moment{}, err
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return domain.Moment{}, err
+	}
+	if len(photos) > 0 {
+		if _, err = tx.ExecContext(ctx, "INSERT INTO moment_photos(moment_id,object_key,sort_order) SELECT ?,object_key,sort_order FROM moment_photos WHERE moment_id=?", id, sourceID); err != nil {
+			return domain.Moment{}, err
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		return domain.Moment{}, err
+	}
+	return domain.RestoreMomentDetails(domain.RestoreInput{ID: id, AuthorID: authorID, RelationshipID: relationshipID, Text: copyMoment.Text(), Status: copyMoment.Status(), Place: copyMoment.Place(), Latitude: copyMoment.Latitude(), Longitude: copyMoment.Longitude(), Photos: photos, OccurredAt: occurredAt, CreatedAt: now, UpdatedAt: now, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard, SourceMomentID: &sourceID}), nil
+}
+
+func (r MySQLRepository) UpsertReaction(ctx context.Context, reaction domain.Reaction) (domain.Reaction, error) {
+	result, err := r.db.ExecContext(ctx, "INSERT INTO moment_reactions(moment_id,user_id,reaction_type,text_content,created_at,updated_at) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE text_content=VALUES(text_content),updated_at=VALUES(updated_at),id=LAST_INSERT_ID(id)", reaction.MomentID(), reaction.UserID(), string(reaction.Type()), reaction.Text(), reaction.CreatedAt(), reaction.UpdatedAt())
+	if err != nil {
+		return domain.Reaction{}, err
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return domain.Reaction{}, err
+	}
+	return domain.RestoreReaction(id, reaction.MomentID(), reaction.UserID(), reaction.Type(), reaction.Text(), reaction.CreatedAt(), reaction.UpdatedAt()), nil
+}
+
+func (r MySQLRepository) DeleteReaction(ctx context.Context, reactionID, userID int64) error {
+	result, err := r.db.ExecContext(ctx, "DELETE FROM moment_reactions WHERE id=? AND user_id=?", reactionID, userID)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return domain.ErrReactionNotFound
+	}
+	return nil
+}
+
+func (r MySQLRepository) ListReactions(ctx context.Context, momentIDs []int64) (map[int64][]domain.Reaction, error) {
+	result := map[int64][]domain.Reaction{}
+	if len(momentIDs) == 0 {
+		return result, nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(momentIDs)), ",")
+	args := make([]any, len(momentIDs))
+	for index, id := range momentIDs {
+		args[index] = id
+	}
+	rows, err := r.db.QueryContext(ctx, "SELECT id,moment_id,user_id,reaction_type,text_content,created_at,updated_at FROM moment_reactions WHERE moment_id IN ("+placeholders+") ORDER BY created_at,id", args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, momentID, userID int64
+		var reactionType, text string
+		var createdAt, updatedAt time.Time
+		if err = rows.Scan(&id, &momentID, &userID, &reactionType, &text, &createdAt, &updatedAt); err != nil {
+			return nil, err
+		}
+		result[momentID] = append(result[momentID], domain.RestoreReaction(id, momentID, userID, domain.ReactionType(reactionType), text, createdAt, updatedAt))
+	}
+	return result, rows.Err()
+}
+
+func nullFloatPointer(value sql.NullFloat64) *float64 {
+	if !value.Valid {
+		return nil
+	}
+	return &value.Float64
+}
+
+func photoObjectKeys(photos []domain.Photo) []string {
+	keys := make([]string, len(photos))
+	for index, photo := range photos {
+		keys[index] = photo.ObjectKey()
+	}
+	return keys
+}
 func encodeCursor(at time.Time, id int64) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(at.UTC().Format(time.RFC3339Nano) + "|" + strconv.FormatInt(id, 10)))
 }

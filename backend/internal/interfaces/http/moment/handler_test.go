@@ -47,6 +47,34 @@ type fakeDelete struct{ err error }
 
 func (f fakeDelete) Execute(context.Context, application.DeleteMomentCommand) error { return f.err }
 
+type fakeShare struct {
+	command application.ShareToCoupleCommand
+	result  domain.Moment
+	err     error
+}
+
+func (f *fakeShare) Execute(_ context.Context, command application.ShareToCoupleCommand) (domain.Moment, error) {
+	f.command = command
+	return f.result, f.err
+}
+
+type fakeReact struct {
+	command       application.ReactToMomentCommand
+	deleteCommand application.DeleteReactionCommand
+	result        domain.Reaction
+	err           error
+}
+
+func (f *fakeReact) Execute(_ context.Context, command application.ReactToMomentCommand) (domain.Reaction, error) {
+	f.command = command
+	return f.result, f.err
+}
+
+func (f *fakeReact) Delete(_ context.Context, command application.DeleteReactionCommand) error {
+	f.deleteCommand = command
+	return f.err
+}
+
 type fakeUpdate struct {
 	result  domain.Moment
 	err     error
@@ -58,7 +86,44 @@ func (f *fakeUpdate) Execute(_ context.Context, command application.UpdateMoment
 	return f.result, f.err
 }
 func fakeUseCases(publishErr, deleteErr error) UseCases {
-	return UseCases{RequestPhotoUpload: fakeUpload{}, PublishMoment: &fakePublish{err: publishErr}, UpdateMoment: &fakeUpdate{}, GetTimeline: &fakeTimeline{}, GetHome: fakeHome{}, DeleteMoment: fakeDelete{deleteErr}}
+	return UseCases{RequestPhotoUpload: fakeUpload{}, PublishMoment: &fakePublish{err: publishErr}, UpdateMoment: &fakeUpdate{}, GetTimeline: &fakeTimeline{}, GetHome: fakeHome{}, DeleteMoment: fakeDelete{deleteErr}, ShareToCouple: &fakeShare{}, ReactToMoment: &fakeReact{}}
+}
+
+func TestShareAndReactionRoutesParseCommands(t *testing.T) {
+	useCases := fakeUseCases(nil, nil)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/moments/7/share-to-couple", strings.NewReader(`{"message":"给我们"}`))
+	request.Header.Set("Content-Type", "application/json")
+	routerFor(useCases).ServeHTTP(response, request)
+	if response.Code != http.StatusCreated || useCases.ShareToCouple.(*fakeShare).command != (application.ShareToCoupleCommand{UserID: 1, MomentID: 7, Message: "给我们"}) {
+		t.Fatalf("share status=%d command=%+v body=%s", response.Code, useCases.ShareToCouple.(*fakeShare).command, response.Body.String())
+	}
+
+	response = httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodPost, "/v1/moments/7/reactions", strings.NewReader(`{"type":"hug"}`))
+	request.Header.Set("Content-Type", "application/json")
+	routerFor(useCases).ServeHTTP(response, request)
+	if response.Code != http.StatusCreated || useCases.ReactToMoment.(*fakeReact).command.Type != domain.ReactionHug {
+		t.Fatalf("react status=%d command=%+v body=%s", response.Code, useCases.ReactToMoment.(*fakeReact).command, response.Body.String())
+	}
+
+	response = httptest.NewRecorder()
+	routerFor(useCases).ServeHTTP(response, httptest.NewRequest(http.MethodDelete, "/v1/moments/7/reactions/13", nil))
+	if response.Code != http.StatusNoContent || useCases.ReactToMoment.(*fakeReact).deleteCommand != (application.DeleteReactionCommand{UserID: 1, MomentID: 7, ReactionID: 13}) {
+		t.Fatalf("delete reaction status=%d command=%+v", response.Code, useCases.ReactToMoment.(*fakeReact).deleteCommand)
+	}
+}
+
+func TestReactionValidationErrorsAreMapped(t *testing.T) {
+	useCases := fakeUseCases(nil, nil)
+	useCases.ReactToMoment = &fakeReact{err: domain.ErrReactionTextTooLong}
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/moments/7/reactions", strings.NewReader(`{"type":"text","text":"too long"}`))
+	request.Header.Set("Content-Type", "application/json")
+	routerFor(useCases).ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"REACTION_TEXT_TOO_LONG"`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
 }
 func TestUpdateMapsConflictAndReturnsOccurrenceVersion(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)

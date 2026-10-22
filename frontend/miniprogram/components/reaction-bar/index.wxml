@@ -1,0 +1,1 @@
+<view class="bar"><button wx:for="{{presets}}" wx:key="type" class="chip" data-type="{{item.type}}" bindtap="toggle">{{item.icon}}</button><button class="chip text" bindtap="text">写句话</button></view><view wx:if="{{items.length}}" class="summary"><text wx:for="{{items}}" wx:key="type" class="count {{item.reactedByMe ? 'mine' : ''}}">{{item.label}} {{item.count}}</text></view>

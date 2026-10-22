@@ -17,4 +17,8 @@ var (
 	ErrMomentConflict         = errors.New("moment conflict")
 	ErrInvalidSpaceVisibility = errors.New("invalid moment space and visibility")
 	ErrInvalidMomentKind      = errors.New("invalid moment kind")
+	ErrInvalidReaction        = errors.New("invalid reaction")
+	ErrEmptyReactionText      = errors.New("empty reaction text")
+	ErrReactionTextTooLong    = errors.New("reaction text too long")
+	ErrReactionNotFound       = errors.New("reaction not found")
 )

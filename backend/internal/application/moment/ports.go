@@ -34,9 +34,10 @@ type PhotoStorage interface {
 	VerifyUploaded(context.Context, string, string, int64) error
 }
 type TimelinePage struct {
-	Moments    []domain.Moment   `json:"moments"`
-	NextCursor string            `json:"nextCursor,omitempty"`
-	PhotoURLs  map[string]string `json:"-"`
+	Moments    []domain.Moment             `json:"moments"`
+	NextCursor string                      `json:"nextCursor,omitempty"`
+	PhotoURLs  map[string]string           `json:"-"`
+	Reactions  map[int64][]domain.Reaction `json:"-"`
 }
 type CalendarDay struct {
 	Date  string `json:"date"`
@@ -99,6 +100,10 @@ type MomentRepository interface {
 	LatestStatusByAuthor(context.Context, int64, int64) (*domain.Moment, error)
 	Find(context.Context, MomentLookup) (domain.Moment, error)
 	Delete(context.Context, int64) error
+	ShareToCouple(context.Context, int64, int64, int64, string, time.Time) (domain.Moment, error)
+	UpsertReaction(context.Context, domain.Reaction) (domain.Reaction, error)
+	DeleteReaction(context.Context, int64, int64) error
+	ListReactions(context.Context, []int64) (map[int64][]domain.Reaction, error)
 }
 type ReadRepository interface {
 	Calendar(context.Context, int64, time.Time, time.Time) ([]CalendarDay, error)

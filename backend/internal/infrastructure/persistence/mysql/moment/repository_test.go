@@ -200,3 +200,52 @@ func TestSharedReadModelsExcludePersonalMoments(t *testing.T) {
 		}
 	})
 }
+
+func TestShareToCoupleCopiesSourceAndPhotosAtomically(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	occurred := now.Add(-24 * time.Hour)
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT author_user_id,space_type,kind,body,status_code,place_name,latitude,longitude,occurred_at FROM moments").WithArgs(int64(7), int64(1)).WillReturnRows(sqlmock.NewRows([]string{"author_user_id", "space_type", "kind", "body", "status_code", "place_name", "latitude", "longitude", "occurred_at"}).AddRow(1, "personal", "standard", "原记录", "miss_you", "公园", nil, nil, occurred))
+	mock.ExpectQuery("SELECT object_key,sort_order FROM moment_photos").WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"object_key", "sort_order"}).AddRow("users/1/a.jpg", 1))
+	mock.ExpectQuery("SELECT id FROM couples").WithArgs(int64(9), int64(1), int64(1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(9))
+	mock.ExpectExec("INSERT INTO moments").WithArgs(int64(9), int64(1), "shared", "couple", "standard", int64(7), nil, "也放进我们的故事", "miss_you", "公园", nil, nil, occurred, now, now).WillReturnResult(sqlmock.NewResult(20, 1))
+	mock.ExpectExec("INSERT INTO moment_photos").WithArgs(int64(20), int64(7)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	shared, err := NewMySQLRepository(db).ShareToCouple(context.Background(), 7, 1, 9, "也放进我们的故事", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shared.ID() != 20 || shared.SourceMomentID() == nil || *shared.SourceMomentID() != 7 || len(shared.Photos()) != 1 {
+		t.Fatalf("shared=%+v photos=%+v", shared, shared.Photos())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReactionUpsertIsIdempotentAndDeleteIsOwnerScoped(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	reaction, _ := domain.NewReaction(7, 2, domain.ReactionHug, "", now)
+	mock.ExpectExec("INSERT INTO moment_reactions.*ON DUPLICATE KEY UPDATE").WithArgs(int64(7), int64(2), "hug", "", now, now).WillReturnResult(sqlmock.NewResult(12, 1))
+	saved, err := NewMySQLRepository(db).UpsertReaction(context.Background(), reaction)
+	if err != nil || saved.ID() != 12 {
+		t.Fatalf("saved=%+v err=%v", saved, err)
+	}
+	mock.ExpectExec("DELETE FROM moment_reactions WHERE id=\\? AND user_id=\\?").WithArgs(int64(12), int64(2)).WillReturnResult(sqlmock.NewResult(0, 1))
+	if err := NewMySQLRepository(db).DeleteReaction(context.Background(), 12, 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}

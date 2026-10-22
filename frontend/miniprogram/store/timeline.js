@@ -57,6 +57,7 @@ function createTimelineStore(service, initialFilter = { space: 'shared' }) {
     loadFirst() { return fetchPage(true) },
     loadMore() { return fetchPage(false) },
     remove(id) { state = { ...state, moments: state.moments.filter(item => String(item.id) !== String(id)) } },
+    replace(moment) { state = { ...state, moments: state.moments.map(item => String(item.id) === String(moment.id) ? moment : item) } },
     snapshot,
   }
 }

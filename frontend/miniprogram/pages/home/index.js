@@ -6,6 +6,7 @@ const { companionshipService } = require('../../services/companionship')
 const { statusMoment,normalizeHighlights } = require('../../utils/home-view-model')
 const { anniversaryView}=require('../../utils/anniversary')
 const { userService } = require('../../services/users')
+const { reactOptimistically, promptTextReaction } = require('../../utils/moment-page-actions')
 
 const CACHE_KEY = 'homeSnapshot'
 // 后端签名图片 URL 有效期 10-15 分钟，缓存必须比它短，
@@ -57,4 +58,7 @@ Page({
     const id=event.detail.id
     wx.showModal({title:'删除这件小事？',content:'删除后不能恢复。',confirmText:'删除',confirmColor:'#C87580',success:async(result)=>{if(!result.confirm)return;try{await momentService.deleteMoment(id);this.setData({moments:this.data.moments.filter((item)=>item.id!==id)});wx.showToast({title:'已删除',icon:'none'})}catch(_){wx.showToast({title:'删除失败，请稍后再试',icon:'none'})}}})
   },
+  replaceMoment(moment){this.setData({moments:this.data.moments.map(item=>String(item.id)===String(moment.id)?moment:item)})},
+  react(event){reactOptimistically(event,this.data.currentUserId,moment=>this.replaceMoment(moment))},
+  textReaction(event){promptTextReaction(event,moment=>this.replaceMoment(moment))},
 })

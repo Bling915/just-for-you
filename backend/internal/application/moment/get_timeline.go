@@ -43,6 +43,14 @@ func (u *GetTimelineUseCase) Execute(ctx context.Context, q GetTimelineQuery) (T
 		return TimelinePage{}, err
 	}
 	page.PhotoURLs, err = signReadURLs(ctx, page.Moments, u.photos, u.clock)
+	if err != nil {
+		return TimelinePage{}, err
+	}
+	ids := make([]int64, 0, len(page.Moments))
+	for _, value := range page.Moments {
+		ids = append(ids, value.ID())
+	}
+	page.Reactions, err = u.moments.ListReactions(ctx, ids)
 	return page, err
 }
 

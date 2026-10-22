@@ -32,6 +32,13 @@ type GetHomeExecutor interface {
 type DeleteMomentExecutor interface {
 	Execute(context.Context, application.DeleteMomentCommand) error
 }
+type ShareToCoupleExecutor interface {
+	Execute(context.Context, application.ShareToCoupleCommand) (domain.Moment, error)
+}
+type ReactToMomentExecutor interface {
+	Execute(context.Context, application.ReactToMomentCommand) (domain.Reaction, error)
+	Delete(context.Context, application.DeleteReactionCommand) error
+}
 type UseCases struct {
 	RequestPhotoUpload RequestPhotoUploadExecutor
 	PublishMoment      PublishMomentExecutor
@@ -39,6 +46,8 @@ type UseCases struct {
 	GetTimeline        GetTimelineExecutor
 	GetHome            GetHomeExecutor
 	DeleteMoment       DeleteMomentExecutor
+	ShareToCouple      ShareToCoupleExecutor
+	ReactToMoment      ReactToMomentExecutor
 	ReadModels         *application.ReadModels
 }
 
@@ -62,6 +71,9 @@ func (h *Handler) RegisterProtected(group *gin.RouterGroup) {
 	group.GET("/moments/map", h.memoryMap)
 	group.GET("/reports/monthly", h.monthlyReport)
 	group.DELETE("/moments/:id", h.delete)
+	group.POST("/moments/:id/share-to-couple", h.shareToCouple)
+	group.POST("/moments/:id/reactions", h.react)
+	group.DELETE("/moments/:id/reactions/:reactionId", h.deleteReaction)
 }
 
 func (h *Handler) calendar(c *gin.Context) {
@@ -195,7 +207,7 @@ func (h *Handler) timeline(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	httpserver.WriteData(c, http.StatusOK, gin.H{"moments": momentsDTO(page.Moments, page.PhotoURLs), "nextCursor": page.NextCursor})
+	httpserver.WriteData(c, http.StatusOK, gin.H{"moments": momentsDTO(page.Moments, page.PhotoURLs, page.Reactions, httpserver.UserID(c)), "nextCursor": page.NextCursor})
 }
 
 func parseTimelineScope(rawSpace, rawOwner string) (domain.SpaceType, application.TimelineOwner, error) {
@@ -230,9 +242,75 @@ func (h *Handler) home(c *gin.Context) {
 	}
 	var latest any
 	if home.PartnerLatestStatus != nil {
-		latest = momentDTO(*home.PartnerLatestStatus, home.PhotoURLs)
+		latest = momentDTO(*home.PartnerLatestStatus, home.PhotoURLs, home.Reactions[home.PartnerLatestStatus.ID()], httpserver.UserID(c))
 	}
-	httpserver.WriteData(c, http.StatusOK, gin.H{"partnerLatestStatus": latest, "recent": momentsDTO(home.Recent, home.PhotoURLs), "pinnedAnniversaries": home.PinnedAnniversaries, "hasMorePinned": home.HasMorePinned})
+	httpserver.WriteData(c, http.StatusOK, gin.H{"partnerLatestStatus": latest, "recent": momentsDTO(home.Recent, home.PhotoURLs, home.Reactions, httpserver.UserID(c)), "pinnedAnniversaries": home.PinnedAnniversaries, "hasMorePinned": home.HasMorePinned})
+}
+
+func parseID(c *gin.Context, name string) (int64, bool) {
+	id, err := strconv.ParseInt(c.Param(name), 10, 64)
+	if err != nil || id <= 0 {
+		httpserver.WriteError(c, http.StatusBadRequest, "INVALID_ARGUMENT", "编号无效")
+		return 0, false
+	}
+	return id, true
+}
+
+func (h *Handler) shareToCouple(c *gin.Context) {
+	id, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
+	var input struct {
+		Message string `json:"message"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httpserver.WriteError(c, 400, "INVALID_ARGUMENT", "分享内容格式无效")
+		return
+	}
+	value, err := h.useCases.ShareToCouple.Execute(c, application.ShareToCoupleCommand{UserID: httpserver.UserID(c), MomentID: id, Message: input.Message})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpserver.WriteData(c, http.StatusCreated, momentDTO(value))
+}
+
+func (h *Handler) react(c *gin.Context) {
+	id, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
+	var input struct {
+		Type domain.ReactionType `json:"type"`
+		Text string              `json:"text"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httpserver.WriteError(c, 400, "INVALID_ARGUMENT", "回应格式无效")
+		return
+	}
+	value, err := h.useCases.ReactToMoment.Execute(c, application.ReactToMomentCommand{UserID: httpserver.UserID(c), MomentID: id, Type: input.Type, Text: input.Text})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpserver.WriteData(c, http.StatusCreated, reactionDTO(value, httpserver.UserID(c)))
+}
+
+func (h *Handler) deleteReaction(c *gin.Context) {
+	momentID, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
+	reactionID, ok := parseID(c, "reactionId")
+	if !ok {
+		return
+	}
+	if err := h.useCases.ReactToMoment.Delete(c, application.DeleteReactionCommand{UserID: httpserver.UserID(c), MomentID: momentID, ReactionID: reactionID}); err != nil {
+		writeError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
 }
 
 func (h *Handler) delete(c *gin.Context) {
@@ -282,6 +360,14 @@ func writeError(c *gin.Context, err error) {
 		status, code, message = http.StatusBadRequest, "INVALID_SPACE_VISIBILITY", "发布空间与可见范围不匹配"
 	case errors.Is(err, domain.ErrInvalidMomentKind):
 		status, code, message = http.StatusBadRequest, "INVALID_MOMENT_KIND", "小事类型无效"
+	case errors.Is(err, domain.ErrInvalidReaction), errors.Is(err, domain.ErrEmptyReactionText):
+		status, code, message = http.StatusBadRequest, "INVALID_REACTION", "回应内容无效"
+	case errors.Is(err, domain.ErrReactionTextTooLong):
+		status, code, message = http.StatusBadRequest, "REACTION_TEXT_TOO_LONG", "回应不能超过 120 个字"
+	case errors.Is(err, domain.ErrReactionNotFound):
+		status, code, message = http.StatusNotFound, "REACTION_NOT_FOUND", "回应不存在"
+	case errors.Is(err, application.ErrCannotShareMoment):
+		status, code, message = http.StatusConflict, "CANNOT_SHARE_MOMENT", "这条小事不能分享"
 	case errors.Is(err, domain.ErrMomentConflict):
 		status, code, message = http.StatusConflict, "MOMENT_CONFLICT", "这条记录已在别处更新，请重新加载"
 	case errors.Is(err, domain.ErrNotAuthor):
@@ -303,10 +389,20 @@ func writeError(c *gin.Context, err error) {
 	httpserver.WriteError(c, status, code, message)
 }
 
-func momentDTO(moment domain.Moment, photoURLs ...map[string]string) gin.H {
+func momentDTO(moment domain.Moment, options ...any) gin.H {
 	urls := map[string]string{}
-	if len(photoURLs) > 0 {
-		urls = photoURLs[0]
+	var reactions []domain.Reaction
+	var viewerID int64
+	if len(options) > 0 {
+		if value, ok := options[0].(map[string]string); ok {
+			urls = value
+		}
+	}
+	if len(options) > 1 {
+		reactions, _ = options[1].([]domain.Reaction)
+	}
+	if len(options) > 2 {
+		viewerID, _ = options[2].(int64)
 	}
 	photos := make([]gin.H, 0, len(moment.Photos()))
 	for _, photo := range moment.Photos() {
@@ -317,13 +413,24 @@ func momentDTO(moment domain.Moment, photoURLs ...map[string]string) gin.H {
 		"status": moment.Status(), "placeName": moment.Place(), "latitude": moment.Latitude(), "longitude": moment.Longitude(), "photos": photos,
 		"spaceType": moment.SpaceType(), "visibility": moment.Visibility(), "kind": moment.Kind(), "sourceMomentId": moment.SourceMomentID(), "dailyQuestionId": moment.DailyQuestionID(),
 		"occurredAt": moment.OccurredAt(), "createdAt": moment.CreatedAt(), "updatedAt": moment.UpdatedAt(),
+		"reactions": reactionsDTO(reactions, viewerID),
 	}
 }
 
-func momentsDTO(moments []domain.Moment, photoURLs map[string]string) []gin.H {
+func reactionDTO(value domain.Reaction, viewerID int64) gin.H {
+	return gin.H{"id": value.ID(), "type": value.Type(), "text": value.Text(), "userId": value.UserID(), "createdAt": value.CreatedAt(), "reactedByMe": value.UserID() == viewerID}
+}
+func reactionsDTO(values []domain.Reaction, viewerID int64) []gin.H {
+	result := make([]gin.H, 0, len(values))
+	for _, value := range values {
+		result = append(result, reactionDTO(value, viewerID))
+	}
+	return result
+}
+func momentsDTO(moments []domain.Moment, photoURLs map[string]string, reactions map[int64][]domain.Reaction, viewerID int64) []gin.H {
 	result := make([]gin.H, 0, len(moments))
 	for _, moment := range moments {
-		result = append(result, momentDTO(moment, photoURLs))
+		result = append(result, momentDTO(moment, photoURLs, reactions[moment.ID()], viewerID))
 	}
 	return result
 }
