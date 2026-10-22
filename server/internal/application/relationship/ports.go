@@ -15,3 +15,7 @@ type Repository interface {
 	GetActiveDetails(context.Context, int64) (domain.Relationship, PartnerProfile, bool, error)
 	End(context.Context, int64, time.Time) error
 }
+type AvatarURLSigner interface {
+	SignRead(context.Context, string, time.Time) (string, error)
+}
+type Clock interface{ Now() time.Time }

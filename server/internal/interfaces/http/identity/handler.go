@@ -21,17 +21,21 @@ type LogoutExecutor interface {
 	Execute(context.Context, application.LogoutCommand) error
 }
 type GetProfileExecutor interface {
-	Execute(context.Context, application.GetProfileQuery) (domain.User, error)
+	Execute(context.Context, application.GetProfileQuery) (application.Profile, error)
 }
 type UpdateProfileExecutor interface {
-	Execute(context.Context, application.UpdateProfileCommand) (domain.User, error)
+	Execute(context.Context, application.UpdateProfileCommand) (application.Profile, error)
+}
+type RequestAvatarUploadExecutor interface {
+	Execute(context.Context, application.RequestAvatarUploadCommand) (application.UploadGrant, error)
 }
 type UseCases struct {
-	Login          LoginExecutor
-	RefreshSession RefreshSessionExecutor
-	Logout         LogoutExecutor
-	GetProfile     GetProfileExecutor
-	UpdateProfile  UpdateProfileExecutor
+	Login               LoginExecutor
+	RefreshSession      RefreshSessionExecutor
+	Logout              LogoutExecutor
+	GetProfile          GetProfileExecutor
+	UpdateProfile       UpdateProfileExecutor
+	RequestAvatarUpload RequestAvatarUploadExecutor
 }
 type Handler struct{ useCases UseCases }
 
@@ -44,6 +48,7 @@ func (h *Handler) RegisterPublic(router *gin.Engine) {
 func (h *Handler) RegisterProtected(group *gin.RouterGroup) {
 	group.GET("/users/me", h.getMe)
 	group.PUT("/users/me", h.updateProfile)
+	group.POST("/users/me/avatar-upload", h.requestAvatarUpload)
 }
 func (h *Handler) login(c *gin.Context) {
 	var input struct {
@@ -120,6 +125,8 @@ func (h *Handler) updateProfile(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidNickname) {
 			httpserver.WriteError(c, http.StatusBadRequest, "INVALID_PROFILE", "昵称需为 1 至 30 个字符")
+		} else if errors.Is(err, domain.ErrInvalidAvatar) {
+			httpserver.WriteError(c, http.StatusBadRequest, "INVALID_AVATAR", "头像无效或已过期")
 		} else {
 			_ = c.Error(err)
 			httpserver.WriteError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "服务暂时不可用")
@@ -128,6 +135,27 @@ func (h *Handler) updateProfile(c *gin.Context) {
 	}
 	httpserver.WriteData(c, 200, toDTO(user))
 }
-func toDTO(user domain.User) gin.H {
-	return gin.H{"id": user.ID(), "displayName": user.DisplayName(), "avatarRef": user.AvatarRef()}
+func (h *Handler) requestAvatarUpload(c *gin.Context) {
+	var input struct {
+		ContentType string `json:"contentType"`
+		Size        int64  `json:"size"`
+	}
+	if c.ShouldBindJSON(&input) != nil {
+		httpserver.WriteError(c, 400, "INVALID_AVATAR", "头像信息无效")
+		return
+	}
+	grant, err := h.useCases.RequestAvatarUpload.Execute(c, application.RequestAvatarUploadCommand{UserID: httpserver.UserID(c), ContentType: input.ContentType, Size: input.Size})
+	if err != nil {
+		if errors.Is(err, domain.ErrInvalidAvatar) {
+			httpserver.WriteError(c, 400, "INVALID_AVATAR", "请选择有效的头像图片")
+		} else {
+			_ = c.Error(err)
+			httpserver.WriteError(c, 500, "INTERNAL_ERROR", "服务暂时不可用")
+		}
+		return
+	}
+	httpserver.WriteData(c, 201, grant)
+}
+func toDTO(profile application.Profile) gin.H {
+	return gin.H{"id": profile.ID(), "displayName": profile.DisplayName(), "avatarRef": profile.AvatarRef(), "avatarUrl": profile.AvatarURL}
 }

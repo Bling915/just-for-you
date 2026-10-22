@@ -31,20 +31,53 @@ func (fakeLogout) Execute(context.Context, application.LogoutCommand) error { re
 
 type fakeGetProfile struct{}
 
-func (fakeGetProfile) Execute(context.Context, application.GetProfileQuery) (domain.User, error) {
-	return domain.NewUser(1, "open"), nil
+func (fakeGetProfile) Execute(context.Context, application.GetProfileQuery) (application.Profile, error) {
+	return application.Profile{User: domain.RestoreUser(1, "open", "小南", "users/1/avatars/a.jpg"), AvatarURL: "https://read/avatar"}, nil
 }
 
 type fakeUpdateProfile struct{}
 
-func (fakeUpdateProfile) Execute(context.Context, application.UpdateProfileCommand) (domain.User, error) {
-	return domain.User{}, domain.ErrInvalidNickname
+func (fakeUpdateProfile) Execute(context.Context, application.UpdateProfileCommand) (application.Profile, error) {
+	return application.Profile{}, domain.ErrInvalidNickname
+}
+
+type fakeAvatarUpload struct{ err error }
+
+func (f fakeAvatarUpload) Execute(context.Context, application.RequestAvatarUploadCommand) (application.UploadGrant, error) {
+	return application.UploadGrant{ObjectKey: "users/1/avatars/a.jpg", UploadURL: "https://upload/avatar", ContentType: "image/jpeg"}, f.err
 }
 
 func fakeUseCases(loginErr error) UseCases {
 	return UseCases{
 		Login: fakeLogin{err: loginErr}, RefreshSession: fakeRefresh{}, Logout: fakeLogout{},
-		GetProfile: fakeGetProfile{}, UpdateProfile: fakeUpdateProfile{},
+		GetProfile: fakeGetProfile{}, UpdateProfile: fakeUpdateProfile{}, RequestAvatarUpload: fakeAvatarUpload{},
+	}
+}
+
+func TestGetProfileReturnsStableRefAndSignedURL(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	group := router.Group("/v1", func(c *gin.Context) { c.Set("userID", int64(1)) })
+	NewHandler(fakeUseCases(nil)).RegisterProtected(group)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/users/me", nil))
+	body := response.Body.String()
+	if response.Code != http.StatusOK || !strings.Contains(body, `"avatarRef":"users/1/avatars/a.jpg"`) || !strings.Contains(body, `"avatarUrl":"https://read/avatar"`) {
+		t.Fatalf("status=%d body=%s", response.Code, body)
+	}
+}
+
+func TestAvatarUploadGrantValidatesRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	group := router.Group("/v1", func(c *gin.Context) { c.Set("userID", int64(1)) })
+	NewHandler(fakeUseCases(nil)).RegisterProtected(group)
+	request := httptest.NewRequest(http.MethodPost, "/v1/users/me/avatar-upload", bytes.NewBufferString(`{"contentType":"image/jpeg","size":2048}`))
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusCreated || !strings.Contains(response.Body.String(), `"uploadURL":"https://upload/avatar"`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

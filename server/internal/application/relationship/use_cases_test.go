@@ -88,7 +88,7 @@ func (r *memoryRepository) GetActiveDetails(ctx context.Context, userID int64) (
 	if partnerID >= 1000 {
 		return relationship, PartnerProfile{UserID: partnerID, DisplayName: "测试搭子"}, true, nil
 	}
-	return relationship, PartnerProfile{UserID: partnerID, DisplayName: "小南", AvatarURL: "cos://avatar"}, false, nil
+	return relationship, PartnerProfile{UserID: partnerID, DisplayName: "小南", AvatarRef: "cos://avatar"}, false, nil
 }
 func (r *memoryRepository) End(_ context.Context, userID int64, now time.Time) error {
 	r.mu.Lock()
@@ -204,5 +204,22 @@ func TestGetRelationshipMarksSoloTestPartner(t *testing.T) {
 	}
 	if !result.SoloTest {
 		t.Fatal("solo relationship was not identified")
+	}
+}
+
+type avatarSignerStub struct{}
+
+func (avatarSignerStub) SignRead(_ context.Context, key string, _ time.Time) (string, error) {
+	return "https://signed/" + key, nil
+}
+
+func TestGetRelationshipSignsPartnerAvatarReference(t *testing.T) {
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	relationship := domain.NewRelationship(9, 7, 8, now)
+	repo := &memoryRepository{active: map[int64]domain.Relationship{7: relationship, 8: relationship}}
+	useCase := NewGetRelationshipUseCaseWithAvatars(repo, avatarSignerStub{}, fixedClock{now})
+	result, err := useCase.Execute(context.Background(), GetRelationshipQuery{UserID: 7})
+	if err != nil || result.Partner.AvatarURL != "https://signed/cos://avatar" {
+		t.Fatalf("partner=%+v err=%v", result.Partner, err)
 	}
 }

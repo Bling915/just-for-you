@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	application "github.com/nanfang/just-for-you/server/internal/application/identity"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/identity"
 )
 
@@ -46,6 +47,43 @@ func (r MySQLRepository) GetUser(ctx context.Context, id int64) (domain.User, er
 func (r MySQLRepository) UpdateUser(ctx context.Context, user domain.User) error {
 	_, err := r.DB.ExecContext(ctx, "UPDATE users SET display_name=?,avatar_ref=? WHERE id=?", user.DisplayName(), user.AvatarRef(), user.ID())
 	return err
+}
+func (r MySQLRepository) CreateAvatarGrant(ctx context.Context, grant application.AvatarGrant) error {
+	_, err := r.DB.ExecContext(ctx, "INSERT INTO upload_grants(user_id,object_key,content_type,purpose,resource_id,expires_at) VALUES(?,?,?,?,NULL,?)", grant.OwnerID, grant.ObjectKey, grant.ContentType, grant.Purpose, grant.ExpiresAt)
+	return err
+}
+func (r MySQLRepository) GetAvatarGrant(ctx context.Context, key string) (application.AvatarGrant, error) {
+	var g application.AvatarGrant
+	var consumed sql.NullTime
+	err := r.DB.QueryRowContext(ctx, "SELECT object_key,user_id,content_type,purpose,expires_at,consumed_at FROM upload_grants WHERE object_key=?", key).Scan(&g.ObjectKey, &g.OwnerID, &g.ContentType, &g.Purpose, &g.ExpiresAt, &consumed)
+	if errors.Is(err, sql.ErrNoRows) {
+		return g, domain.ErrInvalidAvatar
+	}
+	if consumed.Valid {
+		g.ConsumedAt = &consumed.Time
+	}
+	return g, err
+}
+func (r MySQLRepository) UpdateUserWithAvatarGrant(ctx context.Context, user domain.User, key string, now time.Time) error {
+	tx, err := r.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var owner int64
+	var purpose string
+	var expires time.Time
+	var consumed sql.NullTime
+	if err = tx.QueryRowContext(ctx, "SELECT user_id,purpose,expires_at,consumed_at FROM upload_grants WHERE object_key=? FOR UPDATE", key).Scan(&owner, &purpose, &expires, &consumed); err != nil || owner != user.ID() || purpose != "avatar" || consumed.Valid || !expires.After(now) {
+		return domain.ErrInvalidAvatar
+	}
+	if _, err = tx.ExecContext(ctx, "UPDATE users SET display_name=?,avatar_ref=? WHERE id=?", user.DisplayName(), user.AvatarRef(), user.ID()); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, "UPDATE upload_grants SET consumed_at=? WHERE object_key=?", now, key); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 func (r MySQLRepository) StoreRefresh(ctx context.Context, token domain.RefreshToken) error {
 	hash := token.Hash()

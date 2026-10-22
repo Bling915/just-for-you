@@ -189,7 +189,7 @@ func (r MySQLRepository) GetActiveDetails(ctx context.Context, userID int64) (do
 		endedAt = &ended.Time
 	}
 	relationship := domain.RestoreRelationship(id, a, b, status, bound, endedAt)
-	partner := application.PartnerProfile{UserID: partnerID, DisplayName: displayName, AvatarURL: avatarURL}
+	partner := application.PartnerProfile{UserID: partnerID, DisplayName: displayName, AvatarRef: avatarURL}
 	return relationship, partner, soloTest, nil
 }
 func (r MySQLRepository) End(ctx context.Context, userID int64, now time.Time) error {

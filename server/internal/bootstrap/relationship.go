@@ -8,9 +8,9 @@ import (
 	relationshiphttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/relationship"
 )
 
-func buildRelationship(db *sql.DB, enableSoloTest bool) (*relationshiphttp.Handler, *relationshipapp.GetRelationshipUseCase) {
+func buildRelationship(db *sql.DB, enableSoloTest bool, avatars relationshipapp.AvatarURLSigner) (*relationshiphttp.Handler, *relationshipapp.GetRelationshipUseCase) {
 	repo := relationshipmysql.NewMySQLRepository(db)
-	get := relationshipapp.NewGetRelationshipUseCase(repo)
+	get := relationshipapp.NewGetRelationshipUseCaseWithAvatars(repo, avatars, clock.System{})
 	useCases := relationshiphttp.UseCases{CreateInvitation: relationshipapp.NewCreateInvitationUseCase(repo, clock.System{}, relationshipmysql.GenerateInvitationCode), PreviewInvitation: relationshipapp.NewPreviewInvitationUseCase(repo, clock.System{}), BindRelationship: relationshipapp.NewBindRelationshipUseCase(repo, clock.System{}), GetRelationship: get, EndRelationship: relationshipapp.NewEndRelationshipUseCase(repo, clock.System{})}
 	if enableSoloTest {
 		useCases.EnableSoloTest = relationshipapp.NewEnableSoloTestUseCase(repo, clock.System{})
