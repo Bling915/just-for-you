@@ -41,3 +41,18 @@ type MediaStorage interface {
 	VerifyUploaded(context.Context, string, string, int64) error
 	SignRead(context.Context, string, time.Time) (string, error)
 }
+type GeneratedQuestion struct{ Text, Source, ContextVersion string }
+type QuestionContext struct {
+	CoupleID int64
+	Date     time.Time
+}
+type QuestionGenerator interface {
+	Generate(context.Context, QuestionContext) (GeneratedQuestion, error)
+}
+type DailyQuestionRepository interface {
+	FindDailyQuestion(context.Context, int64, time.Time) (domain.DailyQuestion, error)
+	FindDailyQuestionByID(context.Context, int64, int64) (domain.DailyQuestion, error)
+	CreateDailyQuestion(context.Context, domain.DailyQuestion) (domain.DailyQuestion, error)
+	SubmitDailyAnswer(context.Context, int64, int64, int64, string, time.Time) (domain.DailyQuestion, error)
+	ListDailyQuestions(context.Context, int64, int) ([]domain.DailyQuestion, error)
+}

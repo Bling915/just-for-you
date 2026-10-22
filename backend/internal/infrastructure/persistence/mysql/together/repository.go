@@ -7,6 +7,7 @@ import (
 	app "github.com/nanfang/just-for-you/server/internal/application/together"
 	relationship "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/together"
+	"strings"
 	"time"
 )
 
@@ -209,6 +210,133 @@ func (r Repository) MomentCoupleID(ctx context.Context, id int64) (int64, error)
 		e = domain.ErrInvalidMoment
 	}
 	return cid, e
+}
+
+const dailyQuestionColumns = "id,couple_id,question_date,question_text,source,context_version,unlocked_at,created_at,updated_at"
+
+func (r Repository) FindDailyQuestion(ctx context.Context, coupleID int64, date time.Time) (domain.DailyQuestion, error) {
+	return r.scanDailyQuestion(ctx, r.db.QueryRowContext(ctx, "SELECT "+dailyQuestionColumns+" FROM daily_questions WHERE couple_id=? AND question_date=?", coupleID, toAnniversaryDate(date)).Scan)
+}
+func (r Repository) FindDailyQuestionByID(ctx context.Context, coupleID, id int64) (domain.DailyQuestion, error) {
+	return r.scanDailyQuestion(ctx, r.db.QueryRowContext(ctx, "SELECT "+dailyQuestionColumns+" FROM daily_questions WHERE couple_id=? AND id=?", coupleID, id).Scan)
+}
+func (r Repository) scanDailyQuestion(ctx context.Context, scan scanner) (domain.DailyQuestion, error) {
+	var id, coupleID int64
+	var date anniversaryDate
+	var text, source, version string
+	var unlocked sql.NullTime
+	var created, updated time.Time
+	if err := scan(&id, &coupleID, &date, &text, &source, &version, &unlocked, &created, &updated); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			err = domain.ErrNotFound
+		}
+		return domain.DailyQuestion{}, err
+	}
+	rows, err := r.db.QueryContext(ctx, "SELECT user_id,answer_text,submitted_at,updated_at FROM daily_answers WHERE daily_question_id=? ORDER BY user_id", id)
+	if err != nil {
+		return domain.DailyQuestion{}, err
+	}
+	defer rows.Close()
+	answers := []domain.DailyAnswer{}
+	for rows.Next() {
+		var a domain.DailyAnswer
+		if err = rows.Scan(&a.UserID, &a.Text, &a.SubmittedAt, &a.UpdatedAt); err != nil {
+			return domain.DailyQuestion{}, err
+		}
+		answers = append(answers, a)
+	}
+	return domain.RestoreDailyQuestion(id, coupleID, date.Time, text, source, version, answers, timePtr(unlocked), created, updated), rows.Err()
+}
+func (r Repository) CreateDailyQuestion(ctx context.Context, value domain.DailyQuestion) (domain.DailyQuestion, error) {
+	_, err := r.db.ExecContext(ctx, "INSERT IGNORE INTO daily_questions(couple_id,question_date,question_text,source,context_version,created_at,updated_at) VALUES(?,?,?,?,?,?,?)", value.CoupleID(), toAnniversaryDate(value.Date()), value.Text(), value.Source(), value.ContextVersion(), value.CreatedAt(), value.UpdatedAt())
+	if err != nil {
+		return domain.DailyQuestion{}, err
+	}
+	return r.FindDailyQuestion(ctx, value.CoupleID(), value.Date())
+}
+func (r Repository) SubmitDailyAnswer(ctx context.Context, questionID, userID, partnerID int64, text string, now time.Time) (domain.DailyQuestion, error) {
+	textValue := strings.TrimSpace(text)
+	if textValue == "" || len([]rune(textValue)) > 500 {
+		return domain.DailyQuestion{}, domain.ErrInvalidDailyAnswer
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.DailyQuestion{}, err
+	}
+	defer tx.Rollback()
+	var coupleID int64
+	var questionText string
+	var unlocked sql.NullTime
+	err = tx.QueryRowContext(ctx, "SELECT q.couple_id,q.question_text,q.unlocked_at FROM daily_questions q JOIN couples c ON c.id=q.couple_id WHERE q.id=? AND c.status='active' AND (c.user_a_id=? OR c.user_b_id=?) FOR UPDATE", questionID, userID, userID).Scan(&coupleID, &questionText, &unlocked)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.DailyQuestion{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.DailyQuestion{}, err
+	}
+	if unlocked.Valid {
+		return domain.DailyQuestion{}, domain.ErrDailyQuestionFrozen
+	}
+	_, err = tx.ExecContext(ctx, "INSERT INTO daily_answers(daily_question_id,user_id,answer_text,submitted_at,updated_at) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE answer_text=VALUES(answer_text),submitted_at=VALUES(submitted_at),updated_at=VALUES(updated_at)", questionID, userID, textValue, now, now)
+	if err != nil {
+		return domain.DailyQuestion{}, err
+	}
+	var partnerCount int
+	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM daily_answers WHERE daily_question_id=? AND user_id=?", questionID, partnerID).Scan(&partnerCount); err != nil {
+		return domain.DailyQuestion{}, err
+	}
+	if partnerCount > 0 {
+		if _, err = tx.ExecContext(ctx, "UPDATE daily_questions SET unlocked_at=?,updated_at=? WHERE id=? AND unlocked_at IS NULL", now, now, questionID); err != nil {
+			return domain.DailyQuestion{}, err
+		}
+		rows, e := tx.QueryContext(ctx, "SELECT answer_text FROM daily_answers WHERE daily_question_id=? ORDER BY user_id", questionID)
+		if e != nil {
+			return domain.DailyQuestion{}, e
+		}
+		body := "每日一句 · " + questionText
+		for rows.Next() {
+			var answer string
+			if e = rows.Scan(&answer); e != nil {
+				rows.Close()
+				return domain.DailyQuestion{}, e
+			}
+			body += "\n" + answer
+		}
+		rows.Close()
+		_, err = tx.ExecContext(ctx, "INSERT IGNORE INTO moments(couple_id,author_user_id,space_type,visibility,kind,daily_question_id,body,status_code,place_name,occurred_at,created_at,updated_at) VALUES(?,?,'shared','couple','daily_question',?,?,'','',?,?,?)", coupleID, userID, questionID, body, now, now, now)
+		if err != nil {
+			return domain.DailyQuestion{}, err
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		return domain.DailyQuestion{}, err
+	}
+	return r.FindDailyQuestionByID(ctx, coupleID, questionID)
+}
+func (r Repository) ListDailyQuestions(ctx context.Context, coupleID int64, limit int) ([]domain.DailyQuestion, error) {
+	rows, err := r.db.QueryContext(ctx, "SELECT id FROM daily_questions WHERE couple_id=? ORDER BY question_date DESC,id DESC LIMIT ?", coupleID, limit)
+	if err != nil {
+		return nil, err
+	}
+	ids := []int64{}
+	for rows.Next() {
+		var id int64
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	result := make([]domain.DailyQuestion, 0, len(ids))
+	for _, id := range ids {
+		value, e := r.FindDailyQuestionByID(ctx, coupleID, id)
+		if e != nil {
+			return nil, e
+		}
+		result = append(result, value)
+	}
+	return result, nil
 }
 
 type scanner func(...any) error

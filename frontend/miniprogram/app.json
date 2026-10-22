@@ -10,6 +10,7 @@
     "pages/personal-moments/index",
     "pages/moment-edit/index",
     "pages/perspective-edit/index",
+    "pages/daily-questions/index",
     "pages/anniversaries/index",
     "pages/anniversary-edit/index",
     "pages/anniversary-detail/index",

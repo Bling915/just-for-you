@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	app "github.com/nanfang/just-for-you/server/internal/application/together"
+	"github.com/nanfang/just-for-you/server/internal/infrastructure/ai"
 	"github.com/nanfang/just-for-you/server/internal/infrastructure/clock"
 	"github.com/nanfang/just-for-you/server/internal/infrastructure/config"
 	mysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/together"
@@ -26,5 +27,6 @@ func buildTogether(db *sql.DB, cfg config.Config) (*togetherhttp.Handler, error)
 	if err != nil {
 		return nil, err
 	}
-	return togetherhttp.NewHandler(app.NewServiceWithStorage(repo, repo, clock.System{}, storage, coverKey)), nil
+	daily := app.NewDailyQuestionService(repo, repo, ai.NewFallbackQuestions(), clock.System{})
+	return togetherhttp.NewHandler(app.NewServiceWithStorage(repo, repo, clock.System{}, storage, coverKey), daily), nil
 }

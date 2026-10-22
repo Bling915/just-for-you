@@ -1,0 +1,2 @@
+const {dailyQuestionView}=require('../../store/daily-question')
+Component({properties:{question:{type:Object,value:null,observer(value){this.setData({view:dailyQuestionView(value),answer:''})}}},data:{view:{state:'empty'},answer:'',submitting:false},methods:{input(e){this.setData({answer:e.detail.value})},submit(){const text=this.data.answer.trim();if(!text)return wx.showToast({title:'先写下你的答案吧',icon:'none'});this.setData({submitting:true});this.triggerEvent('submit',{text,done:()=>this.setData({submitting:false})})},history(){this.triggerEvent('history')}}})

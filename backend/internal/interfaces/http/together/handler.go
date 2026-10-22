@@ -12,9 +12,18 @@ import (
 	"time"
 )
 
-type Handler struct{ s *app.Service }
+type Handler struct {
+	s     *app.Service
+	daily *app.DailyQuestionService
+}
 
-func NewHandler(s *app.Service) *Handler    { return &Handler{s: s} }
+func NewHandler(s *app.Service, daily ...*app.DailyQuestionService) *Handler {
+	h := &Handler{s: s}
+	if len(daily) > 0 {
+		h.daily = daily[0]
+	}
+	return h
+}
 func (*Handler) RegisterPublic(*gin.Engine) {}
 func (h *Handler) RegisterProtected(g *gin.RouterGroup) {
 	g.GET("/anniversaries", h.listAnniversaries)
@@ -31,6 +40,73 @@ func (h *Handler) RegisterProtected(g *gin.RouterGroup) {
 	g.POST("/wishes", h.createWish)
 	g.PATCH("/wishes/:id", h.updateWish)
 	g.DELETE("/wishes/:id", h.deleteWish)
+	g.GET("/daily-question", h.getDailyQuestion)
+	g.PUT("/daily-question/answer", h.submitDailyAnswer)
+	g.GET("/daily-questions", h.listDailyQuestions)
+}
+func (h *Handler) getDailyQuestion(c *gin.Context) {
+	if h.daily == nil {
+		shared.WriteError(c, 500, "INTERNAL_ERROR", "服务暂时不可用")
+		return
+	}
+	value, e := h.daily.GetToday(c, shared.UserID(c))
+	if e != nil {
+		fail(c, e)
+		return
+	}
+	shared.WriteData(c, 200, dailyQuestionDTO(value, shared.UserID(c)))
+}
+func (h *Handler) submitDailyAnswer(c *gin.Context) {
+	if h.daily == nil {
+		shared.WriteError(c, 500, "INTERNAL_ERROR", "服务暂时不可用")
+		return
+	}
+	var input struct {
+		QuestionID int64  `json:"questionId"`
+		Text       string `json:"text"`
+	}
+	if c.ShouldBindJSON(&input) != nil {
+		shared.WriteError(c, 400, "INVALID_ARGUMENT", "回答内容不正确")
+		return
+	}
+	value, e := h.daily.SubmitAnswer(c, app.SubmitDailyAnswerCommand{UserID: shared.UserID(c), QuestionID: input.QuestionID, Text: input.Text})
+	if e != nil {
+		fail(c, e)
+		return
+	}
+	shared.WriteData(c, 200, dailyQuestionDTO(value, shared.UserID(c)))
+}
+func (h *Handler) listDailyQuestions(c *gin.Context) {
+	if h.daily == nil {
+		shared.WriteError(c, 500, "INTERNAL_ERROR", "服务暂时不可用")
+		return
+	}
+	values, e := h.daily.List(c, shared.UserID(c))
+	if e != nil {
+		fail(c, e)
+		return
+	}
+	out := make([]gin.H, 0, len(values))
+	for _, value := range values {
+		out = append(out, dailyQuestionDTO(value, shared.UserID(c)))
+	}
+	shared.WriteData(c, 200, out)
+}
+func dailyQuestionDTO(value domain.DailyQuestion, userID int64) gin.H {
+	answers := value.Answers()
+	var mine any
+	if answer, ok := answers[userID]; ok {
+		mine = gin.H{"text": answer.Text, "submittedAt": answer.SubmittedAt}
+	}
+	var partner any
+	if value.Unlocked() {
+		for id, answer := range answers {
+			if id != userID {
+				partner = gin.H{"text": answer.Text, "submittedAt": answer.SubmittedAt}
+			}
+		}
+	}
+	return gin.H{"id": value.ID(), "date": value.Date(), "question": value.Text(), "source": value.Source(), "unlocked": value.Unlocked(), "myAnswer": mine, "partnerAnswer": partner, "answered": mine != nil}
 }
 func id(c *gin.Context) (int64, error) { return strconv.ParseInt(c.Param("id"), 10, 64) }
 func (h *Handler) listAnniversaries(c *gin.Context) {
@@ -268,6 +344,10 @@ func fail(c *gin.Context, e error) {
 		status, code, msg = 403, "NOT_CREATOR", "只能删除自己创建的内容"
 	case errors.Is(e, domain.ErrSystemAnniversary):
 		status, code, msg = 403, "SYSTEM_ANNIVERSARY", "系统纪念日不能删除"
+	case errors.Is(e, domain.ErrInvalidDailyAnswer):
+		status, code, msg = 400, "INVALID_DAILY_ANSWER", "回答不能为空且不能超过 500 个字"
+	case errors.Is(e, domain.ErrDailyQuestionFrozen):
+		status, code, msg = 409, "DAILY_QUESTION_FROZEN", "双方已回答，今天的答案已经珍藏"
 	case errors.Is(e, domain.ErrNotFound):
 		status, code, msg = 404, "NOT_FOUND", "内容不存在"
 	case errors.Is(e, relationship.ErrNoActiveRelationship):
