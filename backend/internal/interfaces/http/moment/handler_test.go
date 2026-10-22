@@ -26,9 +26,10 @@ func (f fakePublish) Execute(context.Context, application.PublishMomentCommand) 
 	return domain.Moment{}, f.err
 }
 
-type fakeTimeline struct{}
+type fakeTimeline struct{ query application.GetTimelineQuery }
 
-func (fakeTimeline) Execute(context.Context, application.GetTimelineQuery) (application.TimelinePage, error) {
+func (f *fakeTimeline) Execute(_ context.Context, query application.GetTimelineQuery) (application.TimelinePage, error) {
+	f.query = query
 	return application.TimelinePage{}, nil
 }
 
@@ -51,7 +52,7 @@ func (f fakeUpdate) Execute(context.Context, application.UpdateMomentCommand) (d
 	return f.result, f.err
 }
 func fakeUseCases(publishErr, deleteErr error) UseCases {
-	return UseCases{RequestPhotoUpload: fakeUpload{}, PublishMoment: fakePublish{publishErr}, UpdateMoment: fakeUpdate{}, GetTimeline: fakeTimeline{}, GetHome: fakeHome{}, DeleteMoment: fakeDelete{deleteErr}}
+	return UseCases{RequestPhotoUpload: fakeUpload{}, PublishMoment: fakePublish{publishErr}, UpdateMoment: fakeUpdate{}, GetTimeline: &fakeTimeline{}, GetHome: fakeHome{}, DeleteMoment: fakeDelete{deleteErr}}
 }
 func TestUpdateMapsConflictAndReturnsOccurrenceVersion(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
@@ -114,6 +115,27 @@ func TestPublishMapsInfrastructureFailureToServerError(t *testing.T) {
 	request.Header.Set("Content-Type", "application/json")
 	routerFor(fakeUseCases(errors.New("database unavailable"), nil)).ServeHTTP(response, request)
 	if response.Code != http.StatusInternalServerError || !strings.Contains(response.Body.String(), `"code":"INTERNAL_ERROR"`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestTimelineParsesSpaceAndOwner(t *testing.T) {
+	useCases := fakeUseCases(nil, nil)
+	timeline := useCases.GetTimeline.(*fakeTimeline)
+	response := httptest.NewRecorder()
+	routerFor(useCases).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/moments?space=personal&owner=partner&limit=12", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if timeline.query.SpaceType != domain.SpacePersonal || timeline.query.Owner != application.TimelineOwnerPartner || timeline.query.Limit != 12 {
+		t.Fatalf("query=%+v", timeline.query)
+	}
+}
+
+func TestTimelineRejectsInvalidSpaceQuery(t *testing.T) {
+	response := httptest.NewRecorder()
+	routerFor(fakeUseCases(nil, nil)).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/moments?space=shared&owner=me", nil))
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"INVALID_SPACE_QUERY"`) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }

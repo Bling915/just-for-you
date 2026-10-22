@@ -16,8 +16,10 @@ import (
 
 type MySQLRepository struct{ db *sql.DB }
 
+const momentSelectColumns = "id,author_user_id,couple_id,space_type,visibility,kind,source_moment_id,daily_question_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at,deleted_at"
+
 func (r MySQLRepository) Calendar(ctx context.Context, coupleID int64, from, to time.Time) ([]application.CalendarDay, error) {
-	rows, e := r.db.QueryContext(ctx, "SELECT DATE_FORMAT(CONVERT_TZ(occurred_at,'+00:00','+08:00'),'%Y-%m-%d'),COUNT(*) FROM moments WHERE couple_id=? AND occurred_at>=? AND occurred_at<? AND deleted_at IS NULL GROUP BY 1 ORDER BY 1", coupleID, from.UTC(), to.UTC())
+	rows, e := r.db.QueryContext(ctx, "SELECT DATE_FORMAT(CONVERT_TZ(occurred_at,'+00:00','+08:00'),'%Y-%m-%d'),COUNT(*) FROM moments WHERE couple_id=? AND space_type='shared' AND occurred_at>=? AND occurred_at<? AND deleted_at IS NULL GROUP BY 1 ORDER BY 1", coupleID, from.UTC(), to.UTC())
 	if e != nil {
 		return nil, e
 	}
@@ -33,7 +35,7 @@ func (r MySQLRepository) Calendar(ctx context.Context, coupleID int64, from, to 
 	return out, rows.Err()
 }
 func (r MySQLRepository) Map(ctx context.Context, coupleID int64, from, to time.Time, limit int) ([]application.MapPoint, error) {
-	rows, e := r.db.QueryContext(ctx, "SELECT id,latitude,longitude,occurred_at,place_name FROM moments WHERE couple_id=? AND occurred_at>=? AND occurred_at<? AND latitude IS NOT NULL AND longitude IS NOT NULL AND deleted_at IS NULL ORDER BY occurred_at DESC LIMIT ?", coupleID, from.UTC(), to.UTC(), limit)
+	rows, e := r.db.QueryContext(ctx, "SELECT id,latitude,longitude,occurred_at,place_name FROM moments WHERE couple_id=? AND space_type='shared' AND occurred_at>=? AND occurred_at<? AND latitude IS NOT NULL AND longitude IS NOT NULL AND deleted_at IS NULL ORDER BY occurred_at DESC LIMIT ?", coupleID, from.UTC(), to.UTC(), limit)
 	if e != nil {
 		return nil, e
 	}
@@ -50,12 +52,12 @@ func (r MySQLRepository) Map(ctx context.Context, coupleID int64, from, to time.
 }
 func (r MySQLRepository) MonthlyReport(ctx context.Context, coupleID int64, from, to time.Time) (application.MonthlyReport, error) {
 	var v application.MonthlyReport
-	e := r.db.QueryRowContext(ctx, "SELECT COUNT(*),(SELECT COUNT(*) FROM moment_photos p JOIN moments m2 ON m2.id=p.moment_id WHERE m2.couple_id=? AND m2.occurred_at>=? AND m2.occurred_at<? AND m2.deleted_at IS NULL) FROM moments WHERE couple_id=? AND occurred_at>=? AND occurred_at<? AND deleted_at IS NULL", coupleID, from.UTC(), to.UTC(), coupleID, from.UTC(), to.UTC()).Scan(&v.MomentCount, &v.PhotoCount)
+	e := r.db.QueryRowContext(ctx, "SELECT COUNT(*),(SELECT COUNT(*) FROM moment_photos p JOIN moments m2 ON m2.id=p.moment_id WHERE m2.couple_id=? AND m2.space_type='shared' AND m2.occurred_at>=? AND m2.occurred_at<? AND m2.deleted_at IS NULL) FROM moments WHERE couple_id=? AND space_type='shared' AND occurred_at>=? AND occurred_at<? AND deleted_at IS NULL", coupleID, from.UTC(), to.UTC(), coupleID, from.UTC(), to.UTC()).Scan(&v.MomentCount, &v.PhotoCount)
 	if e != nil {
 		return v, e
 	}
-	_ = r.db.QueryRowContext(ctx, "SELECT place_name FROM moments WHERE couple_id=? AND occurred_at>=? AND occurred_at<? AND deleted_at IS NULL AND place_name<>'' GROUP BY place_name ORDER BY COUNT(*) DESC,place_name LIMIT 1", coupleID, from.UTC(), to.UTC()).Scan(&v.TopPlace)
-	_ = r.db.QueryRowContext(ctx, "SELECT status_code FROM moments WHERE couple_id=? AND occurred_at>=? AND occurred_at<? AND deleted_at IS NULL AND status_code<>'' GROUP BY status_code ORDER BY COUNT(*) DESC,status_code LIMIT 1", coupleID, from.UTC(), to.UTC()).Scan(&v.CommonStatus)
+	_ = r.db.QueryRowContext(ctx, "SELECT place_name FROM moments WHERE couple_id=? AND space_type='shared' AND occurred_at>=? AND occurred_at<? AND deleted_at IS NULL AND place_name<>'' GROUP BY place_name ORDER BY COUNT(*) DESC,place_name LIMIT 1", coupleID, from.UTC(), to.UTC()).Scan(&v.TopPlace)
+	_ = r.db.QueryRowContext(ctx, "SELECT status_code FROM moments WHERE couple_id=? AND space_type='shared' AND occurred_at>=? AND occurred_at<? AND deleted_at IS NULL AND status_code<>'' GROUP BY status_code ORDER BY COUNT(*) DESC,status_code LIMIT 1", coupleID, from.UTC(), to.UTC()).Scan(&v.CommonStatus)
 	return v, nil
 }
 
@@ -175,9 +177,22 @@ func (r MySQLRepository) UpdateWithGrants(ctx context.Context, moment domain.Mom
 	}
 	return moment, nil
 }
-func (r MySQLRepository) List(ctx context.Context, relationshipID int64, cursor string, limit int) (application.TimelinePage, error) {
-	query := "SELECT id,author_user_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at,deleted_at FROM moments WHERE couple_id=? AND deleted_at IS NULL"
-	args := []any{relationshipID}
+func (r MySQLRepository) List(ctx context.Context, filter application.TimelineFilter, cursor string, limit int) (application.TimelinePage, error) {
+	query := "SELECT " + momentSelectColumns + " FROM moments WHERE "
+	args := []any{}
+	switch {
+	case filter.SpaceType == domain.SpaceShared && filter.RelationshipID > 0 && filter.OwnerID == 0:
+		query += "couple_id=? AND space_type='shared' AND deleted_at IS NULL"
+		args = append(args, filter.RelationshipID)
+	case filter.SpaceType == domain.SpacePersonal && filter.OwnerID == filter.ViewerID && filter.OwnerID > 0:
+		query += "author_user_id=? AND space_type='personal' AND deleted_at IS NULL"
+		args = append(args, filter.OwnerID)
+	case filter.SpaceType == domain.SpacePersonal && filter.RelationshipID > 0 && filter.OwnerID > 0 && filter.OwnerID != filter.ViewerID:
+		query += "couple_id=? AND author_user_id=? AND space_type='personal' AND visibility='partner' AND deleted_at IS NULL"
+		args = append(args, filter.RelationshipID, filter.OwnerID)
+	default:
+		return application.TimelinePage{}, application.ErrInvalidSpaceQuery
+	}
 	if cursor != "" {
 		at, id, err := decodeCursor(cursor)
 		if err != nil {
@@ -195,7 +210,7 @@ func (r MySQLRepository) List(ctx context.Context, relationshipID int64, cursor 
 	defer rows.Close()
 	moments := []domain.Moment{}
 	for rows.Next() {
-		moment, err := r.scanMoment(ctx, rows, relationshipID)
+		moment, err := r.scanMoment(ctx, rows)
 		if err != nil {
 			return application.TimelinePage{}, err
 		}
@@ -212,13 +227,14 @@ func (r MySQLRepository) List(ctx context.Context, relationshipID int64, cursor 
 
 type scanner interface{ Scan(...any) error }
 
-func (r MySQLRepository) scanMoment(ctx context.Context, row scanner, relationshipID int64) (domain.Moment, error) {
+func (r MySQLRepository) scanMoment(ctx context.Context, row scanner) (domain.Moment, error) {
 	var id, author int64
-	var text, status, place string
+	var relationship, sourceMoment, dailyQuestion sql.NullInt64
+	var text, status, place, spaceType, visibility, kind string
 	var latitude, longitude sql.NullFloat64
 	var occurred, created, updated time.Time
 	var deleted sql.NullTime
-	if err := row.Scan(&id, &author, &text, &status, &place, &latitude, &longitude, &occurred, &created, &updated, &deleted); err != nil {
+	if err := row.Scan(&id, &author, &relationship, &spaceType, &visibility, &kind, &sourceMoment, &dailyQuestion, &text, &status, &place, &latitude, &longitude, &occurred, &created, &updated, &deleted); err != nil {
 		return domain.Moment{}, err
 	}
 	photoRows, err := r.db.QueryContext(ctx, "SELECT object_key,sort_order FROM moment_photos WHERE moment_id=? ORDER BY sort_order", id)
@@ -246,23 +262,30 @@ func (r MySQLRepository) scanMoment(ctx context.Context, row scanner, relationsh
 	if longitude.Valid {
 		longitudeValue = &longitude.Float64
 	}
-	return domain.RestoreMomentDetails(domain.RestoreInput{ID: id, AuthorID: author, RelationshipID: relationshipID, Text: text, Status: domain.Status(status), Place: place, Latitude: latitudeValue, Longitude: longitudeValue, Photos: photos, OccurredAt: occurred, CreatedAt: created, UpdatedAt: updated, DeletedAt: deletedAt, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard}), nil
+	var sourceMomentID, dailyQuestionID *int64
+	if sourceMoment.Valid {
+		sourceMomentID = &sourceMoment.Int64
+	}
+	if dailyQuestion.Valid {
+		dailyQuestionID = &dailyQuestion.Int64
+	}
+	return domain.RestoreMomentDetails(domain.RestoreInput{ID: id, AuthorID: author, RelationshipID: relationship.Int64, Text: text, Status: domain.Status(status), Place: place, Latitude: latitudeValue, Longitude: longitudeValue, Photos: photos, OccurredAt: occurred, CreatedAt: created, UpdatedAt: updated, DeletedAt: deletedAt, SpaceType: domain.SpaceType(spaceType), Visibility: domain.Visibility(visibility), Kind: domain.Kind(kind), SourceMomentID: sourceMomentID, DailyQuestionID: dailyQuestionID}), nil
 }
-func (r MySQLRepository) Recent(ctx context.Context, relationshipID int64, limit int) ([]domain.Moment, error) {
-	page, err := r.List(ctx, relationshipID, "", limit)
+func (r MySQLRepository) Recent(ctx context.Context, filter application.TimelineFilter, limit int) ([]domain.Moment, error) {
+	page, err := r.List(ctx, filter, "", limit)
 	return page.Moments, err
 }
 func (r MySQLRepository) LatestStatusByAuthor(ctx context.Context, relationshipID, authorID int64) (*domain.Moment, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT id,author_user_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at,deleted_at FROM moments WHERE couple_id=? AND author_user_id=? AND status_code<>'' AND deleted_at IS NULL ORDER BY occurred_at DESC,id DESC LIMIT 1", relationshipID, authorID)
-	moment, err := r.scanMoment(ctx, row, relationshipID)
+	row := r.db.QueryRowContext(ctx, "SELECT "+momentSelectColumns+" FROM moments WHERE couple_id=? AND space_type='shared' AND author_user_id=? AND status_code<>'' AND deleted_at IS NULL ORDER BY occurred_at DESC,id DESC LIMIT 1", relationshipID, authorID)
+	moment, err := r.scanMoment(ctx, row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	return &moment, err
 }
-func (r MySQLRepository) Find(ctx context.Context, relationshipID, momentID int64) (domain.Moment, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT id,author_user_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at,deleted_at FROM moments WHERE couple_id=? AND id=? AND deleted_at IS NULL", relationshipID, momentID)
-	moment, err := r.scanMoment(ctx, row, relationshipID)
+func (r MySQLRepository) Find(ctx context.Context, lookup application.MomentLookup) (domain.Moment, error) {
+	row := r.db.QueryRowContext(ctx, "SELECT "+momentSelectColumns+" FROM moments WHERE id=? AND deleted_at IS NULL AND ((author_user_id=? AND space_type='personal') OR (couple_id=? AND space_type='shared') OR (couple_id=? AND space_type='personal' AND visibility='partner' AND author_user_id<>?))", lookup.MomentID, lookup.ViewerID, lookup.RelationshipID, lookup.RelationshipID, lookup.ViewerID)
+	moment, err := r.scanMoment(ctx, row)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = domain.ErrMomentNotFound
 	}

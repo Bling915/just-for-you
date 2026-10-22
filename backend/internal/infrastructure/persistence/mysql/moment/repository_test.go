@@ -2,6 +2,7 @@ package infrastructure
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"github.com/DATA-DOG/go-sqlmock"
 	application "github.com/nanfang/just-for-you/server/internal/application/moment"
@@ -91,4 +92,108 @@ func TestCursorRoundTripPreservesTimestampAndID(t *testing.T) {
 	if err != nil || !gotAt.Equal(at) || gotID != 42 {
 		t.Fatalf("at=%s id=%d err=%v", gotAt, gotID, err)
 	}
+}
+
+func TestListScopesQueriesToRequestedSpace(t *testing.T) {
+	tests := []struct {
+		name   string
+		filter application.TimelineFilter
+		query  string
+		args   []any
+	}{
+		{
+			name:   "shared relationship",
+			filter: application.TimelineFilter{ViewerID: 1, RelationshipID: 9, SpaceType: domain.SpaceShared},
+			query:  `FROM moments WHERE couple_id=\? AND space_type='shared' AND deleted_at IS NULL`,
+			args:   []any{int64(9), 21},
+		},
+		{
+			name:   "personal owner",
+			filter: application.TimelineFilter{ViewerID: 1, OwnerID: 1, SpaceType: domain.SpacePersonal},
+			query:  `FROM moments WHERE author_user_id=\? AND space_type='personal' AND deleted_at IS NULL`,
+			args:   []any{int64(1), 21},
+		},
+		{
+			name:   "partner visible personal",
+			filter: application.TimelineFilter{ViewerID: 1, RelationshipID: 9, OwnerID: 2, SpaceType: domain.SpacePersonal},
+			query:  `FROM moments WHERE couple_id=\? AND author_user_id=\? AND space_type='personal' AND visibility='partner' AND deleted_at IS NULL`,
+			args:   []any{int64(9), int64(2), 21},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			expectation := mock.ExpectQuery(test.query)
+			driverArgs := make([]driver.Value, len(test.args))
+			for index, value := range test.args {
+				driverArgs[index] = value
+			}
+			expectation.WithArgs(driverArgs...).WillReturnRows(sqlmock.NewRows([]string{"id"}))
+			if _, err := NewMySQLRepository(db).List(context.Background(), test.filter, "", 20); err != nil {
+				t.Fatal(err)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestFindUsesViewerVisibilityScope(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectQuery(`FROM moments WHERE id=\? AND deleted_at IS NULL AND \(`).
+		WithArgs(int64(7), int64(1), int64(9), int64(9), int64(1)).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}))
+	_, err = NewMySQLRepository(db).Find(context.Background(), application.MomentLookup{ViewerID: 1, RelationshipID: 9, MomentID: 7})
+	if !errors.Is(err, domain.ErrMomentNotFound) {
+		t.Fatalf("err=%v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSharedReadModelsExcludePersonalMoments(t *testing.T) {
+	from := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	to := from.AddDate(0, 1, 0)
+	t.Run("calendar", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+		mock.ExpectQuery("FROM moments WHERE couple_id=\\? AND space_type='shared' AND occurred_at").
+			WithArgs(int64(9), from, to).
+			WillReturnRows(sqlmock.NewRows([]string{"date", "count"}))
+		if _, err := NewMySQLRepository(db).Calendar(context.Background(), 9, from, to); err != nil {
+			t.Fatal(err)
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("map", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+		mock.ExpectQuery("FROM moments WHERE couple_id=\\? AND space_type='shared' AND occurred_at").
+			WithArgs(int64(9), from, to, 500).
+			WillReturnRows(sqlmock.NewRows([]string{"id", "latitude", "longitude", "occurred_at", "place_name"}))
+		if _, err := NewMySQLRepository(db).Map(context.Background(), 9, from, to, 500); err != nil {
+			t.Fatal(err)
+		}
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Fatal(err)
+		}
+	})
 }

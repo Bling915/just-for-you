@@ -181,12 +181,41 @@ func (h *Handler) timeline(c *gin.Context) {
 		httpserver.WriteError(c, http.StatusBadRequest, "INVALID_ARGUMENT", "limit 必须是正整数")
 		return
 	}
-	page, err := h.useCases.GetTimeline.Execute(c, application.GetTimelineQuery{UserID: httpserver.UserID(c), Cursor: c.Query("cursor"), Limit: limit})
+	spaceType, owner, err := parseTimelineScope(c.Query("space"), c.Query("owner"))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	page, err := h.useCases.GetTimeline.Execute(c, application.GetTimelineQuery{UserID: httpserver.UserID(c), Cursor: c.Query("cursor"), Limit: limit, SpaceType: spaceType, Owner: owner})
 	if err != nil {
 		writeError(c, err)
 		return
 	}
 	httpserver.WriteData(c, http.StatusOK, gin.H{"moments": momentsDTO(page.Moments, page.PhotoURLs), "nextCursor": page.NextCursor})
+}
+
+func parseTimelineScope(rawSpace, rawOwner string) (domain.SpaceType, application.TimelineOwner, error) {
+	space := domain.SpaceType(rawSpace)
+	owner := application.TimelineOwner(rawOwner)
+	if space == "" {
+		space = domain.SpaceShared
+	}
+	if space == domain.SpaceShared {
+		if owner != "" {
+			return "", "", application.ErrInvalidSpaceQuery
+		}
+		return space, "", nil
+	}
+	if space != domain.SpacePersonal {
+		return "", "", application.ErrInvalidSpaceQuery
+	}
+	if owner == "" {
+		owner = application.TimelineOwnerMe
+	}
+	if owner != application.TimelineOwnerMe && owner != application.TimelineOwnerPartner {
+		return "", "", application.ErrInvalidSpaceQuery
+	}
+	return space, owner, nil
 }
 
 func (h *Handler) home(c *gin.Context) {
@@ -251,6 +280,8 @@ func writeError(c *gin.Context, err error) {
 		status, code, message = http.StatusForbidden, "NOT_AUTHOR", "只能删除自己的动态"
 	case errors.Is(err, domain.ErrMomentNotFound):
 		status, code, message = http.StatusNotFound, "MOMENT_NOT_FOUND", "动态不存在"
+	case errors.Is(err, application.ErrInvalidSpaceQuery):
+		status, code, message = http.StatusBadRequest, "INVALID_SPACE_QUERY", "小事空间参数无效"
 	case errors.Is(err, relationshipdomain.ErrNoActiveRelationship):
 		status, code, message = http.StatusNotFound, "NO_ACTIVE_COUPLE", "还没有绑定情侣关系"
 	}
@@ -272,6 +303,7 @@ func momentDTO(moment domain.Moment, photoURLs ...map[string]string) gin.H {
 	return gin.H{
 		"id": moment.ID(), "authorId": moment.AuthorID(), "text": moment.Text(),
 		"status": moment.Status(), "placeName": moment.Place(), "latitude": moment.Latitude(), "longitude": moment.Longitude(), "photos": photos,
+		"spaceType": moment.SpaceType(), "visibility": moment.Visibility(), "kind": moment.Kind(), "sourceMomentId": moment.SourceMomentID(), "dailyQuestionId": moment.DailyQuestionID(),
 		"occurredAt": moment.OccurredAt(), "createdAt": moment.CreatedAt(), "updatedAt": moment.UpdatedAt(),
 	}
 }

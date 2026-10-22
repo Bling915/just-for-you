@@ -36,7 +36,7 @@ func (u *UpdateMomentUseCase) Execute(ctx context.Context, command UpdateMomentC
 	if err != nil {
 		return domain.Moment{}, err
 	}
-	existing, err := u.moments.Find(ctx, relationship.ID, command.MomentID)
+	existing, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, RelationshipID: relationship.ID, MomentID: command.MomentID})
 	if err != nil {
 		return domain.Moment{}, err
 	}

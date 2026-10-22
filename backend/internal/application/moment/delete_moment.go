@@ -22,7 +22,7 @@ func (u *DeleteMomentUseCase) Execute(ctx context.Context, c DeleteMomentCommand
 	if err != nil {
 		return err
 	}
-	m, err := u.moments.Find(ctx, rel.ID, c.MomentID)
+	m, err := u.moments.Find(ctx, MomentLookup{ViewerID: c.UserID, RelationshipID: rel.ID, MomentID: c.MomentID})
 	if err != nil {
 		return err
 	}

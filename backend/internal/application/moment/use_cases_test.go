@@ -64,6 +64,8 @@ type memoryMoments struct {
 	saveErr  error
 	consumed bool
 	existing momentdomain.Moment
+	filter   TimelineFilter
+	lookup   MomentLookup
 }
 type PublishInput struct {
 	Text      string
@@ -87,16 +89,19 @@ func (r *memoryMoments) UpdateWithGrants(_ context.Context, m momentdomain.Momen
 	r.existing = m
 	return m, nil
 }
-func (r *memoryMoments) List(context.Context, int64, string, int) (TimelinePage, error) {
+func (r *memoryMoments) List(_ context.Context, filter TimelineFilter, _ string, _ int) (TimelinePage, error) {
+	r.filter = filter
 	return TimelinePage{Moments: r.saved}, nil
 }
-func (r *memoryMoments) Recent(context.Context, int64, int) ([]momentdomain.Moment, error) {
+func (r *memoryMoments) Recent(_ context.Context, filter TimelineFilter, _ int) ([]momentdomain.Moment, error) {
+	r.filter = filter
 	return r.saved, nil
 }
 func (r *memoryMoments) LatestStatusByAuthor(context.Context, int64, int64) (*momentdomain.Moment, error) {
 	return nil, nil
 }
-func (r *memoryMoments) Find(context.Context, int64, int64) (momentdomain.Moment, error) {
+func (r *memoryMoments) Find(_ context.Context, lookup MomentLookup) (momentdomain.Moment, error) {
+	r.lookup = lookup
 	return r.existing, nil
 }
 func (r *memoryMoments) Delete(context.Context, int64) error { return nil }
@@ -111,7 +116,7 @@ func (u testUseCases) PublishMoment(ctx context.Context, userID int64, input Pub
 	return u.publish.Execute(ctx, PublishMomentCommand{UserID: userID, Text: input.Text, Status: input.Status, PlaceName: input.PlaceName, PhotoKeys: input.PhotoKeys})
 }
 func (u testUseCases) GetTimeline(ctx context.Context, userID int64, cursor string, limit int) (TimelinePage, error) {
-	return u.timeline.Execute(ctx, GetTimelineQuery{userID, cursor, limit})
+	return u.timeline.Execute(ctx, GetTimelineQuery{UserID: userID, Cursor: cursor, Limit: limit})
 }
 func (u testUseCases) DeleteMoment(ctx context.Context, userID, momentID int64) error {
 	return u.delete.Execute(ctx, DeleteMomentCommand{userID, momentID})
@@ -248,6 +253,47 @@ func TestTimelineReturnsSignedReadURLs(t *testing.T) {
 	}
 	if page.PhotoURLs["users/1/photo.jpg"] != "https://read.test" {
 		t.Fatalf("photo URL was not signed: %#v", page.PhotoURLs)
+	}
+}
+
+func TestTimelineBuildsExplicitSpaceFilters(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name          string
+		relationships fakeRelationships
+		query         GetTimelineQuery
+		want          TimelineFilter
+	}{
+		{
+			name:          "shared defaults to active relationship",
+			relationships: fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}},
+			query:         GetTimelineQuery{UserID: 1},
+			want:          TimelineFilter{ViewerID: 1, RelationshipID: 9, SpaceType: momentdomain.SpaceShared},
+		},
+		{
+			name:          "personal me works without relationship",
+			relationships: fakeRelationships{err: relationshipdomain.ErrNoActiveRelationship},
+			query:         GetTimelineQuery{UserID: 1, SpaceType: momentdomain.SpacePersonal, Owner: TimelineOwnerMe},
+			want:          TimelineFilter{ViewerID: 1, OwnerID: 1, SpaceType: momentdomain.SpacePersonal},
+		},
+		{
+			name:          "personal partner uses current partner and relationship",
+			relationships: fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}},
+			query:         GetTimelineQuery{UserID: 1, SpaceType: momentdomain.SpacePersonal, Owner: TimelineOwnerPartner},
+			want:          TimelineFilter{ViewerID: 1, RelationshipID: 9, OwnerID: 2, SpaceType: momentdomain.SpacePersonal},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &memoryMoments{}
+			useCase := NewGetTimelineUseCase(test.relationships, repository, fakeStorage{}, fixedClock{now})
+			if _, err := useCase.Execute(context.Background(), test.query); err != nil {
+				t.Fatal(err)
+			}
+			if repository.filter != test.want {
+				t.Fatalf("filter=%+v want=%+v", repository.filter, test.want)
+			}
+		})
 	}
 }
 

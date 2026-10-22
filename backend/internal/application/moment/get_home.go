@@ -8,6 +8,7 @@ import (
 )
 
 type GetHomeQuery struct{ UserID int64 }
+
 // pinnedDisplayLimit 是首页最多展示的置顶纪念日数量。
 // 超出部分不丢弃，通过 HasMorePinned 告知前端去「纪念日」页查看。
 const pinnedDisplayLimit = 3
@@ -43,7 +44,7 @@ func (u *GetHomeUseCase) Execute(ctx context.Context, q GetHomeQuery) (HomeResul
 	if err != nil {
 		return HomeResult{}, err
 	}
-	recent, err := u.moments.Recent(ctx, rel.ID, 5)
+	recent, err := u.moments.Recent(ctx, TimelineFilter{ViewerID: q.UserID, RelationshipID: rel.ID, SpaceType: domain.SpaceShared}, 5)
 	if err != nil {
 		return HomeResult{}, err
 	}

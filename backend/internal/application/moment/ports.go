@@ -71,13 +71,33 @@ type AnniversaryHighlight struct {
 type AnniversaryHighlightsReader interface {
 	ListPinned(context.Context, int64, int) ([]AnniversaryHighlight, error)
 }
+type TimelineOwner string
+
+const (
+	TimelineOwnerMe      TimelineOwner = "me"
+	TimelineOwnerPartner TimelineOwner = "partner"
+)
+
+type TimelineFilter struct {
+	ViewerID       int64
+	RelationshipID int64
+	OwnerID        int64
+	SpaceType      domain.SpaceType
+}
+
+type MomentLookup struct {
+	ViewerID       int64
+	RelationshipID int64
+	MomentID       int64
+}
+
 type MomentRepository interface {
 	SaveWithGrants(context.Context, domain.Moment, []UploadGrant) (domain.Moment, error)
 	UpdateWithGrants(context.Context, domain.Moment, time.Time, []UploadGrant) (domain.Moment, error)
-	List(context.Context, int64, string, int) (TimelinePage, error)
-	Recent(context.Context, int64, int) ([]domain.Moment, error)
+	List(context.Context, TimelineFilter, string, int) (TimelinePage, error)
+	Recent(context.Context, TimelineFilter, int) ([]domain.Moment, error)
 	LatestStatusByAuthor(context.Context, int64, int64) (*domain.Moment, error)
-	Find(context.Context, int64, int64) (domain.Moment, error)
+	Find(context.Context, MomentLookup) (domain.Moment, error)
 	Delete(context.Context, int64) error
 }
 type ReadRepository interface {
