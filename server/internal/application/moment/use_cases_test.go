@@ -147,6 +147,33 @@ func TestPublishMomentRejectsMissingOrInvalidStoredObject(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+type fakeHighlights struct {
+	items []AnniversaryHighlight
+	err   error
+	limit int
+}
+
+func (f *fakeHighlights) ListPinned(_ context.Context, _ int64, limit int) ([]AnniversaryHighlight, error) {
+	f.limit = limit
+	return f.items, f.err
+}
+func TestGetHomeLimitsHighlightsAndDegradesReaderFailure(t *testing.T) {
+	now := time.Date(2026, 10, 22, 10, 0, 0, 0, time.UTC)
+	moments := &memoryMoments{saved: []momentdomain.Moment{}}
+	reader := &fakeHighlights{items: []AnniversaryHighlight{{ID: 1}, {ID: 2}, {ID: 3}}}
+	u := NewGetHomeUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, moments, fakeStorage{}, fixedClock{now}, reader)
+	got, err := u.Execute(context.Background(), GetHomeQuery{UserID: 1})
+	if err != nil || reader.limit != 3 || len(got.PinnedAnniversaries) != 3 {
+		t.Fatalf("got=%+v limit=%d err=%v", got, reader.limit, err)
+	}
+	reader = &fakeHighlights{err: errors.New("anniversary unavailable")}
+	u = NewGetHomeUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, moments, fakeStorage{}, fixedClock{now}, reader)
+	got, err = u.Execute(context.Background(), GetHomeQuery{UserID: 1})
+	if err != nil || len(got.PinnedAnniversaries) != 0 || got.Recent == nil {
+		t.Fatalf("got=%+v err=%v", got, err)
+	}
+}
 func TestPublishMomentKeepsNinePhotoOrder(t *testing.T) {
 	now := time.Now()
 	uploads := &fakeUploads{grants: map[string]UploadGrant{}}

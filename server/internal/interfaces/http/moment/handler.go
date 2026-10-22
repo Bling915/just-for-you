@@ -199,7 +199,7 @@ func (h *Handler) home(c *gin.Context) {
 	if home.PartnerLatestStatus != nil {
 		latest = momentDTO(*home.PartnerLatestStatus, home.PhotoURLs)
 	}
-	httpserver.WriteData(c, http.StatusOK, gin.H{"partnerLatestStatus": latest, "recent": momentsDTO(home.Recent, home.PhotoURLs)})
+	httpserver.WriteData(c, http.StatusOK, gin.H{"partnerLatestStatus": latest, "recent": momentsDTO(home.Recent, home.PhotoURLs), "pinnedAnniversaries": home.PinnedAnniversaries})
 }
 
 func (h *Handler) delete(c *gin.Context) {

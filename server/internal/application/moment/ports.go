@@ -56,6 +56,21 @@ type MonthlyReport struct {
 	TopPlace     string `json:"topPlace"`
 	CommonStatus string `json:"commonStatus"`
 }
+type AnniversaryHighlight struct {
+	ID            int64     `json:"id"`
+	Title         string    `json:"title"`
+	Date          time.Time `json:"date"`
+	CountMode     string    `json:"countMode"`
+	RepeatsYearly bool      `json:"repeatsYearly"`
+	Pinned        bool      `json:"pinned"`
+	CoverRef      string    `json:"-"`
+	CoverURL      string    `json:"coverUrl"`
+	Message       string    `json:"message"`
+	SystemKind    string    `json:"systemKind"`
+}
+type AnniversaryHighlightsReader interface {
+	ListPinned(context.Context, int64, int) ([]AnniversaryHighlight, error)
+}
 type MomentRepository interface {
 	SaveWithGrants(context.Context, domain.Moment, []UploadGrant) (domain.Moment, error)
 	UpdateWithGrants(context.Context, domain.Moment, time.Time, []UploadGrant) (domain.Moment, error)
