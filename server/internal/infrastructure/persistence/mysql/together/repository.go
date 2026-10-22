@@ -79,6 +79,48 @@ func (r Repository) UpdateAnniversary(ctx context.Context, v domain.Anniversary)
 	}
 	return v, nil
 }
+func (r Repository) CreateCoverGrant(ctx context.Context, g app.CoverUploadGrant) error {
+	_, err := r.db.ExecContext(ctx, "INSERT INTO upload_grants(user_id,object_key,content_type,purpose,resource_id,expires_at) VALUES(?,?,?,?,?,?)", g.OwnerID, g.ObjectKey, g.ContentType, g.Purpose, g.ResourceID, g.ExpiresAt)
+	return err
+}
+func (r Repository) GetCoverGrant(ctx context.Context, key string) (app.CoverUploadGrant, error) {
+	var g app.CoverUploadGrant
+	var consumed sql.NullTime
+	err := r.db.QueryRowContext(ctx, "SELECT object_key,user_id,resource_id,content_type,purpose,expires_at,consumed_at FROM upload_grants WHERE object_key=?", key).Scan(&g.ObjectKey, &g.OwnerID, &g.ResourceID, &g.ContentType, &g.Purpose, &g.ExpiresAt, &consumed)
+	if errors.Is(err, sql.ErrNoRows) {
+		return g, domain.ErrInvalidCover
+	}
+	if consumed.Valid {
+		g.ConsumedAt = &consumed.Time
+	}
+	return g, err
+}
+func (r Repository) UpdateAnniversaryWithCoverGrant(ctx context.Context, v domain.Anniversary, key string, now time.Time) (domain.Anniversary, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.Anniversary{}, err
+	}
+	defer tx.Rollback()
+	var owner, resource int64
+	var purpose string
+	var expires time.Time
+	var consumed sql.NullTime
+	if err = tx.QueryRowContext(ctx, "SELECT user_id,resource_id,purpose,expires_at,consumed_at FROM upload_grants WHERE object_key=? FOR UPDATE", key).Scan(&owner, &resource, &purpose, &expires, &consumed); err != nil || owner == 0 || resource != v.ID() || purpose != "anniversary_cover" || consumed.Valid || !expires.After(now) {
+		return domain.Anniversary{}, domain.ErrInvalidCover
+	}
+	res, err := tx.ExecContext(ctx, "UPDATE anniversaries SET title=?,anniversary_date=?,repeats_yearly=?,count_mode=?,pinned=?,cover_ref=?,message=?,updated_at=? WHERE couple_id=? AND id=?", v.Title(), v.Date(), v.RepeatsYearly(), v.CountMode(), v.Pinned(), v.CoverRef(), v.Message(), v.UpdatedAt(), v.CoupleID(), v.ID())
+	if err != nil {
+		return domain.Anniversary{}, err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return domain.Anniversary{}, domain.ErrNotFound
+	}
+	if _, err = tx.ExecContext(ctx, "UPDATE upload_grants SET consumed_at=? WHERE object_key=?", now, key); err != nil {
+		return domain.Anniversary{}, err
+	}
+	return v, tx.Commit()
+}
 func (r Repository) DeleteAnniversary(ctx context.Context, coupleID, id, userID int64) error {
 	return deleteOwned(ctx, r.db, "anniversaries", coupleID, id, userID, " AND system_kind='none'")
 }

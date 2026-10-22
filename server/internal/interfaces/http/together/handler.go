@@ -21,6 +21,7 @@ func (h *Handler) RegisterProtected(g *gin.RouterGroup) {
 	g.POST("/anniversaries", h.createAnniversary)
 	g.GET("/anniversaries/:id", h.getAnniversary)
 	g.PATCH("/anniversaries/:id", h.updateAnniversary)
+	g.POST("/anniversaries/:id/cover-upload", h.requestCoverUpload)
 	g.DELETE("/anniversaries/:id", h.deleteAnniversary)
 	g.GET("/todos", h.listTodos)
 	g.POST("/todos", h.createTodo)
@@ -38,7 +39,16 @@ func (h *Handler) listAnniversaries(c *gin.Context) {
 		fail(c, e)
 		return
 	}
-	shared.WriteData(c, 200, anniversariesDTO(v))
+	out := make([]gin.H, 0, len(v))
+	for _, item := range v {
+		dto, err := h.anniversaryDTO(c, item)
+		if err != nil {
+			fail(c, err)
+			return
+		}
+		out = append(out, dto)
+	}
+	shared.WriteData(c, 200, out)
 }
 func (h *Handler) createAnniversary(c *gin.Context) {
 	var x anniversaryInput
@@ -51,7 +61,12 @@ func (h *Handler) createAnniversary(c *gin.Context) {
 		fail(c, e)
 		return
 	}
-	shared.WriteData(c, 201, anniversaryDTO(v))
+	dto, e := h.anniversaryDTO(c, v)
+	if e != nil {
+		fail(c, e)
+		return
+	}
+	shared.WriteData(c, 201, dto)
 }
 
 type anniversaryInput struct {
@@ -76,7 +91,12 @@ func (h *Handler) getAnniversary(c *gin.Context) {
 		var out domain.Anniversary
 		out, e = h.s.GetAnniversary(c, shared.UserID(c), v)
 		if e == nil {
-			shared.WriteData(c, 200, anniversaryDTO(out))
+			dto, err := h.anniversaryDTO(c, out)
+			if err != nil {
+				fail(c, err)
+				return
+			}
+			shared.WriteData(c, 200, dto)
 			return
 		}
 	}
@@ -92,7 +112,31 @@ func (h *Handler) updateAnniversary(c *gin.Context) {
 		var out domain.Anniversary
 		out, e = h.s.UpdateAnniversary(c, shared.UserID(c), v, x.draft())
 		if e == nil {
-			shared.WriteData(c, 200, anniversaryDTO(out))
+			dto, err := h.anniversaryDTO(c, out)
+			if err != nil {
+				fail(c, err)
+				return
+			}
+			shared.WriteData(c, 200, dto)
+			return
+		}
+	}
+	fail(c, e)
+}
+func (h *Handler) requestCoverUpload(c *gin.Context) {
+	v, e := id(c)
+	var x struct {
+		ContentType string `json:"contentType"`
+		Size        int64  `json:"size"`
+	}
+	if c.ShouldBindJSON(&x) != nil {
+		e = domain.ErrInvalidCover
+	}
+	if e == nil {
+		var g app.CoverUploadGrant
+		g, e = h.s.RequestCoverUpload(c, shared.UserID(c), v, x.ContentType, x.Size)
+		if e == nil {
+			shared.WriteData(c, 201, g)
 			return
 		}
 	}
@@ -216,6 +260,8 @@ func fail(c *gin.Context, e error) {
 	switch {
 	case errors.Is(e, domain.ErrInvalidTitle), errors.Is(e, domain.ErrInvalidDate), errors.Is(e, domain.ErrInvalidDescription), errors.Is(e, domain.ErrInvalidMessage), errors.Is(e, domain.ErrInvalidCountMode):
 		status, code, msg = 400, "INVALID_ARGUMENT", "内容不正确"
+	case errors.Is(e, domain.ErrInvalidCover):
+		status, code, msg = 400, "INVALID_COVER", "封面无效或已过期"
 	case errors.Is(e, domain.ErrInvalidMoment):
 		status, code, msg = 400, "INVALID_MOMENT", "关联动态不正确"
 	case errors.Is(e, domain.ErrNotCreator):
@@ -232,15 +278,12 @@ func fail(c *gin.Context, e error) {
 	shared.WriteError(c, status, code, msg)
 }
 
-func anniversaryDTO(v domain.Anniversary) gin.H {
-	return gin.H{"id": v.ID(), "creatorUserId": v.CreatorID(), "title": v.Title(), "date": v.Date(), "countMode": v.CountMode(), "repeatsYearly": v.RepeatsYearly(), "pinned": v.Pinned(), "coverRef": v.CoverRef(), "message": v.Message(), "systemKind": v.SystemKind(), "createdAt": v.CreatedAt(), "updatedAt": v.UpdatedAt()}
-}
-func anniversariesDTO(values []domain.Anniversary) []gin.H {
-	out := make([]gin.H, 0, len(values))
-	for _, v := range values {
-		out = append(out, anniversaryDTO(v))
+func (h *Handler) anniversaryDTO(c *gin.Context, v domain.Anniversary) (gin.H, error) {
+	url, err := h.s.CoverURL(c, v.CoverRef())
+	if err != nil {
+		return nil, err
 	}
-	return out
+	return gin.H{"id": v.ID(), "creatorUserId": v.CreatorID(), "title": v.Title(), "date": v.Date(), "countMode": v.CountMode(), "repeatsYearly": v.RepeatsYearly(), "pinned": v.Pinned(), "coverRef": v.CoverRef(), "coverUrl": url, "message": v.Message(), "systemKind": v.SystemKind(), "createdAt": v.CreatedAt(), "updatedAt": v.UpdatedAt()}, nil
 }
 func todoDTO(v domain.Todo) gin.H {
 	return gin.H{"id": v.ID(), "creatorUserId": v.CreatorID(), "completedByUserId": v.CompletedBy(), "title": v.Title(), "dueAt": v.DueAt(), "status": v.Status(), "completedAt": v.CompletedAt(), "createdAt": v.CreatedAt(), "updatedAt": v.UpdatedAt()}

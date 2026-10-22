@@ -11,6 +11,12 @@ type Service struct {
 	repo          Repository
 	relationships RelationshipReader
 	clock         Clock
+	storage       MediaStorage
+	key           func() string
+}
+
+func NewServiceWithStorage(repo Repository, relationships RelationshipReader, clock Clock, storage MediaStorage, key func() string) *Service {
+	return &Service{repo: repo, relationships: relationships, clock: clock, storage: storage, key: key}
 }
 
 func NewService(repo Repository, relationships RelationshipReader, clock Clock) *Service {

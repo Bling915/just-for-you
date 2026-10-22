@@ -26,6 +26,31 @@ type fakeRepo struct {
 	todo          domain.Todo
 	anniversaries []domain.Anniversary
 	updated       int
+	coverGrants   map[string]CoverUploadGrant
+}
+
+func (f *fakeRepo) CreateCoverGrant(_ context.Context, g CoverUploadGrant) error {
+	if f.coverGrants == nil {
+		f.coverGrants = map[string]CoverUploadGrant{}
+	}
+	f.coverGrants[g.ObjectKey] = g
+	return nil
+}
+func (f *fakeRepo) GetCoverGrant(_ context.Context, key string) (CoverUploadGrant, error) {
+	g, ok := f.coverGrants[key]
+	if !ok {
+		return CoverUploadGrant{}, domain.ErrInvalidCover
+	}
+	return g, nil
+}
+func (f *fakeRepo) UpdateAnniversaryWithCoverGrant(_ context.Context, v domain.Anniversary, key string, now time.Time) (domain.Anniversary, error) {
+	g, ok := f.coverGrants[key]
+	if !ok || g.ConsumedAt != nil || g.OwnerID == 0 || g.ResourceID != v.ID() || g.Purpose != "anniversary_cover" || !g.ExpiresAt.After(now) {
+		return domain.Anniversary{}, domain.ErrInvalidCover
+	}
+	g.ConsumedAt = &now
+	f.coverGrants[key] = g
+	return f.UpdateAnniversary(context.Background(), v)
 }
 
 func (f *fakeRepo) ListAnniversaries(context.Context, int64) ([]domain.Anniversary, error) {
@@ -161,5 +186,58 @@ func TestListCreatesEditableRelationshipAnniversaryOnce(t *testing.T) {
 	second, err := s.ListAnniversaries(context.Background(), 3)
 	if err != nil || len(second) != 1 || second[0].ID() != first[0].ID() {
 		t.Fatalf("second=%#v err=%v", second, err)
+	}
+}
+
+type coverStorageStub struct{ verifyErr error }
+
+func (coverStorageStub) SignUpload(_ context.Context, key, contentType string, _ time.Time) (string, error) {
+	return "https://upload/" + key, nil
+}
+func (c coverStorageStub) VerifyUploaded(context.Context, string, string, int64) error {
+	return c.verifyErr
+}
+func (coverStorageStub) SignRead(_ context.Context, key string, _ time.Time) (string, error) {
+	return "https://read/" + key, nil
+}
+
+func TestCoverUploadGrantRequiresOwnedAnniversaryAndSupportedImage(t *testing.T) {
+	now := time.Date(2026, 10, 22, 10, 0, 0, 0, time.UTC)
+	item := domain.RestoreAnniversary(7, 9, 2, "相识", now, true, domain.CountModeCountdown, false, "", "", "none", now, now)
+	repo := &fakeRepo{anniversaries: []domain.Anniversary{item}}
+	s := NewServiceWithStorage(repo, fakeRelations{rel: ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now}, coverStorageStub{}, func() string { return "fixed" })
+	g, err := s.RequestCoverUpload(context.Background(), 3, 7, "image/jpeg", 5<<20)
+	if err != nil || g.ObjectKey != "couples/9/anniversaries/7/fixed" || g.ResourceID != 7 {
+		t.Fatalf("grant=%+v err=%v", g, err)
+	}
+	if _, err = s.RequestCoverUpload(context.Background(), 3, 8, "image/jpeg", 100); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("foreign err=%v", err)
+	}
+	if _, err = s.RequestCoverUpload(context.Background(), 3, 7, "image/gif", 100); !errors.Is(err, domain.ErrInvalidCover) {
+		t.Fatalf("type err=%v", err)
+	}
+}
+
+func TestCoverUpdateConsumesMatchingGrantOnceAndPreservesOldCoverOnFailure(t *testing.T) {
+	now := time.Date(2026, 10, 22, 10, 0, 0, 0, time.UTC)
+	item := domain.RestoreAnniversary(7, 9, 2, "相识", now, true, domain.CountModeCountdown, false, "old", "", "none", now, now)
+	grant := CoverUploadGrant{ObjectKey: "couples/9/anniversaries/7/new", OwnerID: 3, ResourceID: 7, ContentType: "image/jpeg", Purpose: "anniversary_cover", ExpiresAt: now.Add(time.Minute)}
+	repo := &fakeRepo{anniversaries: []domain.Anniversary{item}, coverGrants: map[string]CoverUploadGrant{grant.ObjectKey: grant}}
+	draft := domain.AnniversaryDraft{Title: "相识", Date: now, CountMode: domain.CountModeCountdown, RepeatsYearly: true, CoverRef: grant.ObjectKey}
+	s := NewServiceWithStorage(repo, fakeRelations{rel: ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now}, coverStorageStub{verifyErr: errors.New("missing")}, func() string { return "x" })
+	if _, err := s.UpdateAnniversary(context.Background(), 3, 7, draft); !errors.Is(err, domain.ErrInvalidCover) {
+		t.Fatalf("verify err=%v", err)
+	}
+	stored, _ := repo.FindAnniversary(context.Background(), 9, 7)
+	if stored.CoverRef() != "old" {
+		t.Fatalf("cover changed=%s", stored.CoverRef())
+	}
+	s = NewServiceWithStorage(repo, fakeRelations{rel: ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now}, coverStorageStub{}, func() string { return "x" })
+	if _, err := s.UpdateAnniversary(context.Background(), 3, 7, draft); err != nil {
+		t.Fatal(err)
+	}
+	repo.anniversaries[0] = item
+	if _, err := s.UpdateAnniversary(context.Background(), 3, 7, draft); !errors.Is(err, domain.ErrInvalidCover) {
+		t.Fatalf("reuse err=%v", err)
 	}
 }

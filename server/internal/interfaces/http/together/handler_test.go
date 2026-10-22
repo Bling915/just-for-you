@@ -24,7 +24,25 @@ type handlerClock struct{ now time.Time }
 
 func (h handlerClock) Now() time.Time { return h.now }
 
+type handlerStorage struct{}
+
+func (handlerStorage) SignUpload(context.Context, string, string, time.Time) (string, error) {
+	return "https://upload", nil
+}
+func (handlerStorage) VerifyUploaded(context.Context, string, string, int64) error { return nil }
+func (handlerStorage) SignRead(_ context.Context, key string, _ time.Time) (string, error) {
+	return "https://read/" + key, nil
+}
+
 type handlerRepo struct{ item domain.Anniversary }
+
+func (*handlerRepo) CreateCoverGrant(context.Context, app.CoverUploadGrant) error { return nil }
+func (*handlerRepo) GetCoverGrant(context.Context, string) (app.CoverUploadGrant, error) {
+	return app.CoverUploadGrant{}, domain.ErrInvalidCover
+}
+func (*handlerRepo) UpdateAnniversaryWithCoverGrant(_ context.Context, v domain.Anniversary, _ string, _ time.Time) (domain.Anniversary, error) {
+	return v, nil
+}
 
 func (h *handlerRepo) ListAnniversaries(context.Context, int64) ([]domain.Anniversary, error) {
 	return []domain.Anniversary{h.item}, nil
@@ -64,19 +82,19 @@ func anniversaryRouter(item domain.Anniversary, now time.Time) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	g := r.Group("/v1", func(c *gin.Context) { c.Set("userID", int64(3)) })
-	NewHandler(app.NewService(&handlerRepo{item: item}, handlerRelations{app.ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3}}, handlerClock{now})).RegisterProtected(g)
+	NewHandler(app.NewServiceWithStorage(&handlerRepo{item: item}, handlerRelations{app.ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3}}, handlerClock{now}, handlerStorage{}, func() string { return "key" })).RegisterProtected(g)
 	return r
 }
 
 func TestPatchAnniversaryReturnsCompleteDTO(t *testing.T) {
 	now := time.Date(2026, 10, 22, 0, 0, 0, 0, time.UTC)
-	item := domain.RestoreAnniversary(7, 9, 2, "相识", now, true, domain.CountModeCountdown, false, "", "", "none", now, now)
+	item := domain.RestoreAnniversary(7, 9, 2, "相识", now, true, domain.CountModeCountdown, false, "cover", "", "none", now, now)
 	body := `{"title":"第一次旅行","date":"2026-11-01T00:00:00Z","countMode":"elapsed","repeatsYearly":false,"pinned":true,"coverRef":"cover","message":"出发"}`
 	req := httptest.NewRequest(http.MethodPatch, "/v1/anniversaries/7", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	res := httptest.NewRecorder()
 	anniversaryRouter(item, now).ServeHTTP(res, req)
-	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"countMode":"elapsed"`) || !strings.Contains(res.Body.String(), `"pinned":true`) || !strings.Contains(res.Body.String(), `"message":"出发"`) {
+	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"countMode":"elapsed"`) || !strings.Contains(res.Body.String(), `"pinned":true`) || !strings.Contains(res.Body.String(), `"message":"出发"`) || !strings.Contains(res.Body.String(), `"coverUrl":"https://read/cover"`) {
 		t.Fatalf("status=%d body=%s", res.Code, res.Body.String())
 	}
 }

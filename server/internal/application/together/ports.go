@@ -19,6 +19,9 @@ type Repository interface {
 	SaveAnniversary(context.Context, domain.Anniversary) (domain.Anniversary, error)
 	FindAnniversary(context.Context, int64, int64) (domain.Anniversary, error)
 	UpdateAnniversary(context.Context, domain.Anniversary) (domain.Anniversary, error)
+	CreateCoverGrant(context.Context, CoverUploadGrant) error
+	GetCoverGrant(context.Context, string) (CoverUploadGrant, error)
+	UpdateAnniversaryWithCoverGrant(context.Context, domain.Anniversary, string, time.Time) (domain.Anniversary, error)
 	DeleteAnniversary(context.Context, int64, int64, int64) error
 	ListTodos(context.Context, int64) ([]domain.Todo, error)
 	SaveTodo(context.Context, domain.Todo) (domain.Todo, error)
@@ -33,3 +36,8 @@ type Repository interface {
 	MomentCoupleID(context.Context, int64) (int64, error)
 }
 type Clock interface{ Now() time.Time }
+type MediaStorage interface {
+	SignUpload(context.Context, string, string, time.Time) (string, error)
+	VerifyUploaded(context.Context, string, string, int64) error
+	SignRead(context.Context, string, time.Time) (string, error)
+}

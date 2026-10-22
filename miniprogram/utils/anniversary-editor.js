@@ -1,0 +1,4 @@
+const {countRunes,truncateRunes}=require('./runes')
+function buildAnniversaryCommand(form={}){const title=String(form.title||'').trim(),message=String(form.message||'').trim(),date=String(form.date||'');if(!title)return{error:'请填写纪念日名称'};if(countRunes(title)>60)return{error:'名称最多 60 个字'};if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return{error:'请选择日期'};if(countRunes(message)>120)return{error:'寄语最多 120 个字'};return{title,date:`${date}T00:00:00+08:00`,countMode:form.countMode==='elapsed'?'elapsed':'countdown',repeatsYearly:Boolean(form.repeatsYearly),pinned:Boolean(form.pinned),coverRef:String(form.coverRef||'').trim(),message}}
+function anniversaryEditorView(item={}){return{...item,coverRef:item.coverRef||'',displayTitle:truncateRunes(String(item.title||''),24)}}
+module.exports={buildAnniversaryCommand,anniversaryEditorView}

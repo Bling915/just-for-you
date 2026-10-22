@@ -33,7 +33,11 @@ func New() (*Application, error) {
 	}
 	relationship, getRelationship := buildRelationship(db, cfg.EnableSoloTest, avatars)
 	companionship := buildCompanionship(db, cfg)
-	together := buildTogether(db)
+	together, err := buildTogether(db, cfg)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	moment, err := buildMoment(cfg, db, getRelationship)
 	if err != nil {
 		_ = db.Close()

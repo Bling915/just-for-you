@@ -9,6 +9,8 @@
     "pages/compose/index",
     "pages/moment-edit/index",
     "pages/anniversaries/index",
+    "pages/anniversary-edit/index",
+    "pages/anniversary-detail/index",
     "pages/todos/index",
     "pages/wishes/index",
     "pages/calendar/index",

@@ -12,4 +12,5 @@ var (
 	ErrInvalidMoment      = errors.New("invalid linked moment")
 	ErrNotFound           = errors.New("together item not found")
 	ErrSystemAnniversary  = errors.New("system anniversary cannot be deleted")
+	ErrInvalidCover       = errors.New("invalid anniversary cover")
 )

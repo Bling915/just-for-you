@@ -34,10 +34,28 @@ func (s *Service) UpdateAnniversary(ctx context.Context, userID, id int64, draft
 	if err != nil {
 		return domain.Anniversary{}, err
 	}
-	if err = a.Update(draft, s.clock.Now()); err != nil {
+	oldCover := a.CoverRef()
+	now := s.clock.Now()
+	if err = a.Update(draft, now); err != nil {
 		return domain.Anniversary{}, err
 	}
-	return s.repo.UpdateAnniversary(ctx, a)
+	if a.CoverRef() == oldCover {
+		return s.repo.UpdateAnniversary(ctx, a)
+	}
+	if a.CoverRef() == "" {
+		return s.repo.UpdateAnniversary(ctx, a)
+	}
+	if s.storage == nil {
+		return domain.Anniversary{}, domain.ErrInvalidCover
+	}
+	g, err := s.repo.GetCoverGrant(ctx, a.CoverRef())
+	if err != nil || g.OwnerID != userID || g.ResourceID != id || g.Purpose != "anniversary_cover" || g.ConsumedAt != nil || !g.ExpiresAt.After(now) {
+		return domain.Anniversary{}, domain.ErrInvalidCover
+	}
+	if err = s.storage.VerifyUploaded(ctx, g.ObjectKey, g.ContentType, 5<<20); err != nil {
+		return domain.Anniversary{}, domain.ErrInvalidCover
+	}
+	return s.repo.UpdateAnniversaryWithCoverGrant(ctx, a, g.ObjectKey, now)
 }
 
 func (s *Service) DeleteAnniversary(ctx context.Context, userID, id int64) error {
