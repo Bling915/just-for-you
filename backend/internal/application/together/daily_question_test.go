@@ -45,7 +45,7 @@ func TestGetTodayUsesShanghaiDayAndCreatesOnlyOnce(t *testing.T) {
 	generator := &generatorFake{}
 	service := NewDailyQuestionService(fakeRelations{rel: ActiveRelationship{ID: 9, UserAID: 1, UserBID: 2}}, repo, generator, fakeClock{now: now})
 	first, err := service.GetToday(context.Background(), 1)
-	if err != nil || first.Date().Day() != 22 || generator.calls != 1 {
+	if err != nil || first.Date().Day() != 22 || first.ContextVersion() != "v1" || generator.calls != 1 {
 		t.Fatalf("first=%+v calls=%d err=%v", first, generator.calls, err)
 	}
 	_, err = service.GetToday(context.Background(), 1)

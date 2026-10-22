@@ -54,6 +54,7 @@ func (s *DailyQuestionService) GetToday(ctx context.Context, userID int64) (doma
 	if err != nil {
 		return domain.DailyQuestion{}, err
 	}
+	value = value.WithContextVersion(generated.ContextVersion)
 	return s.repo.CreateDailyQuestion(ctx, value)
 }
 

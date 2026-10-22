@@ -61,6 +61,10 @@ func (q DailyQuestion) Date() time.Time        { return q.date }
 func (q DailyQuestion) Text() string           { return q.text }
 func (q DailyQuestion) Source() string         { return q.source }
 func (q DailyQuestion) ContextVersion() string { return q.contextVersion }
+func (q DailyQuestion) WithContextVersion(version string) DailyQuestion {
+	q.contextVersion = strings.TrimSpace(version)
+	return q
+}
 func (q DailyQuestion) Answers() map[int64]DailyAnswer {
 	out := map[int64]DailyAnswer{}
 	for k, v := range q.answers {
