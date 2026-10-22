@@ -43,7 +43,7 @@ func (u *ReactToMomentUseCase) Execute(ctx context.Context, command ReactToMomen
 	if err != nil {
 		return domain.Reaction{}, err
 	}
-	return u.moments.UpsertReaction(ctx, reaction)
+	return u.moments.UpsertReaction(ctx, reaction, relationship.ID)
 }
 
 func (u *ReactToMomentUseCase) Delete(ctx context.Context, command DeleteReactionCommand) error {

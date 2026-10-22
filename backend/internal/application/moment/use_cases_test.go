@@ -118,7 +118,7 @@ func (r *memoryMoments) ShareToCouple(_ context.Context, sourceID, authorID, rel
 	}
 	return copy, err
 }
-func (r *memoryMoments) UpsertReaction(_ context.Context, reaction momentdomain.Reaction) (momentdomain.Reaction, error) {
+func (r *memoryMoments) UpsertReaction(_ context.Context, reaction momentdomain.Reaction, _ int64) (momentdomain.Reaction, error) {
 	r.reaction = reaction
 	return reaction, nil
 }

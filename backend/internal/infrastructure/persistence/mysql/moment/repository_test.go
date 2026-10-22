@@ -2,11 +2,13 @@ package infrastructure
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"github.com/DATA-DOG/go-sqlmock"
 	application "github.com/nanfang/just-for-you/server/internal/application/moment"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
+	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	"regexp"
 	"testing"
 	"time"
@@ -236,14 +238,39 @@ func TestReactionUpsertIsIdempotentAndDeleteIsOwnerScoped(t *testing.T) {
 	defer db.Close()
 	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 	reaction, _ := domain.NewReaction(7, 2, domain.ReactionHug, "", now)
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT author_user_id,space_type,visibility,couple_id FROM moments").WithArgs(int64(7), int64(9)).WillReturnRows(sqlmock.NewRows([]string{"author_user_id", "space_type", "visibility", "couple_id"}).AddRow(1, "shared", "couple", 9))
+	mock.ExpectQuery("SELECT id FROM couples").WithArgs(int64(9), int64(2), int64(2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(9))
 	mock.ExpectExec("INSERT INTO moment_reactions.*ON DUPLICATE KEY UPDATE").WithArgs(int64(7), int64(2), "hug", "", now, now).WillReturnResult(sqlmock.NewResult(12, 1))
-	saved, err := NewMySQLRepository(db).UpsertReaction(context.Background(), reaction)
+	mock.ExpectCommit()
+	saved, err := NewMySQLRepository(db).UpsertReaction(context.Background(), reaction, 9)
 	if err != nil || saved.ID() != 12 {
 		t.Fatalf("saved=%+v err=%v", saved, err)
 	}
 	mock.ExpectExec("DELETE FROM moment_reactions WHERE id=\\? AND user_id=\\?").WithArgs(int64(12), int64(2)).WillReturnResult(sqlmock.NewResult(0, 1))
 	if err := NewMySQLRepository(db).DeleteReaction(context.Background(), 12, 2); err != nil {
 		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReactionUpsertRejectsRelationshipEndedBeforeWrite(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	reaction, _ := domain.NewReaction(7, 2, domain.ReactionHug, "", now)
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT author_user_id,space_type,visibility,couple_id FROM moments").WithArgs(int64(7), int64(9)).WillReturnRows(sqlmock.NewRows([]string{"author_user_id", "space_type", "visibility", "couple_id"}).AddRow(1, "personal", "partner", 9))
+	mock.ExpectQuery("SELECT id FROM couples").WithArgs(int64(9), int64(2), int64(2)).WillReturnError(sql.ErrNoRows)
+	mock.ExpectRollback()
+	_, err = NewMySQLRepository(db).UpsertReaction(context.Background(), reaction, 9)
+	if !errors.Is(err, relationshipdomain.ErrNoActiveRelationship) {
+		t.Fatalf("err=%v", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)

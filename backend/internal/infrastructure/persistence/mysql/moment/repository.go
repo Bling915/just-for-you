@@ -397,13 +397,43 @@ func (r MySQLRepository) ShareToCouple(ctx context.Context, sourceID, authorID, 
 	return domain.RestoreMomentDetails(domain.RestoreInput{ID: id, AuthorID: authorID, RelationshipID: relationshipID, Text: copyMoment.Text(), Status: copyMoment.Status(), Place: copyMoment.Place(), Latitude: copyMoment.Latitude(), Longitude: copyMoment.Longitude(), Photos: photos, OccurredAt: occurredAt, CreatedAt: now, UpdatedAt: now, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard, SourceMomentID: &sourceID}), nil
 }
 
-func (r MySQLRepository) UpsertReaction(ctx context.Context, reaction domain.Reaction) (domain.Reaction, error) {
-	result, err := r.db.ExecContext(ctx, "INSERT INTO moment_reactions(moment_id,user_id,reaction_type,text_content,created_at,updated_at) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE text_content=VALUES(text_content),updated_at=VALUES(updated_at),id=LAST_INSERT_ID(id)", reaction.MomentID(), reaction.UserID(), string(reaction.Type()), reaction.Text(), reaction.CreatedAt(), reaction.UpdatedAt())
+func (r MySQLRepository) UpsertReaction(ctx context.Context, reaction domain.Reaction, relationshipID int64) (domain.Reaction, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.Reaction{}, err
+	}
+	defer tx.Rollback()
+	var authorID, coupleID int64
+	var spaceType, visibility string
+	err = tx.QueryRowContext(ctx, "SELECT author_user_id,space_type,visibility,couple_id FROM moments WHERE id=? AND couple_id=? AND deleted_at IS NULL FOR UPDATE", reaction.MomentID(), relationshipID).Scan(&authorID, &spaceType, &visibility, &coupleID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Reaction{}, domain.ErrMomentNotFound
+	}
+	if err != nil {
+		return domain.Reaction{}, err
+	}
+	readableByPartner := (spaceType == string(domain.SpaceShared) && visibility == string(domain.VisibilityCouple)) ||
+		(spaceType == string(domain.SpacePersonal) && visibility == string(domain.VisibilityPartner))
+	if authorID == reaction.UserID() || coupleID != relationshipID || !readableByPartner {
+		return domain.Reaction{}, application.ErrMomentNotVisible
+	}
+	var activeID int64
+	err = tx.QueryRowContext(ctx, "SELECT id FROM couples WHERE id=? AND status='active' AND (user_a_id=? OR user_b_id=?) FOR UPDATE", relationshipID, reaction.UserID(), reaction.UserID()).Scan(&activeID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Reaction{}, relationshipdomain.ErrNoActiveRelationship
+	}
+	if err != nil {
+		return domain.Reaction{}, err
+	}
+	result, err := tx.ExecContext(ctx, "INSERT INTO moment_reactions(moment_id,user_id,reaction_type,text_content,created_at,updated_at) VALUES(?,?,?,?,?,?) ON DUPLICATE KEY UPDATE text_content=VALUES(text_content),updated_at=VALUES(updated_at),id=LAST_INSERT_ID(id)", reaction.MomentID(), reaction.UserID(), string(reaction.Type()), reaction.Text(), reaction.CreatedAt(), reaction.UpdatedAt())
 	if err != nil {
 		return domain.Reaction{}, err
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
+		return domain.Reaction{}, err
+	}
+	if err = tx.Commit(); err != nil {
 		return domain.Reaction{}, err
 	}
 	return domain.RestoreReaction(id, reaction.MomentID(), reaction.UserID(), reaction.Type(), reaction.Text(), reaction.CreatedAt(), reaction.UpdatedAt()), nil

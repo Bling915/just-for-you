@@ -103,7 +103,7 @@ type MomentRepository interface {
 	Find(context.Context, MomentLookup) (domain.Moment, error)
 	Delete(context.Context, int64) error
 	ShareToCouple(context.Context, int64, int64, int64, string, time.Time) (domain.Moment, error)
-	UpsertReaction(context.Context, domain.Reaction) (domain.Reaction, error)
+	UpsertReaction(context.Context, domain.Reaction, int64) (domain.Reaction, error)
 	DeleteReaction(context.Context, int64, int64) error
 	ListReactions(context.Context, []int64) (map[int64][]domain.Reaction, error)
 	SavePerspectiveWithGrants(context.Context, domain.Perspective, []UploadGrant, int64) (domain.Perspective, error)
