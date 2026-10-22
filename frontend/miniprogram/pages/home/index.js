@@ -9,6 +9,7 @@ const { userService } = require('../../services/users')
 const { togetherService } = require('../../services/together')
 const { reactOptimistically, promptTextReaction, editPerspective, deletePerspective } = require('../../utils/moment-page-actions')
 const { memoryResurfaceView } = require('../../utils/memory-resurface')
+const { motionModel } = require('../../utils/motion')
 
 const CACHE_KEY = 'homeSnapshot'
 // 后端签名图片 URL 有效期 10-15 分钟，缓存必须比它短，
@@ -27,7 +28,7 @@ function readFreshCache() {
 
 Page({
   data:{state:'loading',home:null,moments:[],pinnedAnniversaries:[],hasMorePinned:false,dailyQuestion:null,resurfacedMemory:null,relationship:null,currentUser:{},companionship:null,presenceMoment:{},sendingNudge:'',partnerInitial:'♡',relationshipDays:0,currentUserId:0,currentUserAvatar:'',partnerAvatar:'',motionClass:'',error:''},
-  onLoad(){ const session=sessionStore.snapshot();const user=session.user||{};this.setData({currentUser:user,currentUserId:Number(session.userId)||0,currentUserAvatar:user.avatarUrl||'',motionClass:getApp().globalData.reduceMotion?'reduce-motion':''}) },
+  onLoad(){ const session=sessionStore.snapshot();const user=session.user||{};this.setData({currentUser:user,currentUserId:Number(session.userId)||0,currentUserAvatar:user.avatarUrl||'',motionClass:motionModel(getApp().globalData.reduceMotion).className}) },
   async onShow(){ const session=sessionStore.snapshot();if(!session.accessToken)return wx.reLaunch({url:'/pages/welcome/index'});const user=session.user||{};this.setData({currentUser:user,currentUserAvatar:user.avatarUrl||''});let relationship;try{relationship=await relationshipService.getCurrent()}catch(error){if(error.code==='NO_ACTIVE_COUPLE'){storage.remove(CACHE_KEY);this.setData({home:null,moments:[],pinnedAnniversaries:[]});return wx.reLaunch({url:'/pages/bind/index'})}return}const partner=relationship.partner||{};const boundAt=new Date(relationship.boundAt);const days=Number.isNaN(boundAt.getTime())?0:Math.max(1,Math.floor((Date.now()-boundAt.getTime())/86400000)+1);this.setData({relationship,partnerInitial:(partner.displayName||'♡').slice(0,1),partnerAvatar:partner.avatarUrl||'',relationshipDays:days});const cached=readFreshCache();if(!this.data.home&&cached)this.setData({home:cached,moments:cached.recent||[],pinnedAnniversaries:normalizeHighlights(cached.pinnedAnniversaries).map(item=>anniversaryView(item)),hasMorePinned:Boolean(cached.hasMorePinned)});this.refreshAvatar();this.load({quiet:Boolean(cached)}) },
   onPullDownRefresh(){ this.refreshAvatar(); this.load().finally(()=>wx.stopPullDownRefresh()) },
   // 头像 URL 是后端签名的（约 15 分钟过期），本地session 里存的是旧签名，

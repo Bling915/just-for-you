@@ -1,0 +1,2 @@
+const test=require('node:test');const assert=require('node:assert/strict');const {motionModel}=require('../utils/motion')
+test('motion model caps stagger and removes loops for reduced motion',()=>{assert.deepEqual(motionModel(false,20),{className:'motion scrapbook-motion',delayMs:480});const reduced=motionModel(true,20);assert.equal(reduced.className,'reduce-motion');assert.equal(reduced.delayMs,0);assert.ok(reduced.durationMs<=160)})

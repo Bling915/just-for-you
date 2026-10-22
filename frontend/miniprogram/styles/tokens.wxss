@@ -17,4 +17,11 @@ page {
   --shadow-float: 0 22rpx 58rpx rgba(104, 82, 140, 0.14);
   --motion-fast: 160ms;
   --motion-normal: 220ms;
+  --motion-slow: 520ms;
+  --ease-paper: cubic-bezier(.22,.8,.32,1);
+  --float-distance: 8rpx;
+  --paper-rotate: .45deg;
+  --shadow-paper: 0 10rpx 0 rgba(255,255,255,.7), 0 24rpx 56rpx rgba(91,72,112,.13);
+  --photo-border: 12rpx;
+  --stagger-step: 60ms;
 }

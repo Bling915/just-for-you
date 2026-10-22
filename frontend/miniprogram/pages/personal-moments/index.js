@@ -4,16 +4,17 @@ const { sessionStore } = require('../../store/session')
 const { relationshipService } = require('../../services/relationships')
 const { storage } = require('../../utils/storage')
 const { reactOptimistically, promptTextReaction, shareToCouple } = require('../../utils/moment-page-actions')
+const { motionModel } = require('../../utils/motion')
 
 const store = createTimelineStore(momentService, { space: 'personal', owner: 'me' })
 
 Page({
-  data: { owner: 'me', title: '我的小事', subtitle: '只属于你的日常角落', moments: [], loading: true, loadingMore: false, hasMore: true, error: '', currentUserId: 0, currentUserAvatar: '', partnerAvatar: '' },
+  data: { owner: 'me', title: '我的小事', subtitle: '只属于你的日常角落', moments: [], loading: true, loadingMore: false, hasMore: true, error: '', currentUserId: 0, currentUserAvatar: '', partnerAvatar: '',motionClass:'' },
   onLoad(options) {
     const owner = options.owner === 'partner' ? 'partner' : 'me'
     const session = sessionStore.snapshot()
     store.reset({ space: 'personal', owner })
-    this.setData({ owner, title: owner === 'partner' ? 'TA 的小事' : '我的小事', subtitle: owner === 'partner' ? 'TA 愿意与你分享的片刻' : '安静收藏，也可以分享给 TA', currentUserId: Number(session.userId) || 0, currentUserAvatar: (session.user && session.user.avatarUrl) || '' })
+    this.setData({ owner, title: owner === 'partner' ? 'TA 的小事' : '我的小事', subtitle: owner === 'partner' ? 'TA 愿意与你分享的片刻' : '安静收藏，也可以分享给 TA', currentUserId: Number(session.userId) || 0, currentUserAvatar: (session.user && session.user.avatarUrl) || '',motionClass:motionModel(getApp().globalData.reduceMotion).className })
   },
   async onShow() {
     if (!sessionStore.snapshot().accessToken) return wx.reLaunch({ url: '/pages/welcome/index' })
