@@ -102,7 +102,7 @@ func (r MySQLRepository) SaveWithGrants(ctx context.Context, moment domain.Momen
 			return domain.Moment{}, domain.ErrInvalidUpload
 		}
 	}
-	result, err := tx.ExecContext(ctx, "INSERT INTO moments(couple_id,author_user_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)", moment.RelationshipID(), moment.AuthorID(), moment.Text(), string(moment.Status()), moment.Place(), moment.Latitude(), moment.Longitude(), moment.OccurredAt(), moment.CreatedAt(), moment.UpdatedAt())
+	result, err := tx.ExecContext(ctx, "INSERT INTO moments(couple_id,author_user_id,space_type,visibility,kind,source_moment_id,daily_question_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", nullablePositiveID(moment.RelationshipID()), moment.AuthorID(), string(moment.SpaceType()), string(moment.Visibility()), string(moment.Kind()), moment.SourceMomentID(), moment.DailyQuestionID(), moment.Text(), string(moment.Status()), moment.Place(), moment.Latitude(), moment.Longitude(), moment.OccurredAt(), moment.CreatedAt(), moment.UpdatedAt())
 	if err != nil {
 		return domain.Moment{}, err
 	}
@@ -123,7 +123,14 @@ func (r MySQLRepository) SaveWithGrants(ctx context.Context, moment domain.Momen
 	if err = tx.Commit(); err != nil {
 		return domain.Moment{}, err
 	}
-	return domain.RestoreMomentDetails(id, moment.AuthorID(), moment.RelationshipID(), moment.Text(), moment.Status(), moment.Place(), moment.Latitude(), moment.Longitude(), moment.Photos(), moment.OccurredAt(), moment.CreatedAt(), moment.UpdatedAt(), nil), nil
+	return domain.RestoreMomentDetails(domain.RestoreInput{ID: id, AuthorID: moment.AuthorID(), RelationshipID: moment.RelationshipID(), Text: moment.Text(), Status: moment.Status(), Place: moment.Place(), Latitude: moment.Latitude(), Longitude: moment.Longitude(), Photos: moment.Photos(), OccurredAt: moment.OccurredAt(), CreatedAt: moment.CreatedAt(), UpdatedAt: moment.UpdatedAt(), SpaceType: moment.SpaceType(), Visibility: moment.Visibility(), Kind: moment.Kind(), SourceMomentID: moment.SourceMomentID(), DailyQuestionID: moment.DailyQuestionID()}), nil
+}
+
+func nullablePositiveID(value int64) any {
+	if value <= 0 {
+		return nil
+	}
+	return value
 }
 func (r MySQLRepository) UpdateWithGrants(ctx context.Context, moment domain.Moment, version time.Time, grants []application.UploadGrant) (domain.Moment, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -239,7 +246,7 @@ func (r MySQLRepository) scanMoment(ctx context.Context, row scanner, relationsh
 	if longitude.Valid {
 		longitudeValue = &longitude.Float64
 	}
-	return domain.RestoreMomentDetails(id, author, relationshipID, text, domain.Status(status), place, latitudeValue, longitudeValue, photos, occurred, created, updated, deletedAt), nil
+	return domain.RestoreMomentDetails(domain.RestoreInput{ID: id, AuthorID: author, RelationshipID: relationshipID, Text: text, Status: domain.Status(status), Place: place, Latitude: latitudeValue, Longitude: longitudeValue, Photos: photos, OccurredAt: occurred, CreatedAt: created, UpdatedAt: updated, DeletedAt: deletedAt, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard}), nil
 }
 func (r MySQLRepository) Recent(ctx context.Context, relationshipID int64, limit int) ([]domain.Moment, error) {
 	page, err := r.List(ctx, relationshipID, "", limit)

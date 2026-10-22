@@ -62,7 +62,7 @@ func TestNewMomentRejectsDuplicatePhotoKeys(t *testing.T) {
 
 func TestMomentUpdateRequiresAuthorAndPreservesIdentity(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
-	moment := RestoreMomentDetails(5, 7, 9, "旧内容", StatusNone, "", nil, nil, []Photo{NewPhoto("old", 1)}, now, now, now, nil)
+	moment := RestoreMomentDetails(RestoreInput{ID: 5, AuthorID: 7, RelationshipID: 9, Text: "旧内容", Status: StatusNone, Photos: []Photo{NewPhoto("old", 1)}, OccurredAt: now, CreatedAt: now, UpdatedAt: now, SpaceType: SpaceShared, Visibility: VisibilityCouple, Kind: KindStandard})
 	occurred := now.Add(-time.Hour)
 	latitude, longitude := 31.2304, 121.4737
 

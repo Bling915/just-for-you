@@ -24,7 +24,7 @@ func TestSaveWithGrantsPersistsPhotoOrderAndConsumesGrantAtomically(t *testing.T
 	for _, key := range []string{"a", "b"} {
 		mock.ExpectQuery("SELECT user_id,expires_at,consumed_at FROM upload_grants").WithArgs(key).WillReturnRows(sqlmock.NewRows([]string{"user_id", "expires_at", "consumed_at"}).AddRow(1, now.Add(time.Minute), nil))
 	}
-	mock.ExpectExec("INSERT INTO moments").WithArgs(int64(9), int64(1), "hello", string(domain.StatusNone), "", nil, nil, now, now, now).WillReturnResult(sqlmock.NewResult(20, 1))
+	mock.ExpectExec("INSERT INTO moments").WithArgs(int64(9), int64(1), string(domain.SpaceShared), string(domain.VisibilityCouple), string(domain.KindStandard), nil, nil, "hello", string(domain.StatusNone), "", nil, nil, now, now, now).WillReturnResult(sqlmock.NewResult(20, 1))
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO moment_photos(moment_id,object_key,sort_order) VALUES(?,?,?)")).WithArgs(int64(20), "a", 1).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO moment_photos(moment_id,object_key,sort_order) VALUES(?,?,?)")).WithArgs(int64(20), "b", 2).WillReturnResult(sqlmock.NewResult(2, 1))
 	for _, key := range []string{"a", "b"} {
@@ -50,7 +50,7 @@ func TestUpdateWithGrantsUsesOptimisticLockAndUpdatesPhotosAtomically(t *testing
 	defer db.Close()
 	version := time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC)
 	now := version.Add(time.Hour)
-	moment := domain.RestoreMomentDetails(20, 1, 9, "edited", domain.StatusMissYou, "外滩", nil, nil, []domain.Photo{domain.NewPhoto("new", 1)}, now.Add(-time.Minute), version.Add(-time.Hour), now, nil)
+	moment := domain.RestoreMomentDetails(domain.RestoreInput{ID: 20, AuthorID: 1, RelationshipID: 9, Text: "edited", Status: domain.StatusMissYou, Place: "外滩", Photos: []domain.Photo{domain.NewPhoto("new", 1)}, OccurredAt: now.Add(-time.Minute), CreatedAt: version.Add(-time.Hour), UpdatedAt: now, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard})
 	grants := []application.UploadGrant{{ObjectKey: "new", OwnerID: 1, ExpiresAt: now.Add(time.Minute)}}
 	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT user_id,expires_at,consumed_at FROM upload_grants").WithArgs("new").WillReturnRows(sqlmock.NewRows([]string{"user_id", "expires_at", "consumed_at"}).AddRow(1, now.Add(time.Minute), nil))

@@ -65,7 +65,7 @@ func TestUpdateMapsConflictAndReturnsOccurrenceVersion(t *testing.T) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 
-	result := domain.RestoreMomentDetails(5, 1, 9, "更新", domain.StatusNone, "", nil, nil, nil, now.Add(-time.Hour), now.Add(-2*time.Hour), now, nil)
+	result := domain.RestoreMomentDetails(domain.RestoreInput{ID: 5, AuthorID: 1, RelationshipID: 9, Text: "更新", Status: domain.StatusNone, OccurredAt: now.Add(-time.Hour), CreatedAt: now.Add(-2 * time.Hour), UpdatedAt: now, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard})
 	success := fakeUseCases(nil, nil)
 	success.UpdateMoment = fakeUpdate{result: result}
 	response = httptest.NewRecorder()

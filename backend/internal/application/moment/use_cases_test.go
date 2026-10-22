@@ -253,7 +253,7 @@ func TestTimelineReturnsSignedReadURLs(t *testing.T) {
 
 func TestUpdateMomentChecksRelationshipAuthorAndNewPhotoGrant(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
-	existing := momentdomain.RestoreMomentDetails(5, 7, 9, "旧内容", momentdomain.StatusNone, "", nil, nil, []momentdomain.Photo{momentdomain.NewPhoto("existing", 1)}, now.Add(-time.Hour), now.Add(-time.Hour), now.Add(-time.Hour), nil)
+	existing := momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 5, AuthorID: 7, RelationshipID: 9, Text: "旧内容", Status: momentdomain.StatusNone, Photos: []momentdomain.Photo{momentdomain.NewPhoto("existing", 1)}, OccurredAt: now.Add(-time.Hour), CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour), SpaceType: momentdomain.SpaceShared, Visibility: momentdomain.VisibilityCouple, Kind: momentdomain.KindStandard})
 	repository := &memoryMoments{existing: existing}
 	uploads := &fakeUploads{grants: map[string]UploadGrant{"new": {ObjectKey: "new", OwnerID: 7, ContentType: "image/jpeg", ExpiresAt: now.Add(time.Hour)}}}
 	useCase := NewUpdateMomentUseCase(fakeRelationships{active: ActiveRelationship{ID: 9}}, uploads, repository, fakeStorage{}, fixedClock{now})

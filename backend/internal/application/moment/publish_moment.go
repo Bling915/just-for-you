@@ -46,7 +46,7 @@ func (u *PublishMomentUseCase) Execute(ctx context.Context, c PublishMomentComma
 	if occurredAt.IsZero() {
 		occurredAt = now
 	}
-	m, err := domain.NewMomentDetails(c.UserID, rel.ID, c.Text, c.Status, c.PlaceName, c.Latitude, c.Longitude, c.PhotoKeys, occurredAt, now)
+	m, err := domain.NewMomentDetails(domain.CreateInput{AuthorID: c.UserID, RelationshipID: rel.ID, Text: c.Text, Status: c.Status, Place: c.PlaceName, Latitude: c.Latitude, Longitude: c.Longitude, PhotoKeys: c.PhotoKeys, OccurredAt: occurredAt, CreatedAt: now, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard})
 	if err != nil {
 		return domain.Moment{}, err
 	}
