@@ -17,6 +17,8 @@ type RelationshipReader interface {
 type Repository interface {
 	ListAnniversaries(context.Context, int64) ([]domain.Anniversary, error)
 	SaveAnniversary(context.Context, domain.Anniversary) (domain.Anniversary, error)
+	FindAnniversary(context.Context, int64, int64) (domain.Anniversary, error)
+	UpdateAnniversary(context.Context, domain.Anniversary) (domain.Anniversary, error)
 	DeleteAnniversary(context.Context, int64, int64, int64) error
 	ListTodos(context.Context, int64) ([]domain.Todo, error)
 	SaveTodo(context.Context, domain.Todo) (domain.Todo, error)

@@ -23,15 +23,37 @@ func (f fakeRelations) GetActiveRelationship(context.Context, int64) (ActiveRela
 }
 
 type fakeRepo struct {
-	todo    domain.Todo
-	updated int
+	todo          domain.Todo
+	anniversaries []domain.Anniversary
+	updated       int
 }
 
 func (f *fakeRepo) ListAnniversaries(context.Context, int64) ([]domain.Anniversary, error) {
-	return nil, nil
+	return append([]domain.Anniversary(nil), f.anniversaries...), nil
 }
 func (f *fakeRepo) SaveAnniversary(_ context.Context, v domain.Anniversary) (domain.Anniversary, error) {
+	if v.ID() == 0 {
+		v = domain.RestoreAnniversary(100, v.CoupleID(), v.CreatorID(), v.Title(), v.Date(), v.RepeatsYearly(), v.CountMode(), v.Pinned(), v.CoverRef(), v.Message(), v.SystemKind(), v.CreatedAt(), v.UpdatedAt())
+	}
+	f.anniversaries = append(f.anniversaries, v)
 	return v, nil
+}
+func (f *fakeRepo) FindAnniversary(_ context.Context, coupleID, id int64) (domain.Anniversary, error) {
+	for _, item := range f.anniversaries {
+		if item.CoupleID() == coupleID && item.ID() == id {
+			return item, nil
+		}
+	}
+	return domain.Anniversary{}, domain.ErrNotFound
+}
+func (f *fakeRepo) UpdateAnniversary(_ context.Context, v domain.Anniversary) (domain.Anniversary, error) {
+	for i := range f.anniversaries {
+		if f.anniversaries[i].ID() == v.ID() && f.anniversaries[i].CoupleID() == v.CoupleID() {
+			f.anniversaries[i] = v
+			return v, nil
+		}
+	}
+	return domain.Anniversary{}, domain.ErrNotFound
 }
 func (f *fakeRepo) DeleteAnniversary(context.Context, int64, int64, int64) error { return nil }
 func (f *fakeRepo) ListTodos(context.Context, int64) ([]domain.Todo, error)      { return nil, nil }
@@ -75,5 +97,69 @@ func TestTodoCompletionIsIdempotent(t *testing.T) {
 	}
 	if repo.updated != 2 {
 		t.Fatalf("expected persisted idempotent response")
+	}
+}
+
+func TestListAnniversariesSortsPinnedCountdownThenElapsedStably(t *testing.T) {
+	loc := time.FixedZone("CST", 8*60*60)
+	now := time.Date(2026, 10, 22, 9, 0, 0, 0, loc)
+	item := func(id int64, date time.Time, mode domain.CountMode, pinned bool) domain.Anniversary {
+		return domain.RestoreAnniversary(id, 9, 2, "纪念", date, true, mode, pinned, "", "", "none", now, now)
+	}
+	repo := &fakeRepo{anniversaries: []domain.Anniversary{
+		item(4, now.AddDate(-1, 0, 0), domain.CountModeElapsed, false),
+		item(2, now.AddDate(0, 0, 2), domain.CountModeCountdown, true),
+		item(3, now.AddDate(0, 0, 1), domain.CountModeCountdown, true),
+		item(1, now.AddDate(-2, 0, 0), domain.CountModeElapsed, false),
+	}}
+	s := NewService(repo, fakeRelations{rel: ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now})
+	got, err := s.ListAnniversaries(context.Background(), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []int64{3, 2, 4, 1}
+	for i := range want {
+		if got[i].ID() != want[i] {
+			t.Fatalf("order[%d]=%d want %d", i, got[i].ID(), want[i])
+		}
+	}
+}
+
+func TestPartnerCanUpdateAnniversaryInsideCoupleButNotForeignItem(t *testing.T) {
+	now := time.Date(2026, 10, 22, 9, 0, 0, 0, time.UTC)
+	owned := domain.RestoreAnniversary(7, 9, 2, "相识", now, true, domain.CountModeCountdown, false, "", "", "none", now, now)
+	foreign := domain.RestoreAnniversary(8, 10, 4, "别人的", now, true, domain.CountModeCountdown, false, "", "", "none", now, now)
+	repo := &fakeRepo{anniversaries: []domain.Anniversary{owned, foreign}}
+	s := NewService(repo, fakeRelations{rel: ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now})
+	draft := domain.AnniversaryDraft{Title: "我们的相识", Date: now, CountMode: domain.CountModeElapsed, Pinned: true}
+	updated, err := s.UpdateAnniversary(context.Background(), 3, 7, draft)
+	if err != nil || updated.Title() != "我们的相识" || !updated.Pinned() {
+		t.Fatalf("updated=%#v err=%v", updated, err)
+	}
+	if _, err = s.UpdateAnniversary(context.Background(), 3, 8, draft); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("foreign update error=%v", err)
+	}
+}
+
+func TestSystemAnniversaryCannotBeDeleted(t *testing.T) {
+	now := time.Now()
+	repo := &fakeRepo{anniversaries: []domain.Anniversary{domain.RestoreAnniversary(7, 9, 2, "我们在一起", now, true, domain.CountModeElapsed, true, "", "", "relationship", now, now)}}
+	s := NewService(repo, fakeRelations{rel: ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now})
+	if err := s.DeleteAnniversary(context.Background(), 2, 7); !errors.Is(err, domain.ErrSystemAnniversary) {
+		t.Fatalf("error=%v", err)
+	}
+}
+
+func TestListCreatesEditableRelationshipAnniversaryOnce(t *testing.T) {
+	now := time.Date(2026, 5, 20, 8, 0, 0, 0, time.UTC)
+	repo := &fakeRepo{}
+	s := NewService(repo, fakeRelations{rel: ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3, BoundAt: now}}, fakeClock{now})
+	first, err := s.ListAnniversaries(context.Background(), 3)
+	if err != nil || len(first) != 1 || first[0].ID() == 0 || first[0].SystemKind() != "relationship" {
+		t.Fatalf("first=%#v err=%v", first, err)
+	}
+	second, err := s.ListAnniversaries(context.Background(), 3)
+	if err != nil || len(second) != 1 || second[0].ID() != first[0].ID() {
+		t.Fatalf("second=%#v err=%v", second, err)
 	}
 }

@@ -21,8 +21,11 @@ func (r Repository) GetActiveRelationship(ctx context.Context, userID int64) (ap
 	}
 	return v, err
 }
+
+const anniversaryColumns = "id,couple_id,creator_user_id,title,anniversary_date,repeats_yearly,count_mode,pinned,cover_ref,message,system_kind,created_at,updated_at"
+
 func (r Repository) ListAnniversaries(ctx context.Context, coupleID int64) ([]domain.Anniversary, error) {
-	rows, e := r.db.QueryContext(ctx, "SELECT id,couple_id,creator_user_id,title,anniversary_date,repeats_yearly,system_kind,created_at,updated_at FROM anniversaries WHERE couple_id=? ORDER BY anniversary_date,id", coupleID)
+	rows, e := r.db.QueryContext(ctx, "SELECT "+anniversaryColumns+" FROM anniversaries WHERE couple_id=? ORDER BY anniversary_date,id", coupleID)
 	if e != nil {
 		return nil, e
 	}
@@ -30,23 +33,51 @@ func (r Repository) ListAnniversaries(ctx context.Context, coupleID int64) ([]do
 	out := []domain.Anniversary{}
 	for rows.Next() {
 		var id, cid, uid int64
-		var title, kind string
+		var title, kind, countMode, coverRef, message string
 		var date, created, updated time.Time
-		var repeats bool
-		if e = rows.Scan(&id, &cid, &uid, &title, &date, &repeats, &kind, &created, &updated); e != nil {
+		var repeats, pinned bool
+		if e = rows.Scan(&id, &cid, &uid, &title, &date, &repeats, &countMode, &pinned, &coverRef, &message, &kind, &created, &updated); e != nil {
 			return nil, e
 		}
-		out = append(out, domain.RestoreAnniversary(id, cid, uid, title, date, repeats, domain.CountModeCountdown, false, "", "", kind, created, updated))
+		out = append(out, domain.RestoreAnniversary(id, cid, uid, title, date, repeats, domain.CountMode(countMode), pinned, coverRef, message, kind, created, updated))
 	}
 	return out, rows.Err()
 }
 func (r Repository) SaveAnniversary(ctx context.Context, v domain.Anniversary) (domain.Anniversary, error) {
-	res, e := r.db.ExecContext(ctx, "INSERT INTO anniversaries(couple_id,creator_user_id,title,anniversary_date,repeats_yearly,system_kind,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)", v.CoupleID(), v.CreatorID(), v.Title(), v.Date(), v.RepeatsYearly(), v.SystemKind(), v.CreatedAt(), v.UpdatedAt())
+	res, e := r.db.ExecContext(ctx, "INSERT INTO anniversaries(couple_id,creator_user_id,title,anniversary_date,repeats_yearly,count_mode,pinned,cover_ref,message,system_kind,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)", v.CoupleID(), v.CreatorID(), v.Title(), v.Date(), v.RepeatsYearly(), v.CountMode(), v.Pinned(), v.CoverRef(), v.Message(), v.SystemKind(), v.CreatedAt(), v.UpdatedAt())
 	if e != nil {
 		return v, e
 	}
 	id, e := res.LastInsertId()
 	return domain.RestoreAnniversary(id, v.CoupleID(), v.CreatorID(), v.Title(), v.Date(), v.RepeatsYearly(), v.CountMode(), v.Pinned(), v.CoverRef(), v.Message(), v.SystemKind(), v.CreatedAt(), v.UpdatedAt()), e
+}
+func (r Repository) FindAnniversary(ctx context.Context, coupleID, id int64) (domain.Anniversary, error) {
+	var aid, cid, uid int64
+	var title, mode, cover, message, kind string
+	var date, created, updated time.Time
+	var repeats, pinned bool
+	err := r.db.QueryRowContext(ctx, "SELECT "+anniversaryColumns+" FROM anniversaries WHERE couple_id=? AND id=?", coupleID, id).Scan(&aid, &cid, &uid, &title, &date, &repeats, &mode, &pinned, &cover, &message, &kind, &created, &updated)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Anniversary{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.Anniversary{}, err
+	}
+	return domain.RestoreAnniversary(aid, cid, uid, title, date, repeats, domain.CountMode(mode), pinned, cover, message, kind, created, updated), nil
+}
+func (r Repository) UpdateAnniversary(ctx context.Context, v domain.Anniversary) (domain.Anniversary, error) {
+	res, err := r.db.ExecContext(ctx, "UPDATE anniversaries SET title=?,anniversary_date=?,repeats_yearly=?,count_mode=?,pinned=?,cover_ref=?,message=?,updated_at=? WHERE couple_id=? AND id=?", v.Title(), v.Date(), v.RepeatsYearly(), v.CountMode(), v.Pinned(), v.CoverRef(), v.Message(), v.UpdatedAt(), v.CoupleID(), v.ID())
+	if err != nil {
+		return domain.Anniversary{}, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return domain.Anniversary{}, err
+	}
+	if n == 0 {
+		return domain.Anniversary{}, domain.ErrNotFound
+	}
+	return v, nil
 }
 func (r Repository) DeleteAnniversary(ctx context.Context, coupleID, id, userID int64) error {
 	return deleteOwned(ctx, r.db, "anniversaries", coupleID, id, userID, " AND system_kind='none'")

@@ -19,6 +19,8 @@ func (*Handler) RegisterPublic(*gin.Engine) {}
 func (h *Handler) RegisterProtected(g *gin.RouterGroup) {
 	g.GET("/anniversaries", h.listAnniversaries)
 	g.POST("/anniversaries", h.createAnniversary)
+	g.GET("/anniversaries/:id", h.getAnniversary)
+	g.PATCH("/anniversaries/:id", h.updateAnniversary)
 	g.DELETE("/anniversaries/:id", h.deleteAnniversary)
 	g.GET("/todos", h.listTodos)
 	g.POST("/todos", h.createTodo)
@@ -39,21 +41,62 @@ func (h *Handler) listAnniversaries(c *gin.Context) {
 	shared.WriteData(c, 200, anniversariesDTO(v))
 }
 func (h *Handler) createAnniversary(c *gin.Context) {
-	var x struct {
-		Title   string    `json:"title"`
-		Date    time.Time `json:"date"`
-		Repeats bool      `json:"repeatsYearly"`
-	}
+	var x anniversaryInput
 	if c.ShouldBindJSON(&x) != nil {
 		shared.WriteError(c, 400, "INVALID_ARGUMENT", "纪念日内容不正确")
 		return
 	}
-	v, e := h.s.CreateAnniversary(c, shared.UserID(c), x.Title, x.Date, x.Repeats)
+	v, e := h.s.CreateAnniversary(c, shared.UserID(c), x.draft())
 	if e != nil {
 		fail(c, e)
 		return
 	}
 	shared.WriteData(c, 201, anniversaryDTO(v))
+}
+
+type anniversaryInput struct {
+	Title     string           `json:"title"`
+	Date      time.Time        `json:"date"`
+	CountMode domain.CountMode `json:"countMode"`
+	Repeats   bool             `json:"repeatsYearly"`
+	Pinned    bool             `json:"pinned"`
+	CoverRef  string           `json:"coverRef"`
+	Message   string           `json:"message"`
+}
+
+func (x anniversaryInput) draft() domain.AnniversaryDraft {
+	if x.CountMode == "" {
+		x.CountMode = domain.CountModeCountdown
+	}
+	return domain.AnniversaryDraft{Title: x.Title, Date: x.Date, CountMode: x.CountMode, RepeatsYearly: x.Repeats, Pinned: x.Pinned, CoverRef: x.CoverRef, Message: x.Message}
+}
+func (h *Handler) getAnniversary(c *gin.Context) {
+	v, e := id(c)
+	if e == nil {
+		var out domain.Anniversary
+		out, e = h.s.GetAnniversary(c, shared.UserID(c), v)
+		if e == nil {
+			shared.WriteData(c, 200, anniversaryDTO(out))
+			return
+		}
+	}
+	fail(c, e)
+}
+func (h *Handler) updateAnniversary(c *gin.Context) {
+	var x anniversaryInput
+	v, e := id(c)
+	if c.ShouldBindJSON(&x) != nil {
+		e = domain.ErrInvalidTitle
+	}
+	if e == nil {
+		var out domain.Anniversary
+		out, e = h.s.UpdateAnniversary(c, shared.UserID(c), v, x.draft())
+		if e == nil {
+			shared.WriteData(c, 200, anniversaryDTO(out))
+			return
+		}
+	}
+	fail(c, e)
 }
 func (h *Handler) deleteAnniversary(c *gin.Context) {
 	v, e := id(c)
@@ -171,12 +214,14 @@ func finish(c *gin.Context, e error) {
 func fail(c *gin.Context, e error) {
 	status, code, msg := 500, "INTERNAL_ERROR", "服务暂时不可用"
 	switch {
-	case errors.Is(e, domain.ErrInvalidTitle), errors.Is(e, domain.ErrInvalidDate), errors.Is(e, domain.ErrInvalidDescription):
+	case errors.Is(e, domain.ErrInvalidTitle), errors.Is(e, domain.ErrInvalidDate), errors.Is(e, domain.ErrInvalidDescription), errors.Is(e, domain.ErrInvalidMessage), errors.Is(e, domain.ErrInvalidCountMode):
 		status, code, msg = 400, "INVALID_ARGUMENT", "内容不正确"
 	case errors.Is(e, domain.ErrInvalidMoment):
 		status, code, msg = 400, "INVALID_MOMENT", "关联动态不正确"
 	case errors.Is(e, domain.ErrNotCreator):
 		status, code, msg = 403, "NOT_CREATOR", "只能删除自己创建的内容"
+	case errors.Is(e, domain.ErrSystemAnniversary):
+		status, code, msg = 403, "SYSTEM_ANNIVERSARY", "系统纪念日不能删除"
 	case errors.Is(e, domain.ErrNotFound):
 		status, code, msg = 404, "NOT_FOUND", "内容不存在"
 	case errors.Is(e, relationship.ErrNoActiveRelationship):
@@ -188,7 +233,7 @@ func fail(c *gin.Context, e error) {
 }
 
 func anniversaryDTO(v domain.Anniversary) gin.H {
-	return gin.H{"id": v.ID(), "creatorUserId": v.CreatorID(), "title": v.Title(), "date": v.Date(), "repeatsYearly": v.RepeatsYearly(), "systemKind": v.SystemKind()}
+	return gin.H{"id": v.ID(), "creatorUserId": v.CreatorID(), "title": v.Title(), "date": v.Date(), "countMode": v.CountMode(), "repeatsYearly": v.RepeatsYearly(), "pinned": v.Pinned(), "coverRef": v.CoverRef(), "message": v.Message(), "systemKind": v.SystemKind(), "createdAt": v.CreatedAt(), "updatedAt": v.UpdatedAt()}
 }
 func anniversariesDTO(values []domain.Anniversary) []gin.H {
 	out := make([]gin.H, 0, len(values))

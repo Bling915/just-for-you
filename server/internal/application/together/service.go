@@ -19,48 +19,6 @@ func NewService(repo Repository, relationships RelationshipReader, clock Clock) 
 func (s *Service) relationship(ctx context.Context, userID int64) (ActiveRelationship, error) {
 	return s.relationships.GetActiveRelationship(ctx, userID)
 }
-func (s *Service) ListAnniversaries(ctx context.Context, userID int64) ([]domain.Anniversary, error) {
-	r, e := s.relationship(ctx, userID)
-	if e != nil {
-		return nil, e
-	}
-	items, e := s.repo.ListAnniversaries(ctx, r.ID)
-	if e != nil {
-		return nil, e
-	}
-	hasBound := false
-	for _, item := range items {
-		if item.SystemKind() == "relationship" {
-			hasBound = true
-			break
-		}
-	}
-	if !hasBound && !r.BoundAt.IsZero() {
-		items = append(items, domain.RestoreAnniversary(0, r.ID, r.UserAID, "我们在一起", r.BoundAt, true, domain.CountModeElapsed, true, "", "", "relationship", r.BoundAt, r.BoundAt))
-	}
-	return items, nil
-}
-func (s *Service) CreateAnniversary(ctx context.Context, userID int64, title string, date time.Time, repeats bool) (domain.Anniversary, error) {
-	r, e := s.relationship(ctx, userID)
-	if e != nil {
-		return domain.Anniversary{}, e
-	}
-	a, e := domain.NewAnniversary(r.ID, userID, title, date, s.clock.Now())
-	if e != nil {
-		return a, e
-	}
-	if !repeats {
-		a = domain.RestoreAnniversary(a.ID(), a.CoupleID(), a.CreatorID(), a.Title(), a.Date(), false, a.CountMode(), a.Pinned(), a.CoverRef(), a.Message(), a.SystemKind(), a.CreatedAt(), a.UpdatedAt())
-	}
-	return s.repo.SaveAnniversary(ctx, a)
-}
-func (s *Service) DeleteAnniversary(ctx context.Context, userID, id int64) error {
-	r, e := s.relationship(ctx, userID)
-	if e != nil {
-		return e
-	}
-	return s.repo.DeleteAnniversary(ctx, r.ID, id, userID)
-}
 func (s *Service) ListTodos(ctx context.Context, userID int64) ([]domain.Todo, error) {
 	r, e := s.relationship(ctx, userID)
 	if e != nil {
