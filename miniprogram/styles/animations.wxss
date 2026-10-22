@@ -8,8 +8,10 @@
   50% { transform: translateY(-8rpx) scale(1.025); }
 }
 
-.animate-in { animation: gentle-fade-up 360ms ease-out both; }
-.reduce-motion { animation-duration: 1ms !important; animation-iteration-count: 1 !important; }
+.animate-in { animation: gentle-fade-up var(--motion-normal) ease-out both; }
+.pressable { transition: transform var(--motion-fast) ease, opacity var(--motion-fast) ease; }
+.pressable:active { opacity: .82; transform: scale(.985); }
+.reduce-motion, .reduce-motion .animate-in, .reduce-motion .orb, .reduce-motion .orb-skeleton, .reduce-motion .pressable { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-in, .orb, .brand-moon, .orb-skeleton, .line {

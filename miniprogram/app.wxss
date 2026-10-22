@@ -9,6 +9,9 @@ page {
   -webkit-font-smoothing: antialiased;
 }
 
+button { box-sizing: border-box; }
+image { background: var(--color-primary-soft); }
+
 .safe-page {
   min-height: 100vh;
   padding: calc(env(safe-area-inset-top) + 32rpx) 32rpx calc(env(safe-area-inset-bottom) + 40rpx);

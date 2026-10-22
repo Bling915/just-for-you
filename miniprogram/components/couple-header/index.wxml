@@ -1,0 +1,8 @@
+<view class="album-head">
+  <view class="copy"><text class="eyebrow">{{eyebrow}}</text><view class="title">{{title}}</view><view class="subtitle" wx:if="{{days}}">牵手第 <text>{{days}}</text> 天<text wx:if="{{soloTest}}" class="solo">单人测试</text></view></view>
+  <view class="portraits" aria-label="两个人的头像">
+    <view class="portrait self"><image wx:if="{{currentUser.avatarUrl}}" src="{{currentUser.avatarUrl}}" mode="aspectFill"/><text wx:else>{{currentInitial}}</text></view>
+    <view class="thread">♡</view>
+    <view class="portrait partner"><image wx:if="{{partner.avatarUrl}}" src="{{partner.avatarUrl}}" mode="aspectFill"/><text wx:else>{{partnerInitial}}</text></view>
+  </view>
+</view>

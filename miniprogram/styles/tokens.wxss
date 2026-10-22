@@ -1,13 +1,20 @@
 page {
   --color-primary: #9d87c1;
   --color-primary-deep: #806aa8;
+  --color-primary-soft: #eee6f8;
   --color-text: #403946;
   --color-text-muted: #83798b;
   --color-bg-warm: #fffaf7;
   --color-bg-lavender: #f0eafa;
   --color-card: rgba(255, 255, 255, 0.76);
+  --color-surface-solid: #fffdfc;
+  --color-stroke: rgba(128, 106, 168, 0.14);
   --color-moon: #f0ce7a;
   --color-danger: #c87580;
   --radius-card: 28rpx;
+  --radius-hero: 38rpx;
   --shadow-card: 0 18rpx 48rpx rgba(119, 96, 150, 0.12);
+  --shadow-float: 0 22rpx 58rpx rgba(104, 82, 140, 0.14);
+  --motion-fast: 160ms;
+  --motion-normal: 220ms;
 }

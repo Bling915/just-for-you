@@ -1,4 +1,4 @@
-<view class="card animate-in">
+<view class="card animate-in pressable">
   <view class="top"><view class="avatar"><image wx:if="{{moment.authorId === currentUserId ? currentUserAvatar : partnerAvatar}}" src="{{moment.authorId === currentUserId ? currentUserAvatar : partnerAvatar}}" mode="aspectFill" binderror="avatarError"/><text wx:else>{{moment.authorId === currentUserId ? '我' : 'TA'}}</text></view><view class="meta"><view>{{moment.authorId === currentUserId ? '我' : '对方'}}</view><text>{{displayTime}}</text></view><view wx:if="{{moment.authorId === currentUserId}}" class="actions"><button class="more" bindtap="edit">编辑</button><button class="more" bindtap="remove">删除</button></view></view>
   <view wx:if="{{moment.status}}" class="status">{{labels[moment.status]}}</view>
   <view wx:if="{{moment.text}}" class="body">{{moment.text}}</view>

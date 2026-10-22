@@ -18,6 +18,9 @@ Content-Type: application/json
 | `POST /v1/auth/logout` | `{"refreshToken":"..."}` | `204` |
 | `GET /v1/users/me` | 无 | 当前用户 |
 | `PUT /v1/users/me` | `{"displayName":"南方","avatarRef":"..."}` | 更新后的用户 |
+| `POST /v1/users/me/avatar-upload` | `{"contentType":"image/jpeg","size":245760}` | 头像专用上传授权 |
+
+头像支持 JPEG、PNG、WebP，最大 5 MiB。客户端必须先 PUT 到授权地址，再把返回的 `objectKey` 作为 `avatarRef` 更新资料；若任一步失败，应继续保留旧头像。用户和伴侣 DTO 同时返回私有短期读取地址 `avatarUrl`。
 
 ## 情侣关系
 
@@ -64,6 +67,19 @@ Content-Type: application/json
 - `DELETE /v1/moments/:id`：仅作者可删除，成功返回 `204`。
 
 照片项包含对象键、显示顺序和短期有效的私有读取 `url`。
+
+## 纪念日
+
+| 方法与路径 | 用途 |
+| --- | --- |
+| `GET /v1/anniversaries` | 获取纪念日列表（置顶优先） |
+| `POST /v1/anniversaries` | 新建纪念日 |
+| `GET /v1/anniversaries/:id` | 获取纪念日详情 |
+| `PATCH /v1/anniversaries/:id` | 更新标题、日期、模式、留言、置顶及封面引用 |
+| `POST /v1/anniversaries/:id/cover-upload` | 获取该纪念日封面的上传授权 |
+| `DELETE /v1/anniversaries/:id` | 删除非系统纪念日 |
+
+创建/更新字段包括 `title`、`date`（`YYYY-MM-DD`）、`countMode`（`elapsed` 或 `countdown`）、`repeatsYearly`、`pinned`、`message`、`coverRef`。系统生成的“在一起”纪念日不可删除。闰日按每年重复时，非闰年在 2 月 28 日纪念。
 
 ## 主要错误码
 
