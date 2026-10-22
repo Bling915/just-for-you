@@ -4,8 +4,9 @@ const { messageForError } = require('../../utils/error-copy');
 const { countRunes, truncateRunes } = require('../../utils/runes');
 
 Page({
-  data: { displayName: '', initial: '♡', submitting: false, error: '', editing: false },
-  onLoad(options) { const user=sessionStore.snapshot().user||{}; const editing=options&&options.edit==='1'; const displayName=editing?(user.displayName||''):''; this.setData({editing,displayName,initial:displayName.slice(0,1)||'♡'}); },
+  data: { displayName: '', initial: '♡', user: {}, submitting: false, error: '', editing: false },
+  onLoad(options) { const user=sessionStore.snapshot().user||{}; const editing=options&&options.edit==='1'; const displayName=editing?(user.displayName||''):''; this.setData({editing,user,displayName,initial:displayName.slice(0,1)||'♡'}); },
+  avatarChanged(event) { this.setData({user:event.detail.user}); },
   inputName(event) { const displayName=truncateRunes(event.detail.value,30);this.setData({displayName,initial:displayName.slice(0,1)||'♡',error:''}); },
   async submit() {
     if (this.data.submitting || countRunes(this.data.displayName.trim()) < 1) {
@@ -14,7 +15,7 @@ Page({
     }
     this.setData({ submitting: true, error: '' });
     try {
-      const user = await userService.updateProfile({ displayName: this.data.displayName.trim(), avatarRef: '' });
+      const user = await userService.updateProfile({ displayName: this.data.displayName.trim(), avatarRef: this.data.user.avatarRef || '' });
       sessionStore.setUser(user);
       if (this.data.editing) wx.navigateBack(); else wx.redirectTo({ url: '/pages/bind/index' });
     } catch (error) {

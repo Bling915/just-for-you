@@ -1,0 +1,8 @@
+<view class="picker {{size}}">
+  <button class="avatar" open-type="chooseAvatar" bindchooseavatar="chooseAvatar" disabled="{{uploading}}" aria-label="更换头像">
+    <image wx:if="{{user.avatarUrl}}" src="{{user.avatarUrl}}" mode="aspectFill"/>
+    <text wx:else>{{initial}}</text>
+    <view class="camera">✦</view>
+  </button>
+  <button class="album" bindtap="chooseFromAlbum" disabled="{{uploading}}">{{uploading ? '上传中 ' + progress + '%' : '更换头像'}}</button>
+</view>

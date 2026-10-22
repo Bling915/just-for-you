@@ -1,8 +1,8 @@
 const { timelineStore }=require('../../store/timeline');const { momentService }=require('../../services/moments');const { sessionStore }=require('../../store/session');const { relationshipService }=require('../../services/relationships');const { storage }=require('../../utils/storage')
 Page({
- data:{moments:[],loading:true,loadingMore:false,hasMore:true,error:'',currentUserId:0},
- onLoad(){this.setData({currentUserId:Number(sessionStore.snapshot().userId)||0})},
- async onShow(){const session=sessionStore.snapshot();if(!session.accessToken)return wx.reLaunch({url:'/pages/welcome/index'});try{await relationshipService.getCurrent()}catch(error){timelineStore.reset();this.sync();if(error.code==='NO_ACTIVE_COUPLE')return wx.reLaunch({url:'/pages/bind/index'});return}await this.refresh()},
+ data:{moments:[],loading:true,loadingMore:false,hasMore:true,error:'',currentUserId:0,currentUserAvatar:'',partnerAvatar:''},
+ onLoad(){const session=sessionStore.snapshot();this.setData({currentUserId:Number(session.userId)||0,currentUserAvatar:(session.user&&session.user.avatarUrl)||''})},
+ async onShow(){const session=sessionStore.snapshot();if(!session.accessToken)return wx.reLaunch({url:'/pages/welcome/index'});this.setData({currentUserAvatar:(session.user&&session.user.avatarUrl)||''});try{const relationship=await relationshipService.getCurrent();this.setData({partnerAvatar:(relationship.partner&&relationship.partner.avatarUrl)||''})}catch(error){timelineStore.reset();this.sync();if(error.code==='NO_ACTIVE_COUPLE')return wx.reLaunch({url:'/pages/bind/index'});return}await this.refresh()},
  onPullDownRefresh(){this.refresh().finally(()=>wx.stopPullDownRefresh())},
  onReachBottom(){if(!this.data.loading&&!this.data.loadingMore&&this.data.hasMore)this.more()},
  sync(){this.setData(timelineStore.snapshot())},

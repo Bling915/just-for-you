@@ -1,7 +1,8 @@
 <view class="page safe-page animate-in">
   <view class="headline">先认识一下你</view><view class="hint">以后，每一件小事都会带着你的名字。</view>
-  <view class="avatar" aria-label="头像将由昵称首字生成"><text>{{initial}}</text></view>
-  <view class="avatar-tip">头像会用昵称的第一个字生成</view>
+  <avatar-picker wx:if="{{editing}}" user="{{user}}" bind:change="avatarChanged"/>
+  <view wx:else class="avatar" aria-label="头像将由昵称首字生成"><text>{{initial}}</text></view>
+  <view class="avatar-tip">{{editing ? '点头像或按钮，换一张属于你的照片' : '头像稍后可以在「我的」里随时更换'}}</view>
   <input class="name-input" type="nickname" maxlength="30" placeholder="你的昵称" value="{{displayName}}" bindinput="inputName" />
   <view wx:if="{{error}}" class="error">{{error}}</view>
   <button class="primary" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submit">保存并继续</button>

@@ -1,1 +1,1 @@
-{ "navigationBarTitleText": "设置资料", "navigationStyle": "default" }
+{ "navigationBarTitleText": "设置资料", "navigationStyle": "default", "usingComponents": { "avatar-picker": "/components/avatar-picker/index" } }

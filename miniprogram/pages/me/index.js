@@ -3,6 +3,7 @@ Page({
  data:{user:{},initial:'♡',relationship:null,boundDate:'',loading:true},
  async onShow(){const session=sessionStore.snapshot();if(!session.accessToken)return wx.reLaunch({url:'/pages/welcome/index'});const user=session.user||{};this.setData({user,initial:(user.displayName||'♡').slice(0,1),loading:true});try{const relationship=await relationshipService.getCurrent();this.setData({relationship,boundDate:(relationship.boundAt||'').slice(0,10),loading:false})}catch(error){this.setData({relationship:null,boundDate:'',loading:false});if(error.code==='NO_ACTIVE_COUPLE')wx.reLaunch({url:'/pages/bind/index'})}},
  edit(){wx.navigateTo({url:'/pages/profile-setup/index?edit=1'})},
+ avatarChanged(event){const user=event.detail.user;this.setData({user,initial:(user.displayName||'♡').slice(0,1)})},
  openTogether(event){wx.navigateTo({url:event.currentTarget.dataset.url})},
  openNotifications(){wx.navigateTo({url:'/pages/notification-settings/index'})},
  endRelationship(){wx.showModal({title:'解除情侣关系？',content:'解除后，共同时间线和照片会立即不可见，且无法从小程序恢复。',confirmText:'确认解除',confirmColor:'#C87580',success:async result=>{if(!result.confirm)return;try{await relationshipService.end();appState.clearRelationshipData();wx.reLaunch({url:'/pages/bind/index'})}catch(_){wx.showToast({title:'解除失败，请稍后再试',icon:'none'})}}})},
