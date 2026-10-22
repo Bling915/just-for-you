@@ -14,12 +14,14 @@ type GetHomeQuery struct{ UserID int64 }
 const pinnedDisplayLimit = 3
 
 type HomeResult struct {
-	PartnerLatestStatus *domain.Moment
-	Recent              []domain.Moment
-	PhotoURLs           map[string]string
-	Reactions           map[int64][]domain.Reaction
-	PinnedAnniversaries []AnniversaryHighlight
-	HasMorePinned       bool
+	PartnerLatestStatus  *domain.Moment
+	Recent               []domain.Moment
+	PhotoURLs            map[string]string
+	Reactions            map[int64][]domain.Reaction
+	Perspectives         map[int64]domain.Perspective
+	PerspectivePhotoURLs map[string]string
+	PinnedAnniversaries  []AnniversaryHighlight
+	HasMorePinned        bool
 }
 type GetHomeUseCase struct {
 	relationships ActiveRelationshipReader
@@ -65,6 +67,14 @@ func (u *GetHomeUseCase) Execute(ctx context.Context, q GetHomeQuery) (HomeResul
 	if err != nil {
 		return HomeResult{}, err
 	}
+	perspectives, err := u.moments.ListPerspectives(ctx, ids)
+	if err != nil {
+		return HomeResult{}, err
+	}
+	perspectiveURLs, err := signPerspectiveURLs(ctx, perspectives, u.photos, u.clock)
+	if err != nil {
+		return HomeResult{}, err
+	}
 	highlights := []AnniversaryHighlight{}
 	hasMore := false
 	if u.highlights != nil {
@@ -84,5 +94,5 @@ func (u *GetHomeUseCase) Execute(ctx context.Context, q GetHomeQuery) (HomeResul
 			}
 		}
 	}
-	return HomeResult{PartnerLatestStatus: latest, Recent: recent, PhotoURLs: urls, Reactions: reactions, PinnedAnniversaries: highlights, HasMorePinned: hasMore}, nil
+	return HomeResult{PartnerLatestStatus: latest, Recent: recent, PhotoURLs: urls, Reactions: reactions, Perspectives: perspectives, PerspectivePhotoURLs: perspectiveURLs, PinnedAnniversaries: highlights, HasMorePinned: hasMore}, nil
 }

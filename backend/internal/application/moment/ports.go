@@ -34,10 +34,12 @@ type PhotoStorage interface {
 	VerifyUploaded(context.Context, string, string, int64) error
 }
 type TimelinePage struct {
-	Moments    []domain.Moment             `json:"moments"`
-	NextCursor string                      `json:"nextCursor,omitempty"`
-	PhotoURLs  map[string]string           `json:"-"`
-	Reactions  map[int64][]domain.Reaction `json:"-"`
+	Moments              []domain.Moment              `json:"moments"`
+	NextCursor           string                       `json:"nextCursor,omitempty"`
+	PhotoURLs            map[string]string            `json:"-"`
+	Reactions            map[int64][]domain.Reaction  `json:"-"`
+	Perspectives         map[int64]domain.Perspective `json:"-"`
+	PerspectivePhotoURLs map[string]string            `json:"-"`
 }
 type CalendarDay struct {
 	Date  string `json:"date"`
@@ -104,6 +106,9 @@ type MomentRepository interface {
 	UpsertReaction(context.Context, domain.Reaction) (domain.Reaction, error)
 	DeleteReaction(context.Context, int64, int64) error
 	ListReactions(context.Context, []int64) (map[int64][]domain.Reaction, error)
+	SavePerspectiveWithGrants(context.Context, domain.Perspective, []UploadGrant, int64) (domain.Perspective, error)
+	DeletePerspective(context.Context, int64, int64) error
+	ListPerspectives(context.Context, []int64) (map[int64]domain.Perspective, error)
 }
 type ReadRepository interface {
 	Calendar(context.Context, int64, time.Time, time.Time) ([]CalendarDay, error)

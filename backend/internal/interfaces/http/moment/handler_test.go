@@ -64,6 +64,21 @@ type fakeReact struct {
 	result        domain.Reaction
 	err           error
 }
+type fakePerspective struct {
+	command       application.SavePerspectiveCommand
+	deleteCommand application.DeletePerspectiveCommand
+	result        domain.Perspective
+	err           error
+}
+
+func (f *fakePerspective) Execute(_ context.Context, command application.SavePerspectiveCommand) (domain.Perspective, error) {
+	f.command = command
+	return f.result, f.err
+}
+func (f *fakePerspective) Delete(_ context.Context, command application.DeletePerspectiveCommand) error {
+	f.deleteCommand = command
+	return f.err
+}
 
 func (f *fakeReact) Execute(_ context.Context, command application.ReactToMomentCommand) (domain.Reaction, error) {
 	f.command = command
@@ -86,7 +101,24 @@ func (f *fakeUpdate) Execute(_ context.Context, command application.UpdateMoment
 	return f.result, f.err
 }
 func fakeUseCases(publishErr, deleteErr error) UseCases {
-	return UseCases{RequestPhotoUpload: fakeUpload{}, PublishMoment: &fakePublish{err: publishErr}, UpdateMoment: &fakeUpdate{}, GetTimeline: &fakeTimeline{}, GetHome: fakeHome{}, DeleteMoment: fakeDelete{deleteErr}, ShareToCouple: &fakeShare{}, ReactToMoment: &fakeReact{}}
+	return UseCases{RequestPhotoUpload: fakeUpload{}, PublishMoment: &fakePublish{err: publishErr}, UpdateMoment: &fakeUpdate{}, GetTimeline: &fakeTimeline{}, GetHome: fakeHome{}, DeleteMoment: fakeDelete{deleteErr}, ShareToCouple: &fakeShare{}, ReactToMoment: &fakeReact{}, SavePerspective: &fakePerspective{}}
+}
+
+func TestPerspectiveRoutesParseCommands(t *testing.T) {
+	useCases := fakeUseCases(nil, nil)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPut, "/v1/moments/7/perspective", strings.NewReader(`{"text":"我的视角","photoKeys":["p"]}`))
+	request.Header.Set("Content-Type", "application/json")
+	routerFor(useCases).ServeHTTP(response, request)
+	command := useCases.SavePerspective.(*fakePerspective).command
+	if response.Code != http.StatusOK || command.UserID != 1 || command.MomentID != 7 || command.Text != "我的视角" || len(command.PhotoKeys) != 1 {
+		t.Fatalf("status=%d command=%+v body=%s", response.Code, command, response.Body.String())
+	}
+	response = httptest.NewRecorder()
+	routerFor(useCases).ServeHTTP(response, httptest.NewRequest(http.MethodDelete, "/v1/moments/7/perspective", nil))
+	if response.Code != http.StatusNoContent || useCases.SavePerspective.(*fakePerspective).deleteCommand.MomentID != 7 {
+		t.Fatalf("status=%d command=%+v", response.Code, useCases.SavePerspective.(*fakePerspective).deleteCommand)
+	}
 }
 
 func TestShareAndReactionRoutesParseCommands(t *testing.T) {

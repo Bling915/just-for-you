@@ -39,6 +39,10 @@ type ReactToMomentExecutor interface {
 	Execute(context.Context, application.ReactToMomentCommand) (domain.Reaction, error)
 	Delete(context.Context, application.DeleteReactionCommand) error
 }
+type SavePerspectiveExecutor interface {
+	Execute(context.Context, application.SavePerspectiveCommand) (domain.Perspective, error)
+	Delete(context.Context, application.DeletePerspectiveCommand) error
+}
 type UseCases struct {
 	RequestPhotoUpload RequestPhotoUploadExecutor
 	PublishMoment      PublishMomentExecutor
@@ -48,6 +52,7 @@ type UseCases struct {
 	DeleteMoment       DeleteMomentExecutor
 	ShareToCouple      ShareToCoupleExecutor
 	ReactToMoment      ReactToMomentExecutor
+	SavePerspective    SavePerspectiveExecutor
 	ReadModels         *application.ReadModels
 }
 
@@ -74,6 +79,8 @@ func (h *Handler) RegisterProtected(group *gin.RouterGroup) {
 	group.POST("/moments/:id/share-to-couple", h.shareToCouple)
 	group.POST("/moments/:id/reactions", h.react)
 	group.DELETE("/moments/:id/reactions/:reactionId", h.deleteReaction)
+	group.PUT("/moments/:id/perspective", h.savePerspective)
+	group.DELETE("/moments/:id/perspective", h.deletePerspective)
 }
 
 func (h *Handler) calendar(c *gin.Context) {
@@ -207,7 +214,7 @@ func (h *Handler) timeline(c *gin.Context) {
 		writeError(c, err)
 		return
 	}
-	httpserver.WriteData(c, http.StatusOK, gin.H{"moments": momentsDTO(page.Moments, page.PhotoURLs, page.Reactions, httpserver.UserID(c)), "nextCursor": page.NextCursor})
+	httpserver.WriteData(c, http.StatusOK, gin.H{"moments": momentsDTO(page.Moments, page.PhotoURLs, page.Reactions, page.Perspectives, page.PerspectivePhotoURLs, httpserver.UserID(c)), "nextCursor": page.NextCursor})
 }
 
 func parseTimelineScope(rawSpace, rawOwner string) (domain.SpaceType, application.TimelineOwner, error) {
@@ -242,9 +249,9 @@ func (h *Handler) home(c *gin.Context) {
 	}
 	var latest any
 	if home.PartnerLatestStatus != nil {
-		latest = momentDTO(*home.PartnerLatestStatus, home.PhotoURLs, home.Reactions[home.PartnerLatestStatus.ID()], httpserver.UserID(c))
+		latest = momentDTO(*home.PartnerLatestStatus, home.PhotoURLs, home.Reactions[home.PartnerLatestStatus.ID()], httpserver.UserID(c), home.Perspectives[home.PartnerLatestStatus.ID()], home.PerspectivePhotoURLs)
 	}
-	httpserver.WriteData(c, http.StatusOK, gin.H{"partnerLatestStatus": latest, "recent": momentsDTO(home.Recent, home.PhotoURLs, home.Reactions, httpserver.UserID(c)), "pinnedAnniversaries": home.PinnedAnniversaries, "hasMorePinned": home.HasMorePinned})
+	httpserver.WriteData(c, http.StatusOK, gin.H{"partnerLatestStatus": latest, "recent": momentsDTO(home.Recent, home.PhotoURLs, home.Reactions, home.Perspectives, home.PerspectivePhotoURLs, httpserver.UserID(c)), "pinnedAnniversaries": home.PinnedAnniversaries, "hasMorePinned": home.HasMorePinned})
 }
 
 func parseID(c *gin.Context, name string) (int64, bool) {
@@ -313,6 +320,38 @@ func (h *Handler) deleteReaction(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func (h *Handler) savePerspective(c *gin.Context) {
+	id, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
+	var input struct {
+		Text      string   `json:"text"`
+		PhotoKeys []string `json:"photoKeys"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		httpserver.WriteError(c, 400, "INVALID_ARGUMENT", "视角内容格式无效")
+		return
+	}
+	value, err := h.useCases.SavePerspective.Execute(c, application.SavePerspectiveCommand{UserID: httpserver.UserID(c), MomentID: id, Text: input.Text, PhotoKeys: input.PhotoKeys})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	httpserver.WriteData(c, http.StatusOK, perspectiveDTO(value, map[string]string{}, httpserver.UserID(c)))
+}
+func (h *Handler) deletePerspective(c *gin.Context) {
+	id, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
+	if err := h.useCases.SavePerspective.Delete(c, application.DeletePerspectiveCommand{UserID: httpserver.UserID(c), MomentID: id}); err != nil {
+		writeError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func (h *Handler) delete(c *gin.Context) {
 	momentID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil || momentID <= 0 {
@@ -368,6 +407,14 @@ func writeError(c *gin.Context, err error) {
 		status, code, message = http.StatusNotFound, "REACTION_NOT_FOUND", "回应不存在"
 	case errors.Is(err, application.ErrCannotShareMoment):
 		status, code, message = http.StatusConflict, "CANNOT_SHARE_MOMENT", "这条小事不能分享"
+	case errors.Is(err, domain.ErrTooManyPerspectivePhotos):
+		status, code, message = http.StatusBadRequest, "TOO_MANY_PERSPECTIVE_PHOTOS", "另一个视角最多上传三张照片"
+	case errors.Is(err, domain.ErrEmptyPerspective), errors.Is(err, domain.ErrPerspectiveTextTooLong):
+		status, code, message = http.StatusBadRequest, "INVALID_PERSPECTIVE", "另一个视角内容无效"
+	case errors.Is(err, domain.ErrNotPerspectiveAuthor):
+		status, code, message = http.StatusForbidden, "NOT_PERSPECTIVE_AUTHOR", "只能修改自己的视角"
+	case errors.Is(err, application.ErrPerspectiveOnlyForShared), errors.Is(err, application.ErrPerspectiveRequiresPartner):
+		status, code, message = http.StatusConflict, "PERSPECTIVE_NOT_ALLOWED", "只有共同小事的另一方可以添加视角"
 	case errors.Is(err, domain.ErrMomentConflict):
 		status, code, message = http.StatusConflict, "MOMENT_CONFLICT", "这条记录已在别处更新，请重新加载"
 	case errors.Is(err, domain.ErrNotAuthor):
@@ -393,6 +440,8 @@ func momentDTO(moment domain.Moment, options ...any) gin.H {
 	urls := map[string]string{}
 	var reactions []domain.Reaction
 	var viewerID int64
+	var perspective domain.Perspective
+	var perspectiveURLs map[string]string
 	if len(options) > 0 {
 		if value, ok := options[0].(map[string]string); ok {
 			urls = value
@@ -404,6 +453,12 @@ func momentDTO(moment domain.Moment, options ...any) gin.H {
 	if len(options) > 2 {
 		viewerID, _ = options[2].(int64)
 	}
+	if len(options) > 3 {
+		perspective, _ = options[3].(domain.Perspective)
+	}
+	if len(options) > 4 {
+		perspectiveURLs, _ = options[4].(map[string]string)
+	}
 	photos := make([]gin.H, 0, len(moment.Photos()))
 	for _, photo := range moment.Photos() {
 		photos = append(photos, gin.H{"objectKey": photo.ObjectKey(), "url": urls[photo.ObjectKey()], "order": photo.Order()})
@@ -413,7 +468,8 @@ func momentDTO(moment domain.Moment, options ...any) gin.H {
 		"status": moment.Status(), "placeName": moment.Place(), "latitude": moment.Latitude(), "longitude": moment.Longitude(), "photos": photos,
 		"spaceType": moment.SpaceType(), "visibility": moment.Visibility(), "kind": moment.Kind(), "sourceMomentId": moment.SourceMomentID(), "dailyQuestionId": moment.DailyQuestionID(),
 		"occurredAt": moment.OccurredAt(), "createdAt": moment.CreatedAt(), "updatedAt": moment.UpdatedAt(),
-		"reactions": reactionsDTO(reactions, viewerID),
+		"reactions":   reactionsDTO(reactions, viewerID),
+		"perspective": perspectiveDTOOrNil(perspective, perspectiveURLs, viewerID),
 	}
 }
 
@@ -427,10 +483,23 @@ func reactionsDTO(values []domain.Reaction, viewerID int64) []gin.H {
 	}
 	return result
 }
-func momentsDTO(moments []domain.Moment, photoURLs map[string]string, reactions map[int64][]domain.Reaction, viewerID int64) []gin.H {
+func perspectiveDTO(value domain.Perspective, urls map[string]string, viewerID int64) gin.H {
+	photos := make([]gin.H, 0, len(value.Photos()))
+	for _, photo := range value.Photos() {
+		photos = append(photos, gin.H{"objectKey": photo.ObjectKey(), "url": urls[photo.ObjectKey()], "order": photo.Order()})
+	}
+	return gin.H{"id": value.ID(), "authorId": value.AuthorID(), "text": value.Text(), "photos": photos, "createdAt": value.CreatedAt(), "updatedAt": value.UpdatedAt(), "editable": value.AuthorID() == viewerID}
+}
+func perspectiveDTOOrNil(value domain.Perspective, urls map[string]string, viewerID int64) any {
+	if value.ID() == 0 {
+		return nil
+	}
+	return perspectiveDTO(value, urls, viewerID)
+}
+func momentsDTO(moments []domain.Moment, photoURLs map[string]string, reactions map[int64][]domain.Reaction, perspectives map[int64]domain.Perspective, perspectiveURLs map[string]string, viewerID int64) []gin.H {
 	result := make([]gin.H, 0, len(moments))
 	for _, moment := range moments {
-		result = append(result, momentDTO(moment, photoURLs, reactions[moment.ID()], viewerID))
+		result = append(result, momentDTO(moment, photoURLs, reactions[moment.ID()], viewerID, perspectives[moment.ID()], perspectiveURLs))
 	}
 	return result
 }

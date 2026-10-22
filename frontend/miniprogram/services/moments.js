@@ -14,6 +14,8 @@ const momentService = {
   shareToCouple: (id, input = {}) => http.post(`/v1/moments/${encodeURIComponent(id)}/share-to-couple`, input),
   react: (id, input) => http.post(`/v1/moments/${encodeURIComponent(id)}/reactions`, input),
   deleteReaction: (momentId, reactionId) => http.delete(`/v1/moments/${encodeURIComponent(momentId)}/reactions/${encodeURIComponent(reactionId)}`),
+  savePerspective: (momentId, input) => http.put(`/v1/moments/${encodeURIComponent(momentId)}/perspective`, input),
+  deletePerspective: (momentId) => http.delete(`/v1/moments/${encodeURIComponent(momentId)}/perspective`),
   getCalendar: month => http.get(`/v1/moments/calendar?month=${encodeURIComponent(month)}`),
   getMap: ({from,to}) => http.get(`/v1/moments/map?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
   getMonthlyReport: month => http.get(`/v1/reports/monthly?month=${encodeURIComponent(month)}`),

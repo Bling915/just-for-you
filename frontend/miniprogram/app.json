@@ -9,6 +9,7 @@
     "pages/compose/index",
     "pages/personal-moments/index",
     "pages/moment-edit/index",
+    "pages/perspective-edit/index",
     "pages/anniversaries/index",
     "pages/anniversary-edit/index",
     "pages/anniversary-detail/index",

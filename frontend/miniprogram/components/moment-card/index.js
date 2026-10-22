@@ -16,5 +16,7 @@ Component({
     share(){ this.triggerEvent('share',{moment:this.data.moment}) },
     react(event){ this.triggerEvent('react',{moment:this.data.moment,...event.detail}) },
     textReaction(){ this.triggerEvent('textreaction',{moment:this.data.moment}) },
+    editPerspective(){ this.triggerEvent('editperspective',{moment:this.data.moment}) },
+    deletePerspective(){ this.triggerEvent('deleteperspective',{moment:this.data.moment}) },
   },
 })

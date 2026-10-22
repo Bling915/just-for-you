@@ -249,3 +249,30 @@ func TestReactionUpsertIsIdempotentAndDeleteIsOwnerScoped(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSavePerspectiveUpsertsAndConsumesPhotoGrantAtomically(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	value, _ := domain.NewPerspective(7, 2, "我的视角", []string{"p"}, now)
+	grants := []application.UploadGrant{{ObjectKey: "p", OwnerID: 2, ExpiresAt: now.Add(time.Minute)}}
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT author_user_id,space_type FROM moments").WithArgs(int64(7), int64(9)).WillReturnRows(sqlmock.NewRows([]string{"author_user_id", "space_type"}).AddRow(1, "shared"))
+	mock.ExpectQuery("SELECT id FROM couples").WithArgs(int64(9), int64(2), int64(2)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(9))
+	mock.ExpectQuery("SELECT user_id,expires_at,consumed_at FROM upload_grants").WithArgs("p").WillReturnRows(sqlmock.NewRows([]string{"user_id", "expires_at", "consumed_at"}).AddRow(2, now.Add(time.Minute), nil))
+	mock.ExpectExec("INSERT INTO moment_perspectives.*ON DUPLICATE KEY UPDATE").WithArgs(int64(7), int64(2), "我的视角", now, now).WillReturnResult(sqlmock.NewResult(4, 1))
+	mock.ExpectExec("DELETE FROM moment_perspective_photos").WithArgs(int64(4)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("INSERT INTO moment_perspective_photos").WithArgs(int64(4), "p", 1).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec("UPDATE upload_grants SET consumed_at").WithArgs(now, "p").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	saved, err := NewMySQLRepository(db).SavePerspectiveWithGrants(context.Background(), value, grants, 9)
+	if err != nil || saved.ID() != 4 {
+		t.Fatalf("saved=%+v err=%v", saved, err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}

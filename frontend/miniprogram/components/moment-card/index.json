@@ -1,1 +1,1 @@
-{"component":true,"usingComponents":{"photo-grid":"/components/photo-grid/index","privacy-badge":"/components/privacy-badge/index","reaction-bar":"/components/reaction-bar/index"}}
+{"component":true,"usingComponents":{"photo-grid":"/components/photo-grid/index","privacy-badge":"/components/privacy-badge/index","reaction-bar":"/components/reaction-bar/index","perspective-panel":"/components/perspective-panel/index"}}

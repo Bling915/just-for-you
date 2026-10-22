@@ -69,6 +69,7 @@ type memoryMoments struct {
 	sharedCopy        momentdomain.Moment
 	reaction          momentdomain.Reaction
 	deletedReactionID int64
+	perspective       momentdomain.Perspective
 }
 type PublishInput struct {
 	Text      string
@@ -129,6 +130,44 @@ func (r *memoryMoments) DeleteReaction(_ context.Context, reactionID, userID int
 }
 func (r *memoryMoments) ListReactions(context.Context, []int64) (map[int64][]momentdomain.Reaction, error) {
 	return map[int64][]momentdomain.Reaction{}, nil
+}
+func (r *memoryMoments) SavePerspectiveWithGrants(_ context.Context, value momentdomain.Perspective, _ []UploadGrant, _ int64) (momentdomain.Perspective, error) {
+	r.perspective = value
+	return value, nil
+}
+func (r *memoryMoments) DeletePerspective(_ context.Context, momentID, userID int64) error {
+	if r.perspective.AuthorID() != 0 && r.perspective.AuthorID() != userID {
+		return momentdomain.ErrNotPerspectiveAuthor
+	}
+	r.perspective = momentdomain.Perspective{}
+	return nil
+}
+func (r *memoryMoments) ListPerspectives(context.Context, []int64) (map[int64]momentdomain.Perspective, error) {
+	result := map[int64]momentdomain.Perspective{}
+	if r.perspective.MomentID() > 0 {
+		result[r.perspective.MomentID()] = r.perspective
+	}
+	return result, nil
+}
+
+func TestSavePerspectiveRequiresSharedMomentOtherPartnerAndValidUploads(t *testing.T) {
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	shared := momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 7, AuthorID: 1, RelationshipID: 9, Text: "那天", SpaceType: momentdomain.SpaceShared, Visibility: momentdomain.VisibilityCouple, Kind: momentdomain.KindStandard, OccurredAt: now, CreatedAt: now, UpdatedAt: now})
+	uploads := &fakeUploads{grants: map[string]UploadGrant{"p": {ObjectKey: "p", OwnerID: 2, ContentType: "image/jpeg", ExpiresAt: now.Add(time.Hour)}}}
+	repo := &memoryMoments{existing: shared}
+	useCase := NewSavePerspectiveUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 1}}, uploads, repo, fakeStorage{}, fixedClock{now})
+	value, err := useCase.Execute(context.Background(), SavePerspectiveCommand{UserID: 2, MomentID: 7, Text: "我的视角", PhotoKeys: []string{"p"}})
+	if err != nil || value.AuthorID() != 2 || len(value.Photos()) != 1 {
+		t.Fatalf("value=%+v err=%v", value, err)
+	}
+	ownerUseCase := NewSavePerspectiveUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, uploads, repo, fakeStorage{}, fixedClock{now})
+	if _, err = ownerUseCase.Execute(context.Background(), SavePerspectiveCommand{UserID: 1, MomentID: 7, Text: "自己补充"}); !errors.Is(err, ErrPerspectiveRequiresPartner) {
+		t.Fatalf("err=%v", err)
+	}
+	repo.existing = momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 8, AuthorID: 1, Text: "个人", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPartner, Kind: momentdomain.KindStandard, OccurredAt: now, CreatedAt: now, UpdatedAt: now})
+	if _, err = useCase.Execute(context.Background(), SavePerspectiveCommand{UserID: 2, MomentID: 8, Text: "越界"}); !errors.Is(err, ErrPerspectiveOnlyForShared) {
+		t.Fatalf("err=%v", err)
+	}
 }
 
 func photoKeys(photos []momentdomain.Photo) []string {

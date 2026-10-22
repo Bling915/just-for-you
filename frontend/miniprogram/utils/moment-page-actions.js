@@ -1,5 +1,6 @@
 const { momentService } = require('../services/moments')
 const { toggleReaction, normalizeReactionText } = require('./moment-actions')
+const { storage } = require('./storage')
 
 async function reactOptimistically(event, currentUserId, update) {
   const { moment, type } = event.detail
@@ -38,4 +39,6 @@ function shareToCouple(event, onSuccess) {
   } })
 }
 
-module.exports = { reactOptimistically, promptTextReaction, shareToCouple }
+function editPerspective(event){storage.set('perspectiveMoment',event.detail.moment);wx.navigateTo({url:'/pages/perspective-edit/index'})}
+function deletePerspective(event,update){const moment=event.detail.moment;wx.showModal({title:'删除我的视角？',content:'文字和照片都会移除。',confirmText:'删除',confirmColor:'#c87580',success:async result=>{if(!result.confirm)return;try{await momentService.deletePerspective(moment.id);update({...moment,perspective:null});wx.showToast({title:'已删除',icon:'none'})}catch(_){wx.showToast({title:'删除失败，请稍后再试',icon:'none'})}}})}
+module.exports = { reactOptimistically, promptTextReaction, shareToCouple, editPerspective, deletePerspective }

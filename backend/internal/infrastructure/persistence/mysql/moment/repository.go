@@ -451,6 +451,128 @@ func (r MySQLRepository) ListReactions(ctx context.Context, momentIDs []int64) (
 	return result, rows.Err()
 }
 
+func (r MySQLRepository) SavePerspectiveWithGrants(ctx context.Context, value domain.Perspective, grants []application.UploadGrant, relationshipID int64) (domain.Perspective, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return domain.Perspective{}, err
+	}
+	defer tx.Rollback()
+	var sourceAuthor, activeID int64
+	var space string
+	err = tx.QueryRowContext(ctx, "SELECT author_user_id,space_type FROM moments WHERE id=? AND couple_id=? AND deleted_at IS NULL FOR UPDATE", value.MomentID(), relationshipID).Scan(&sourceAuthor, &space)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Perspective{}, domain.ErrMomentNotFound
+	}
+	if err != nil {
+		return domain.Perspective{}, err
+	}
+	if space != "shared" {
+		return domain.Perspective{}, application.ErrPerspectiveOnlyForShared
+	}
+	if sourceAuthor == value.AuthorID() {
+		return domain.Perspective{}, application.ErrPerspectiveRequiresPartner
+	}
+	err = tx.QueryRowContext(ctx, "SELECT id FROM couples WHERE id=? AND status='active' AND (user_a_id=? OR user_b_id=?) FOR UPDATE", relationshipID, value.AuthorID(), value.AuthorID()).Scan(&activeID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return domain.Perspective{}, relationshipdomain.ErrNoActiveRelationship
+	}
+	if err != nil {
+		return domain.Perspective{}, err
+	}
+	for _, grant := range grants {
+		var owner int64
+		var expires time.Time
+		var consumed sql.NullTime
+		if err = tx.QueryRowContext(ctx, "SELECT user_id,expires_at,consumed_at FROM upload_grants WHERE object_key=? FOR UPDATE", grant.ObjectKey).Scan(&owner, &expires, &consumed); err != nil || owner != value.AuthorID() || consumed.Valid || !expires.After(value.UpdatedAt()) {
+			return domain.Perspective{}, domain.ErrInvalidUpload
+		}
+	}
+	result, err := tx.ExecContext(ctx, "INSERT INTO moment_perspectives(moment_id,author_user_id,body,created_at,updated_at) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE body=VALUES(body),updated_at=VALUES(updated_at),id=LAST_INSERT_ID(id)", value.MomentID(), value.AuthorID(), value.Text(), value.CreatedAt(), value.UpdatedAt())
+	if err != nil {
+		return domain.Perspective{}, err
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return domain.Perspective{}, err
+	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM moment_perspective_photos WHERE perspective_id=?", id); err != nil {
+		return domain.Perspective{}, err
+	}
+	for _, photo := range value.Photos() {
+		if _, err = tx.ExecContext(ctx, "INSERT INTO moment_perspective_photos(perspective_id,object_key,sort_order) VALUES(?,?,?)", id, photo.ObjectKey(), photo.Order()); err != nil {
+			return domain.Perspective{}, err
+		}
+	}
+	for _, grant := range grants {
+		if _, err = tx.ExecContext(ctx, "UPDATE upload_grants SET consumed_at=? WHERE object_key=?", value.UpdatedAt(), grant.ObjectKey); err != nil {
+			return domain.Perspective{}, err
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		return domain.Perspective{}, err
+	}
+	return domain.RestorePerspective(id, value.MomentID(), value.AuthorID(), value.Text(), value.Photos(), value.CreatedAt(), value.UpdatedAt()), nil
+}
+
+func (r MySQLRepository) DeletePerspective(ctx context.Context, momentID, userID int64) error {
+	result, err := r.db.ExecContext(ctx, "DELETE FROM moment_perspectives WHERE moment_id=? AND author_user_id=?", momentID, userID)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return domain.ErrNotPerspectiveAuthor
+	}
+	return nil
+}
+
+func (r MySQLRepository) ListPerspectives(ctx context.Context, momentIDs []int64) (map[int64]domain.Perspective, error) {
+	result := map[int64]domain.Perspective{}
+	if len(momentIDs) == 0 {
+		return result, nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(momentIDs)), ",")
+	args := make([]any, len(momentIDs))
+	for i, id := range momentIDs {
+		args[i] = id
+	}
+	rows, err := r.db.QueryContext(ctx, "SELECT id,moment_id,author_user_id,body,created_at,updated_at FROM moment_perspectives WHERE moment_id IN ("+placeholders+")", args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, momentID, authorID int64
+		var body string
+		var created, updated time.Time
+		if err = rows.Scan(&id, &momentID, &authorID, &body, &created, &updated); err != nil {
+			return nil, err
+		}
+		photoRows, queryErr := r.db.QueryContext(ctx, "SELECT object_key,sort_order FROM moment_perspective_photos WHERE perspective_id=? ORDER BY sort_order", id)
+		if queryErr != nil {
+			return nil, queryErr
+		}
+		photos := []domain.Photo{}
+		for photoRows.Next() {
+			var key string
+			var order int
+			if queryErr = photoRows.Scan(&key, &order); queryErr != nil {
+				photoRows.Close()
+				return nil, queryErr
+			}
+			photos = append(photos, domain.NewPhoto(key, order))
+		}
+		if queryErr = photoRows.Close(); queryErr != nil {
+			return nil, queryErr
+		}
+		result[momentID] = domain.RestorePerspective(id, momentID, authorID, body, photos, created, updated)
+	}
+	return result, rows.Err()
+}
+
 func nullFloatPointer(value sql.NullFloat64) *float64 {
 	if !value.Valid {
 		return nil

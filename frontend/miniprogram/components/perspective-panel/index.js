@@ -1,0 +1,2 @@
+const {canAddPerspective}=require('../../utils/perspective')
+Component({properties:{moment:{type:Object,value:{}},currentUserId:{type:Number,value:0}},methods:{add(){this.triggerEvent('edit',{moment:this.data.moment})},edit(){this.triggerEvent('edit',{moment:this.data.moment})},remove(){this.triggerEvent('delete',{moment:this.data.moment})}},observers:{'moment,currentUserId':function(moment,userID){this.setData({canAdd:canAddPerspective(moment,userID)})}}})

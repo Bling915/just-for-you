@@ -6,4 +6,5 @@
   <view wx:if="{{moment.placeName}}" class="place">⌖ {{moment.placeName}}</view>
   <button wx:if="{{canShare}}" class="share" bindtap="share">分享给我们 ✦</button>
   <reaction-bar reactions="{{moment.reactions || []}}" current-user-id="{{currentUserId}}" bind:toggle="react" bind:text="textReaction"/>
+  <perspective-panel wx:if="{{moment.spaceType === 'shared'}}" moment="{{moment}}" current-user-id="{{currentUserId}}" bind:edit="editPerspective" bind:delete="deletePerspective"/>
 </view>

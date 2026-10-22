@@ -6,6 +6,7 @@ import (
 	appshared "github.com/nanfang/just-for-you/server/internal/application/shared"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
 	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
+	"time"
 )
 
 var ErrInvalidSpaceQuery = errors.New("invalid space query")
@@ -51,7 +52,29 @@ func (u *GetTimelineUseCase) Execute(ctx context.Context, q GetTimelineQuery) (T
 		ids = append(ids, value.ID())
 	}
 	page.Reactions, err = u.moments.ListReactions(ctx, ids)
+	if err != nil {
+		return TimelinePage{}, err
+	}
+	page.Perspectives, err = u.moments.ListPerspectives(ctx, ids)
+	if err != nil {
+		return TimelinePage{}, err
+	}
+	page.PerspectivePhotoURLs, err = signPerspectiveURLs(ctx, page.Perspectives, u.photos, u.clock)
 	return page, err
+}
+
+func signPerspectiveURLs(ctx context.Context, values map[int64]domain.Perspective, photos PhotoStorage, clock appshared.Clock) (map[string]string, error) {
+	result := map[string]string{}
+	for _, value := range values {
+		for _, photo := range value.Photos() {
+			url, err := photos.SignRead(ctx, photo.ObjectKey(), clock.Now().Add(15*time.Minute))
+			if err != nil {
+				return nil, err
+			}
+			result[photo.ObjectKey()] = url
+		}
+	}
+	return result, nil
 }
 
 func (u *GetTimelineUseCase) timelineFilter(ctx context.Context, q GetTimelineQuery) (TimelineFilter, error) {
