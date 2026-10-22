@@ -36,7 +36,7 @@ func (r Repository) ListAnniversaries(ctx context.Context, coupleID int64) ([]do
 		if e = rows.Scan(&id, &cid, &uid, &title, &date, &repeats, &kind, &created, &updated); e != nil {
 			return nil, e
 		}
-		out = append(out, domain.RestoreAnniversary(id, cid, uid, title, date, repeats, kind, created, updated))
+		out = append(out, domain.RestoreAnniversary(id, cid, uid, title, date, repeats, domain.CountModeCountdown, false, "", "", kind, created, updated))
 	}
 	return out, rows.Err()
 }
@@ -46,7 +46,7 @@ func (r Repository) SaveAnniversary(ctx context.Context, v domain.Anniversary) (
 		return v, e
 	}
 	id, e := res.LastInsertId()
-	return domain.RestoreAnniversary(id, v.CoupleID(), v.CreatorID(), v.Title(), v.Date(), v.RepeatsYearly(), v.SystemKind(), v.CreatedAt(), v.UpdatedAt()), e
+	return domain.RestoreAnniversary(id, v.CoupleID(), v.CreatorID(), v.Title(), v.Date(), v.RepeatsYearly(), v.CountMode(), v.Pinned(), v.CoverRef(), v.Message(), v.SystemKind(), v.CreatedAt(), v.UpdatedAt()), e
 }
 func (r Repository) DeleteAnniversary(ctx context.Context, coupleID, id, userID int64) error {
 	return deleteOwned(ctx, r.db, "anniversaries", coupleID, id, userID, " AND system_kind='none'")

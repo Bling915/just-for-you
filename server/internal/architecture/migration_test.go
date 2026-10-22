@@ -5,11 +5,27 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 )
+
+func TestAvatarAnniversaryMigrationShape(t *testing.T) {
+	up := migrationSQL(t, "000003_avatar_anniversary_experience.up.sql")
+	down := migrationSQL(t, "000003_avatar_anniversary_experience.down.sql")
+	for _, fragment := range []string{"count_mode", "pinned", "cover_ref", "message", "purpose", "resource_id", "moment_photo"} {
+		if !strings.Contains(up, fragment) {
+			t.Fatalf("up migration missing %q", fragment)
+		}
+	}
+	for _, fragment := range []string{"DROP COLUMN count_mode", "DROP COLUMN pinned", "DROP COLUMN cover_ref", "DROP COLUMN message", "DROP COLUMN purpose", "DROP COLUMN resource_id"} {
+		if !strings.Contains(down, fragment) {
+			t.Fatalf("down migration missing %q", fragment)
+		}
+	}
+}
 
 func TestCoupleExperienceMigration(t *testing.T) {
 	up := migrationSQL(t, "000002_couple_experience.up.sql")

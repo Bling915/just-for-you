@@ -30,13 +30,13 @@ func (s *Service) ListAnniversaries(ctx context.Context, userID int64) ([]domain
 	}
 	hasBound := false
 	for _, item := range items {
-		if item.SystemKind() == "bound" {
+		if item.SystemKind() == "relationship" {
 			hasBound = true
 			break
 		}
 	}
 	if !hasBound && !r.BoundAt.IsZero() {
-		items = append(items, domain.RestoreAnniversary(0, r.ID, r.UserAID, "我们在一起", r.BoundAt, true, "bound", r.BoundAt, r.BoundAt))
+		items = append(items, domain.RestoreAnniversary(0, r.ID, r.UserAID, "我们在一起", r.BoundAt, true, domain.CountModeElapsed, true, "", "", "relationship", r.BoundAt, r.BoundAt))
 	}
 	return items, nil
 }
@@ -50,7 +50,7 @@ func (s *Service) CreateAnniversary(ctx context.Context, userID int64, title str
 		return a, e
 	}
 	if !repeats {
-		a = domain.RestoreAnniversary(a.ID(), a.CoupleID(), a.CreatorID(), a.Title(), a.Date(), false, a.SystemKind(), a.CreatedAt(), a.UpdatedAt())
+		a = domain.RestoreAnniversary(a.ID(), a.CoupleID(), a.CreatorID(), a.Title(), a.Date(), false, a.CountMode(), a.Pinned(), a.CoverRef(), a.Message(), a.SystemKind(), a.CreatedAt(), a.UpdatedAt())
 	}
 	return s.repo.SaveAnniversary(ctx, a)
 }
