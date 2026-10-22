@@ -9,6 +9,7 @@ import (
 	"fmt"
 	application "github.com/nanfang/just-for-you/server/internal/application/moment"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
+	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	"strconv"
 	"strings"
 	"time"
@@ -104,6 +105,16 @@ func (r MySQLRepository) SaveWithGrants(ctx context.Context, moment domain.Momen
 			return domain.Moment{}, domain.ErrInvalidUpload
 		}
 	}
+	if moment.RelationshipID() > 0 {
+		var relationshipID int64
+		err = tx.QueryRowContext(ctx, "SELECT id FROM couples WHERE id=? AND status='active' AND (user_a_id=? OR user_b_id=?) FOR UPDATE", moment.RelationshipID(), moment.AuthorID(), moment.AuthorID()).Scan(&relationshipID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return domain.Moment{}, relationshipdomain.ErrNoActiveRelationship
+		}
+		if err != nil {
+			return domain.Moment{}, err
+		}
+	}
 	result, err := tx.ExecContext(ctx, "INSERT INTO moments(couple_id,author_user_id,space_type,visibility,kind,source_moment_id,daily_question_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", nullablePositiveID(moment.RelationshipID()), moment.AuthorID(), string(moment.SpaceType()), string(moment.Visibility()), string(moment.Kind()), moment.SourceMomentID(), moment.DailyQuestionID(), moment.Text(), string(moment.Status()), moment.Place(), moment.Latitude(), moment.Longitude(), moment.OccurredAt(), moment.CreatedAt(), moment.UpdatedAt())
 	if err != nil {
 		return domain.Moment{}, err
@@ -148,7 +159,17 @@ func (r MySQLRepository) UpdateWithGrants(ctx context.Context, moment domain.Mom
 			return domain.Moment{}, domain.ErrInvalidUpload
 		}
 	}
-	result, err := tx.ExecContext(ctx, "UPDATE moments SET body=?,status_code=?,place_name=?,latitude=?,longitude=?,occurred_at=?,updated_at=? WHERE id=? AND couple_id=? AND updated_at=? AND deleted_at IS NULL", moment.Text(), string(moment.Status()), moment.Place(), moment.Latitude(), moment.Longitude(), moment.OccurredAt(), moment.UpdatedAt(), moment.ID(), moment.RelationshipID(), version)
+	if moment.RelationshipID() > 0 {
+		var relationshipID int64
+		err = tx.QueryRowContext(ctx, "SELECT id FROM couples WHERE id=? AND status='active' AND (user_a_id=? OR user_b_id=?) FOR UPDATE", moment.RelationshipID(), moment.AuthorID(), moment.AuthorID()).Scan(&relationshipID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return domain.Moment{}, relationshipdomain.ErrNoActiveRelationship
+		}
+		if err != nil {
+			return domain.Moment{}, err
+		}
+	}
+	result, err := tx.ExecContext(ctx, "UPDATE moments SET couple_id=?,visibility=?,body=?,status_code=?,place_name=?,latitude=?,longitude=?,occurred_at=?,updated_at=? WHERE id=? AND author_user_id=? AND space_type=? AND updated_at=? AND deleted_at IS NULL", nullablePositiveID(moment.RelationshipID()), string(moment.Visibility()), moment.Text(), string(moment.Status()), moment.Place(), moment.Latitude(), moment.Longitude(), moment.OccurredAt(), moment.UpdatedAt(), moment.ID(), moment.AuthorID(), string(moment.SpaceType()), version)
 	if err != nil {
 		return domain.Moment{}, err
 	}

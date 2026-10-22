@@ -1,4 +1,5 @@
 const { countRunes } = require('./runes')
+const { normalizeSpaceSelection } = require('./space-model')
 
 /**
  * 新增记录页的「离开时要不要留草稿」决策。
@@ -19,7 +20,7 @@ const { countRunes } = require('./runes')
  * 小程序退出后会被系统清理 —— 存进草稿，下次恢复就是一堆裂图。
  * 所以草稿只留文字 / 状态 / 地点 / 时间，照片交给用户重选。
  */
-const DRAFT_FIELDS = ['text', 'status', 'placeName', 'latitude', 'longitude', 'occurredAt']
+const DRAFT_FIELDS = ['text', 'status', 'placeName', 'latitude', 'longitude', 'occurredAt', 'spaceType', 'visibility']
 
 /** 页面当前是否算「有内容」，用于决定要不要打扰用户 */
 function hasContent(form = {}) {
@@ -69,6 +70,7 @@ function buildDraftPayload(form = {}) {
  * 照片一律不恢复（草稿里存的路径早已失效）。
  */
 function restoreDraft(draft = {}) {
+	const space = normalizeSpaceSelection(draft)
   return {
     text: String(draft.text || ''),
     status: String(draft.status || ''),
@@ -76,6 +78,8 @@ function restoreDraft(draft = {}) {
     latitude: draft.latitude === undefined ? null : draft.latitude,
     longitude: draft.longitude === undefined ? null : draft.longitude,
     occurredAt: String(draft.occurredAt || ''),
+		spaceType: space.spaceType,
+		visibility: space.visibility,
     files: [],
   }
 }

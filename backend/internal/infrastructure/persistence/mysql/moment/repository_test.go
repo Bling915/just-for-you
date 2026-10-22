@@ -25,6 +25,7 @@ func TestSaveWithGrantsPersistsPhotoOrderAndConsumesGrantAtomically(t *testing.T
 	for _, key := range []string{"a", "b"} {
 		mock.ExpectQuery("SELECT user_id,expires_at,consumed_at FROM upload_grants").WithArgs(key).WillReturnRows(sqlmock.NewRows([]string{"user_id", "expires_at", "consumed_at"}).AddRow(1, now.Add(time.Minute), nil))
 	}
+	mock.ExpectQuery("SELECT id FROM couples").WithArgs(int64(9), int64(1), int64(1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(9))
 	mock.ExpectExec("INSERT INTO moments").WithArgs(int64(9), int64(1), string(domain.SpaceShared), string(domain.VisibilityCouple), string(domain.KindStandard), nil, nil, "hello", string(domain.StatusNone), "", nil, nil, now, now, now).WillReturnResult(sqlmock.NewResult(20, 1))
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO moment_photos(moment_id,object_key,sort_order) VALUES(?,?,?)")).WithArgs(int64(20), "a", 1).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO moment_photos(moment_id,object_key,sort_order) VALUES(?,?,?)")).WithArgs(int64(20), "b", 2).WillReturnResult(sqlmock.NewResult(2, 1))
@@ -55,7 +56,8 @@ func TestUpdateWithGrantsUsesOptimisticLockAndUpdatesPhotosAtomically(t *testing
 	grants := []application.UploadGrant{{ObjectKey: "new", OwnerID: 1, ExpiresAt: now.Add(time.Minute)}}
 	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT user_id,expires_at,consumed_at FROM upload_grants").WithArgs("new").WillReturnRows(sqlmock.NewRows([]string{"user_id", "expires_at", "consumed_at"}).AddRow(1, now.Add(time.Minute), nil))
-	mock.ExpectExec("UPDATE moments SET").WithArgs("edited", string(domain.StatusMissYou), "外滩", nil, nil, moment.OccurredAt(), moment.UpdatedAt(), int64(20), int64(9), version).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT id FROM couples").WithArgs(int64(9), int64(1), int64(1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(9))
+	mock.ExpectExec("UPDATE moments SET").WithArgs(int64(9), string(domain.VisibilityCouple), "edited", string(domain.StatusMissYou), "外滩", nil, nil, moment.OccurredAt(), moment.UpdatedAt(), int64(20), int64(1), string(domain.SpaceShared), version).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("DELETE FROM moment_photos").WithArgs(int64(20)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("INSERT INTO moment_photos").WithArgs(int64(20), "new", 1).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec("UPDATE upload_grants SET consumed_at").WithArgs(moment.UpdatedAt(), "new").WillReturnResult(sqlmock.NewResult(0, 1))
@@ -78,6 +80,7 @@ func TestUpdateWithGrantsReturnsConflictWithoutReplacingPhotos(t *testing.T) {
 	now := time.Now()
 	moment, _ := domain.NewMoment(1, 9, "edited", domain.StatusNone, "", nil, now)
 	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT id FROM couples").WithArgs(int64(9), int64(1), int64(1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(9))
 	mock.ExpectExec("UPDATE moments SET").WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectRollback()
 	_, err = NewMySQLRepository(db).UpdateWithGrants(context.Background(), moment, now.Add(-time.Minute), nil)

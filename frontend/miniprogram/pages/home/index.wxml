@@ -1,5 +1,6 @@
 <view class="page safe-page {{motionClass}}">
-  <couple-header current-user="{{currentUser}}" partner="{{relationship.partner}}" days="{{relationshipDays}}" solo-test="{{relationship.soloTest}}"/>
+  <couple-header current-user="{{currentUser}}" partner="{{relationship.partner}}" days="{{relationshipDays}}" solo-test="{{relationship.soloTest}}" bind:openpartner="openPartnerMoments"/>
+  <view class="space-entries"><view class="space-entry shared pressable" bindtap="openSharedMoments"><text>♡</text><view><strong>我们的小事</strong><small>两个人共同珍藏</small></view></view><view class="space-entry personal pressable" bindtap="openMyMoments"><text>✦</text><view><strong>我的小事</strong><small>属于自己的角落</small></view></view></view>
   <block wx:if="{{state === 'loading'}}"><view class="orb-skeleton"></view><skeleton-card/><skeleton-card/></block>
   <block wx:else>
     <view wx:if="{{state === 'error-with-cache'}}" class="notice" bindtap="retry">网络打了个盹，正在展示上次内容 · 点此重试</view>

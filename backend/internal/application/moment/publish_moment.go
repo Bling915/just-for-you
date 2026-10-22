@@ -15,6 +15,8 @@ type PublishMomentCommand struct {
 	Latitude, Longitude *float64
 	PhotoKeys           []string
 	OccurredAt          time.Time
+	SpaceType           domain.SpaceType
+	Visibility          domain.Visibility
 }
 type PublishMomentUseCase struct {
 	relationships ActiveRelationshipReader
@@ -28,9 +30,14 @@ func NewPublishMomentUseCase(r ActiveRelationshipReader, u UploadAuthorizer, m M
 	return &PublishMomentUseCase{r, u, m, p, c}
 }
 func (u *PublishMomentUseCase) Execute(ctx context.Context, c PublishMomentCommand) (domain.Moment, error) {
-	rel, err := u.relationships.GetActiveRelationship(ctx, c.UserID)
-	if err != nil {
-		return domain.Moment{}, err
+	spaceType, visibility := normalizePublishSpace(c.SpaceType, c.Visibility)
+	var relationshipID int64
+	if spaceType != domain.SpacePersonal || visibility != domain.VisibilityPrivate {
+		rel, err := u.relationships.GetActiveRelationship(ctx, c.UserID)
+		if err != nil {
+			return domain.Moment{}, err
+		}
+		relationshipID = rel.ID
 	}
 	grants, err := u.uploads.ValidateGrants(ctx, c.UserID, c.PhotoKeys, u.clock.Now())
 	if err != nil {
@@ -46,9 +53,23 @@ func (u *PublishMomentUseCase) Execute(ctx context.Context, c PublishMomentComma
 	if occurredAt.IsZero() {
 		occurredAt = now
 	}
-	m, err := domain.NewMomentDetails(domain.CreateInput{AuthorID: c.UserID, RelationshipID: rel.ID, Text: c.Text, Status: c.Status, Place: c.PlaceName, Latitude: c.Latitude, Longitude: c.Longitude, PhotoKeys: c.PhotoKeys, OccurredAt: occurredAt, CreatedAt: now, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard})
+	m, err := domain.NewMomentDetails(domain.CreateInput{AuthorID: c.UserID, RelationshipID: relationshipID, Text: c.Text, Status: c.Status, Place: c.PlaceName, Latitude: c.Latitude, Longitude: c.Longitude, PhotoKeys: c.PhotoKeys, OccurredAt: occurredAt, CreatedAt: now, SpaceType: spaceType, Visibility: visibility, Kind: domain.KindStandard})
 	if err != nil {
 		return domain.Moment{}, err
 	}
 	return u.moments.SaveWithGrants(ctx, m, grants)
+}
+
+func normalizePublishSpace(spaceType domain.SpaceType, visibility domain.Visibility) (domain.SpaceType, domain.Visibility) {
+	if spaceType == "" {
+		spaceType = domain.SpaceShared
+	}
+	if visibility == "" {
+		if spaceType == domain.SpacePersonal {
+			visibility = domain.VisibilityPrivate
+		} else {
+			visibility = domain.VisibilityCouple
+		}
+	}
+	return spaceType, visibility
 }

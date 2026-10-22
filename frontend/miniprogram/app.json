@@ -7,6 +7,7 @@
     "pages/home/index",
     "pages/status-editor/index",
     "pages/compose/index",
+    "pages/personal-moments/index",
     "pages/moment-edit/index",
     "pages/anniversaries/index",
     "pages/anniversary-edit/index",

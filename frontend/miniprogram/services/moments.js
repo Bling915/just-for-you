@@ -2,8 +2,9 @@ const { http } = require('./http-client')
 
 const momentService = {
   getHome: () => http.get('/v1/home'),
-  getTimeline({ cursor = '', limit = 20 } = {}) {
-    const query = [`limit=${encodeURIComponent(limit)}`]
+  getTimeline({ space = 'shared', owner = '', cursor = '', limit = 20 } = {}) {
+    const query = [`space=${encodeURIComponent(space)}`, `limit=${encodeURIComponent(limit)}`]
+    if (owner) query.push(`owner=${encodeURIComponent(owner)}`)
     if (cursor) query.push(`cursor=${encodeURIComponent(cursor)}`)
     return http.get(`/v1/moments?${query.join('&')}`)
   },

@@ -1,0 +1,1 @@
+.badge{display:inline-flex;padding:7rpx 14rpx;border-radius:999rpx;color:var(--color-text-muted);background:rgba(240,234,250,.72);font-size:18rpx}.badge.partner{color:var(--color-primary-deep);background:#eee6f8}

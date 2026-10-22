@@ -127,19 +127,21 @@ func (h *Handler) requestUpload(c *gin.Context) {
 
 func (h *Handler) publish(c *gin.Context) {
 	var input struct {
-		Text       string        `json:"text"`
-		Status     domain.Status `json:"status"`
-		PlaceName  string        `json:"placeName"`
-		Latitude   *float64      `json:"latitude"`
-		Longitude  *float64      `json:"longitude"`
-		PhotoKeys  []string      `json:"photoKeys"`
-		OccurredAt time.Time     `json:"occurredAt"`
+		Text       string            `json:"text"`
+		Status     domain.Status     `json:"status"`
+		PlaceName  string            `json:"placeName"`
+		Latitude   *float64          `json:"latitude"`
+		Longitude  *float64          `json:"longitude"`
+		PhotoKeys  []string          `json:"photoKeys"`
+		OccurredAt time.Time         `json:"occurredAt"`
+		SpaceType  domain.SpaceType  `json:"spaceType"`
+		Visibility domain.Visibility `json:"visibility"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		httpserver.WriteError(c, http.StatusBadRequest, "INVALID_ARGUMENT", "发布内容格式无效")
 		return
 	}
-	moment, err := h.useCases.PublishMoment.Execute(c, application.PublishMomentCommand{UserID: httpserver.UserID(c), Text: input.Text, Status: input.Status, PlaceName: input.PlaceName, Latitude: input.Latitude, Longitude: input.Longitude, PhotoKeys: input.PhotoKeys, OccurredAt: input.OccurredAt})
+	moment, err := h.useCases.PublishMoment.Execute(c, application.PublishMomentCommand{UserID: httpserver.UserID(c), Text: input.Text, Status: input.Status, PlaceName: input.PlaceName, Latitude: input.Latitude, Longitude: input.Longitude, PhotoKeys: input.PhotoKeys, OccurredAt: input.OccurredAt, SpaceType: input.SpaceType, Visibility: input.Visibility})
 	if err != nil {
 		writeError(c, err)
 		return
@@ -154,20 +156,22 @@ func (h *Handler) update(c *gin.Context) {
 		return
 	}
 	var input struct {
-		Text       string        `json:"text"`
-		Status     domain.Status `json:"status"`
-		PlaceName  string        `json:"placeName"`
-		Latitude   *float64      `json:"latitude"`
-		Longitude  *float64      `json:"longitude"`
-		PhotoKeys  []string      `json:"photoKeys"`
-		OccurredAt time.Time     `json:"occurredAt"`
-		Version    time.Time     `json:"version"`
+		Text       string            `json:"text"`
+		Status     domain.Status     `json:"status"`
+		PlaceName  string            `json:"placeName"`
+		Latitude   *float64          `json:"latitude"`
+		Longitude  *float64          `json:"longitude"`
+		PhotoKeys  []string          `json:"photoKeys"`
+		OccurredAt time.Time         `json:"occurredAt"`
+		Version    time.Time         `json:"version"`
+		SpaceType  domain.SpaceType  `json:"spaceType"`
+		Visibility domain.Visibility `json:"visibility"`
 	}
 	if c.ShouldBindJSON(&input) != nil || input.OccurredAt.IsZero() || input.Version.IsZero() {
 		httpserver.WriteError(c, http.StatusBadRequest, "INVALID_ARGUMENT", "更新内容格式无效")
 		return
 	}
-	moment, err := h.useCases.UpdateMoment.Execute(c, application.UpdateMomentCommand{UserID: httpserver.UserID(c), MomentID: momentID, Text: input.Text, Status: input.Status, PlaceName: input.PlaceName, Latitude: input.Latitude, Longitude: input.Longitude, PhotoKeys: input.PhotoKeys, OccurredAt: input.OccurredAt, Version: input.Version})
+	moment, err := h.useCases.UpdateMoment.Execute(c, application.UpdateMomentCommand{UserID: httpserver.UserID(c), MomentID: momentID, Text: input.Text, Status: input.Status, PlaceName: input.PlaceName, Latitude: input.Latitude, Longitude: input.Longitude, PhotoKeys: input.PhotoKeys, OccurredAt: input.OccurredAt, Version: input.Version, SpaceType: input.SpaceType, Visibility: input.Visibility})
 	if err != nil {
 		writeError(c, err)
 		return
@@ -274,6 +278,10 @@ func writeError(c *gin.Context, err error) {
 		status, code, message = http.StatusBadRequest, "INVALID_OCCURRED_AT", "记录时间无效"
 	case errors.Is(err, domain.ErrInvalidCoordinates):
 		status, code, message = http.StatusBadRequest, "INVALID_COORDINATES", "位置坐标无效"
+	case errors.Is(err, domain.ErrInvalidSpaceVisibility):
+		status, code, message = http.StatusBadRequest, "INVALID_SPACE_VISIBILITY", "发布空间与可见范围不匹配"
+	case errors.Is(err, domain.ErrInvalidMomentKind):
+		status, code, message = http.StatusBadRequest, "INVALID_MOMENT_KIND", "小事类型无效"
 	case errors.Is(err, domain.ErrMomentConflict):
 		status, code, message = http.StatusConflict, "MOMENT_CONFLICT", "这条记录已在别处更新，请重新加载"
 	case errors.Is(err, domain.ErrNotAuthor):
@@ -282,6 +290,10 @@ func writeError(c *gin.Context, err error) {
 		status, code, message = http.StatusNotFound, "MOMENT_NOT_FOUND", "动态不存在"
 	case errors.Is(err, application.ErrInvalidSpaceQuery):
 		status, code, message = http.StatusBadRequest, "INVALID_SPACE_QUERY", "小事空间参数无效"
+	case errors.Is(err, application.ErrMomentNotVisible):
+		status, code, message = http.StatusNotFound, "MOMENT_NOT_FOUND", "动态不存在"
+	case errors.Is(err, application.ErrPartnerRequired):
+		status, code, message = http.StatusConflict, "PARTNER_REQUIRED", "需要先绑定伴侣"
 	case errors.Is(err, relationshipdomain.ErrNoActiveRelationship):
 		status, code, message = http.StatusNotFound, "NO_ACTIVE_COUPLE", "还没有绑定情侣关系"
 	}

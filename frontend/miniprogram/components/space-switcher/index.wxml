@@ -1,0 +1,4 @@
+<view class="switcher" aria-label="选择发布空间">
+  <view class="option {{value === 'shared' ? 'active' : ''}}" data-value="shared" bindtap="choose"><text>♡</text><view>我们的小事<small wx:if="{{!hasPartner}}">需先绑定</small></view></view>
+  <view class="option {{value === 'personal' ? 'active' : ''}}" data-value="personal" bindtap="choose"><text>✦</text><view>我的小事<small>属于自己的角落</small></view></view>
+</view>

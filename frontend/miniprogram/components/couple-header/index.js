@@ -9,6 +9,7 @@ Component({
   },
   data: { currentInitial: '我', partnerInitial: 'TA' },
   methods: {
+		openPartner(){this.triggerEvent('openpartner')},
     syncInitials() {
       const current = this.data.currentUser || {};
       const partner = this.data.partner || {};

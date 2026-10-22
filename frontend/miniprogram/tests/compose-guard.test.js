@@ -133,6 +133,8 @@ test('恢复草稿时丢弃照片，其余字段原样带回', () => {
     latitude: 31.2,
     longitude: 121.4,
     occurredAt: '2026-10-22T10:00:00.000Z',
+	spaceType: 'personal',
+	visibility: 'partner',
     files: [{ path: 'wxfile://tmp_gone.jpg' }],
   });
   assert.deepEqual(form.files, []);
@@ -141,6 +143,17 @@ test('恢复草稿时丢弃照片，其余字段原样带回', () => {
   assert.equal(form.placeName, '家');
   assert.equal(form.latitude, 31.2);
   assert.equal(form.longitude, 121.4);
+	assert.equal(form.spaceType, 'personal');
+	assert.equal(form.visibility, 'partner');
+});
+
+test('草稿保留显式空间，新草稿仍由发布页默认到共同空间', () => {
+	const payload = buildDraftPayload({ text: '写了一半', spaceType: 'personal', visibility: 'private' });
+	assert.equal(payload.spaceType, 'personal');
+	assert.equal(payload.visibility, 'private');
+	const restored = restoreDraft(payload);
+	assert.equal(restored.spaceType, 'personal');
+	assert.equal(restored.visibility, 'private');
 });
 
 test('空草稿恢复出来是干净表单', () => {

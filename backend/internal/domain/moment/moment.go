@@ -64,6 +64,9 @@ type UpdateInput struct {
 	Latitude, Longitude *float64
 	PhotoKeys           []string
 	OccurredAt          time.Time
+	SpaceType           SpaceType
+	Visibility          Visibility
+	RelationshipID      int64
 }
 
 func NewMoment(authorID, relationshipID int64, text string, status Status, place string, photoKeys []string, createdAt time.Time) (Moment, error) {
@@ -93,8 +96,22 @@ func (m Moment) Update(actorID int64, input UpdateInput, now time.Time) (Moment,
 	if err != nil {
 		return Moment{}, err
 	}
+	spaceType, visibility, relationshipID := input.SpaceType, input.Visibility, input.RelationshipID
+	if spaceType == "" {
+		spaceType, visibility, relationshipID = m.spaceType, m.visibility, m.relationshipID
+	}
+	if visibility == "" {
+		visibility = m.visibility
+	}
+	if spaceType != m.spaceType {
+		return Moment{}, ErrInvalidSpaceVisibility
+	}
+	if err := validateSpace(spaceType, visibility, relationshipID); err != nil {
+		return Moment{}, err
+	}
 	m.text, m.status, m.place = fields.text, input.Status, fields.place
 	m.latitude, m.longitude, m.photos = copyFloat(input.Latitude), copyFloat(input.Longitude), fields.photos
+	m.relationshipID, m.visibility = relationshipID, visibility
 	m.occurredAt, m.updatedAt = input.OccurredAt, now
 	return m, nil
 }

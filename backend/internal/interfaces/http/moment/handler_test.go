@@ -20,9 +20,13 @@ func (fakeUpload) Execute(context.Context, application.RequestPhotoUploadCommand
 	return application.UploadGrant{}, domain.ErrInvalidUpload
 }
 
-type fakePublish struct{ err error }
+type fakePublish struct {
+	err     error
+	command application.PublishMomentCommand
+}
 
-func (f fakePublish) Execute(context.Context, application.PublishMomentCommand) (domain.Moment, error) {
+func (f *fakePublish) Execute(_ context.Context, command application.PublishMomentCommand) (domain.Moment, error) {
+	f.command = command
 	return domain.Moment{}, f.err
 }
 
@@ -44,20 +48,22 @@ type fakeDelete struct{ err error }
 func (f fakeDelete) Execute(context.Context, application.DeleteMomentCommand) error { return f.err }
 
 type fakeUpdate struct {
-	result domain.Moment
-	err    error
+	result  domain.Moment
+	err     error
+	command application.UpdateMomentCommand
 }
 
-func (f fakeUpdate) Execute(context.Context, application.UpdateMomentCommand) (domain.Moment, error) {
+func (f *fakeUpdate) Execute(_ context.Context, command application.UpdateMomentCommand) (domain.Moment, error) {
+	f.command = command
 	return f.result, f.err
 }
 func fakeUseCases(publishErr, deleteErr error) UseCases {
-	return UseCases{RequestPhotoUpload: fakeUpload{}, PublishMoment: fakePublish{publishErr}, UpdateMoment: fakeUpdate{}, GetTimeline: &fakeTimeline{}, GetHome: fakeHome{}, DeleteMoment: fakeDelete{deleteErr}}
+	return UseCases{RequestPhotoUpload: fakeUpload{}, PublishMoment: &fakePublish{err: publishErr}, UpdateMoment: &fakeUpdate{}, GetTimeline: &fakeTimeline{}, GetHome: fakeHome{}, DeleteMoment: fakeDelete{deleteErr}}
 }
 func TestUpdateMapsConflictAndReturnsOccurrenceVersion(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	conflict := fakeUseCases(nil, nil)
-	conflict.UpdateMoment = fakeUpdate{err: domain.ErrMomentConflict}
+	conflict.UpdateMoment = &fakeUpdate{err: domain.ErrMomentConflict}
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPatch, "/v1/moments/5", strings.NewReader(`{"text":"更新","occurredAt":"2026-10-20T11:00:00Z","version":"2026-10-20T10:00:00Z"}`))
 	request.Header.Set("Content-Type", "application/json")
@@ -68,7 +74,7 @@ func TestUpdateMapsConflictAndReturnsOccurrenceVersion(t *testing.T) {
 
 	result := domain.RestoreMomentDetails(domain.RestoreInput{ID: 5, AuthorID: 1, RelationshipID: 9, Text: "更新", Status: domain.StatusNone, OccurredAt: now.Add(-time.Hour), CreatedAt: now.Add(-2 * time.Hour), UpdatedAt: now, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard})
 	success := fakeUseCases(nil, nil)
-	success.UpdateMoment = fakeUpdate{result: result}
+	success.UpdateMoment = &fakeUpdate{result: result}
 	response = httptest.NewRecorder()
 	request = httptest.NewRequest(http.MethodPatch, "/v1/moments/5", strings.NewReader(`{"text":"更新","occurredAt":"2026-10-20T11:00:00Z","version":"2026-10-20T10:00:00Z"}`))
 	request.Header.Set("Content-Type", "application/json")
@@ -137,5 +143,34 @@ func TestTimelineRejectsInvalidSpaceQuery(t *testing.T) {
 	routerFor(fakeUseCases(nil, nil)).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/moments?space=shared&owner=me", nil))
 	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), `"code":"INVALID_SPACE_QUERY"`) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestPublishAndUpdateParseSpaceVisibility(t *testing.T) {
+	useCases := fakeUseCases(nil, nil)
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/moments", strings.NewReader(`{"text":"我的小事","spaceType":"personal","visibility":"partner"}`))
+	request.Header.Set("Content-Type", "application/json")
+	routerFor(useCases).ServeHTTP(response, request)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("publish status=%d body=%s", response.Code, response.Body.String())
+	}
+	publish := useCases.PublishMoment.(*fakePublish).command
+	if publish.SpaceType != domain.SpacePersonal || publish.Visibility != domain.VisibilityPartner {
+		t.Fatalf("publish=%+v", publish)
+	}
+
+	useCases = fakeUseCases(nil, nil)
+	useCases.UpdateMoment = &fakeUpdate{result: domain.RestoreMomentDetails(domain.RestoreInput{ID: 5, AuthorID: 1, Text: "我的小事", SpaceType: domain.SpacePersonal, Visibility: domain.VisibilityPrivate, Kind: domain.KindStandard, OccurredAt: time.Date(2026, 10, 20, 11, 0, 0, 0, time.UTC), CreatedAt: time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)})}
+	response = httptest.NewRecorder()
+	request = httptest.NewRequest(http.MethodPatch, "/v1/moments/5", strings.NewReader(`{"text":"我的小事","spaceType":"personal","visibility":"private","occurredAt":"2026-10-20T11:00:00Z","version":"2026-10-20T10:00:00Z"}`))
+	request.Header.Set("Content-Type", "application/json")
+	routerFor(useCases).ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("update status=%d body=%s", response.Code, response.Body.String())
+	}
+	update := useCases.UpdateMoment.(*fakeUpdate).command
+	if update.SpaceType != domain.SpacePersonal || update.Visibility != domain.VisibilityPrivate {
+		t.Fatalf("update=%+v", update)
 	}
 }

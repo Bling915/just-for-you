@@ -316,3 +316,108 @@ func TestUpdateMomentChecksRelationshipAuthorAndNewPhotoGrant(t *testing.T) {
 		t.Fatalf("ended err=%v", err)
 	}
 }
+
+func TestPublishMomentSupportsSharedAndPersonalSpaces(t *testing.T) {
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name             string
+		relationships    fakeRelationships
+		command          PublishMomentCommand
+		wantSpace        momentdomain.SpaceType
+		wantVisibility   momentdomain.Visibility
+		wantRelationship int64
+		wantErr          error
+	}{
+		{
+			name:          "default remains shared",
+			relationships: fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}},
+			command:       PublishMomentCommand{UserID: 1, Text: "共同小事"},
+			wantSpace:     momentdomain.SpaceShared, wantVisibility: momentdomain.VisibilityCouple, wantRelationship: 9,
+		},
+		{
+			name:          "private works without relationship",
+			relationships: fakeRelationships{err: relationshipdomain.ErrNoActiveRelationship},
+			command:       PublishMomentCommand{UserID: 1, Text: "只给自己", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPrivate},
+			wantSpace:     momentdomain.SpacePersonal, wantVisibility: momentdomain.VisibilityPrivate,
+		},
+		{
+			name:          "partner visible uses current relationship",
+			relationships: fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}},
+			command:       PublishMomentCommand{UserID: 1, Text: "给 TA 看", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPartner},
+			wantSpace:     momentdomain.SpacePersonal, wantVisibility: momentdomain.VisibilityPartner, wantRelationship: 9,
+		},
+		{
+			name:          "invalid shared private pair",
+			relationships: fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}},
+			command:       PublishMomentCommand{UserID: 1, Text: "错误组合", SpaceType: momentdomain.SpaceShared, Visibility: momentdomain.VisibilityPrivate},
+			wantErr:       momentdomain.ErrInvalidSpaceVisibility,
+		},
+		{
+			name:          "partner visibility requires relationship",
+			relationships: fakeRelationships{err: relationshipdomain.ErrNoActiveRelationship},
+			command:       PublishMomentCommand{UserID: 1, Text: "没有伴侣", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPartner},
+			wantErr:       relationshipdomain.ErrNoActiveRelationship,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repository := &memoryMoments{}
+			useCase := NewPublishMomentUseCase(test.relationships, &fakeUploads{grants: map[string]UploadGrant{}}, repository, fakeStorage{}, fixedClock{now})
+			got, err := useCase.Execute(context.Background(), test.command)
+			if test.wantErr != nil {
+				if !errors.Is(err, test.wantErr) {
+					t.Fatalf("err=%v want=%v", err, test.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.SpaceType() != test.wantSpace || got.Visibility() != test.wantVisibility || got.RelationshipID() != test.wantRelationship {
+				t.Fatalf("moment space=%q visibility=%q relationship=%d", got.SpaceType(), got.Visibility(), got.RelationshipID())
+			}
+		})
+	}
+}
+
+func TestUpdateMomentChangesOnlyPersonalVisibility(t *testing.T) {
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	private := momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{
+		ID: 5, AuthorID: 1, Text: "我的小事", SpaceType: momentdomain.SpacePersonal,
+		Visibility: momentdomain.VisibilityPrivate, Kind: momentdomain.KindStandard,
+		OccurredAt: now.Add(-time.Hour), CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour),
+	})
+	repository := &memoryMoments{existing: private}
+	useCase := NewUpdateMomentUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, &fakeUploads{grants: map[string]UploadGrant{}}, repository, fakeStorage{}, fixedClock{now})
+	updated, err := useCase.Execute(context.Background(), UpdateMomentCommand{
+		UserID: 1, MomentID: 5, Text: "给 TA 看", SpaceType: momentdomain.SpacePersonal,
+		Visibility: momentdomain.VisibilityPartner, OccurredAt: now.Add(-time.Minute), Version: private.UpdatedAt(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.SpaceType() != momentdomain.SpacePersonal || updated.Visibility() != momentdomain.VisibilityPartner || updated.RelationshipID() != 9 {
+		t.Fatalf("updated=%+v visibility=%q relationship=%d", updated, updated.Visibility(), updated.RelationshipID())
+	}
+
+	shared, _ := momentdomain.NewMoment(1, 9, "共同小事", momentdomain.StatusNone, "", nil, now.Add(-time.Hour))
+	repository.existing = shared
+	_, err = useCase.Execute(context.Background(), UpdateMomentCommand{
+		UserID: 1, MomentID: 5, Text: "偷偷移动", SpaceType: momentdomain.SpacePersonal,
+		Visibility: momentdomain.VisibilityPrivate, OccurredAt: now.Add(-time.Minute), Version: shared.UpdatedAt(),
+	})
+	if !errors.Is(err, momentdomain.ErrInvalidSpaceVisibility) {
+		t.Fatalf("move shared err=%v", err)
+	}
+}
+
+func TestUpdatePrivateMomentWorksWithoutRelationship(t *testing.T) {
+	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	private := momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 5, AuthorID: 1, Text: "旧内容", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPrivate, Kind: momentdomain.KindStandard, OccurredAt: now.Add(-time.Hour), CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour)})
+	repository := &memoryMoments{existing: private}
+	useCase := NewUpdateMomentUseCase(fakeRelationships{err: relationshipdomain.ErrNoActiveRelationship}, &fakeUploads{grants: map[string]UploadGrant{}}, repository, fakeStorage{}, fixedClock{now})
+	updated, err := useCase.Execute(context.Background(), UpdateMomentCommand{UserID: 1, MomentID: 5, Text: "新内容", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPrivate, OccurredAt: now.Add(-time.Minute), Version: private.UpdatedAt()})
+	if err != nil || updated.Text() != "新内容" {
+		t.Fatalf("updated=%+v err=%v", updated, err)
+	}
+}

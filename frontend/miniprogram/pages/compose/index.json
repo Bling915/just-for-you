@@ -1,1 +1,1 @@
-{"navigationStyle":"default","navigationBarTitleText":"记录小事","usingComponents":{"photo-picker":"/components/photo-picker/index"}}
+{"navigationStyle":"default","navigationBarTitleText":"记录小事","usingComponents":{"photo-picker":"/components/photo-picker/index","space-switcher":"/components/space-switcher/index","visibility-picker":"/components/visibility-picker/index"}}

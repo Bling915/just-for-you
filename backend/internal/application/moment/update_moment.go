@@ -2,10 +2,12 @@ package moment
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	appshared "github.com/nanfang/just-for-you/server/internal/application/shared"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
+	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 )
 
 type UpdateMomentCommand struct {
@@ -17,6 +19,8 @@ type UpdateMomentCommand struct {
 	PhotoKeys           []string
 	OccurredAt          time.Time
 	Version             time.Time
+	SpaceType           domain.SpaceType
+	Visibility          domain.Visibility
 }
 
 type UpdateMomentUseCase struct {
@@ -32,15 +36,44 @@ func NewUpdateMomentUseCase(r ActiveRelationshipReader, u UploadAuthorizer, m Mo
 }
 
 func (u *UpdateMomentUseCase) Execute(ctx context.Context, command UpdateMomentCommand) (domain.Moment, error) {
-	relationship, err := u.relationships.GetActiveRelationship(ctx, command.UserID)
+	var relationship *ActiveRelationship
+	current, relationshipErr := u.relationships.GetActiveRelationship(ctx, command.UserID)
+	if relationshipErr == nil {
+		relationship = &current
+	} else if !errors.Is(relationshipErr, relationshipdomain.ErrNoActiveRelationship) {
+		return domain.Moment{}, relationshipErr
+	}
+	var relationshipID int64
+	if relationship != nil {
+		relationshipID = relationship.ID
+	}
+	existing, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, RelationshipID: relationshipID, MomentID: command.MomentID})
 	if err != nil {
 		return domain.Moment{}, err
 	}
-	existing, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, RelationshipID: relationship.ID, MomentID: command.MomentID})
-	if err != nil {
+	if existing.SpaceType() == domain.SpaceShared && relationship == nil {
+		return domain.Moment{}, relationshipErr
+	}
+	if err := (AccessPolicy{}).CanMutate(existing, command.UserID, relationship); err != nil {
 		return domain.Moment{}, err
 	}
-	updated, err := existing.Update(command.UserID, domain.UpdateInput{Text: command.Text, Status: command.Status, Place: command.PlaceName, Latitude: command.Latitude, Longitude: command.Longitude, PhotoKeys: command.PhotoKeys, OccurredAt: command.OccurredAt}, u.clock.Now())
+	spaceType := command.SpaceType
+	if spaceType == "" {
+		spaceType = existing.SpaceType()
+	}
+	visibility := command.Visibility
+	if visibility == "" {
+		visibility = existing.Visibility()
+	}
+	newRelationshipID := existing.RelationshipID()
+	if spaceType == domain.SpacePersonal && visibility == domain.VisibilityPrivate {
+		newRelationshipID = 0
+	} else if relationship != nil {
+		newRelationshipID = relationship.ID
+	} else {
+		return domain.Moment{}, relationshipErr
+	}
+	updated, err := existing.Update(command.UserID, domain.UpdateInput{Text: command.Text, Status: command.Status, Place: command.PlaceName, Latitude: command.Latitude, Longitude: command.Longitude, PhotoKeys: command.PhotoKeys, OccurredAt: command.OccurredAt, SpaceType: spaceType, Visibility: visibility, RelationshipID: newRelationshipID}, u.clock.Now())
 	if err != nil {
 		return domain.Moment{}, err
 	}

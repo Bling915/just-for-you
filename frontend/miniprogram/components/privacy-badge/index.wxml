@@ -1,0 +1,1 @@
+<view class="badge {{visibility}}">{{visibility === 'partner' ? '♡ 对方可见' : '◌ 仅自己'}}</view>

@@ -1,1 +1,1 @@
-{"component":true,"usingComponents":{"photo-grid":"/components/photo-grid/index"}}
+{"component":true,"usingComponents":{"photo-grid":"/components/photo-grid/index","privacy-badge":"/components/privacy-badge/index"}}
