@@ -573,6 +573,26 @@ func (r MySQLRepository) ListPerspectives(ctx context.Context, momentIDs []int64
 	return result, rows.Err()
 }
 
+func (r MySQLRepository) ResurfaceCandidates(ctx context.Context, relationshipID int64, now time.Time, limit int) ([]domain.Moment, error) {
+	local := now.In(time.FixedZone("CST", 8*3600))
+	today := local.Format("01-02")
+	monthAgo := local.AddDate(0, -1, 0).Format("2006-01-02")
+	rows, err := r.db.QueryContext(ctx, "SELECT "+momentSelectColumns+" FROM moments WHERE couple_id=? AND space_type='shared' AND visibility='couple' AND deleted_at IS NULL AND occurred_at<? ORDER BY (DATE_FORMAT(CONVERT_TZ(occurred_at,'+00:00','+08:00'),'%m-%d')=?) DESC,(DATE(CONVERT_TZ(occurred_at,'+00:00','+08:00'))=?) DESC,occurred_at ASC,id ASC LIMIT ?", relationshipID, now.AddDate(0, 0, -7), today, monthAgo, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	values := []domain.Moment{}
+	for rows.Next() {
+		value, e := r.scanMoment(ctx, rows)
+		if e != nil {
+			return nil, e
+		}
+		values = append(values, value)
+	}
+	return values, rows.Err()
+}
+
 func nullFloatPointer(value sql.NullFloat64) *float64 {
 	if !value.Valid {
 		return nil

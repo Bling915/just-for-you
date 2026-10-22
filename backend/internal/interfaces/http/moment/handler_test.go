@@ -70,6 +70,14 @@ type fakePerspective struct {
 	result        domain.Perspective
 	err           error
 }
+type fakeResurface struct {
+	result application.ResurfacedMemoryResult
+	err    error
+}
+
+func (f fakeResurface) Execute(context.Context, application.GetResurfacedMemoryQuery) (application.ResurfacedMemoryResult, error) {
+	return f.result, f.err
+}
 
 func (f *fakePerspective) Execute(_ context.Context, command application.SavePerspectiveCommand) (domain.Perspective, error) {
 	f.command = command
@@ -101,7 +109,14 @@ func (f *fakeUpdate) Execute(_ context.Context, command application.UpdateMoment
 	return f.result, f.err
 }
 func fakeUseCases(publishErr, deleteErr error) UseCases {
-	return UseCases{RequestPhotoUpload: fakeUpload{}, PublishMoment: &fakePublish{err: publishErr}, UpdateMoment: &fakeUpdate{}, GetTimeline: &fakeTimeline{}, GetHome: fakeHome{}, DeleteMoment: fakeDelete{deleteErr}, ShareToCouple: &fakeShare{}, ReactToMoment: &fakeReact{}, SavePerspective: &fakePerspective{}}
+	return UseCases{RequestPhotoUpload: fakeUpload{}, PublishMoment: &fakePublish{err: publishErr}, UpdateMoment: &fakeUpdate{}, GetTimeline: &fakeTimeline{}, GetHome: fakeHome{}, DeleteMoment: fakeDelete{deleteErr}, ShareToCouple: &fakeShare{}, ReactToMoment: &fakeReact{}, SavePerspective: &fakePerspective{}, GetResurfacedMemory: fakeResurface{}}
+}
+func TestResurfaceRouteReturnsEmptyMemory(t *testing.T) {
+	response := httptest.NewRecorder()
+	routerFor(fakeUseCases(nil, nil)).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/memories/resurface", nil))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"memory":null`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
 }
 
 func TestPerspectiveRoutesParseCommands(t *testing.T) {

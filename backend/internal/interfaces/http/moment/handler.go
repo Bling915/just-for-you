@@ -43,17 +43,21 @@ type SavePerspectiveExecutor interface {
 	Execute(context.Context, application.SavePerspectiveCommand) (domain.Perspective, error)
 	Delete(context.Context, application.DeletePerspectiveCommand) error
 }
+type GetResurfacedMemoryExecutor interface {
+	Execute(context.Context, application.GetResurfacedMemoryQuery) (application.ResurfacedMemoryResult, error)
+}
 type UseCases struct {
-	RequestPhotoUpload RequestPhotoUploadExecutor
-	PublishMoment      PublishMomentExecutor
-	UpdateMoment       UpdateMomentExecutor
-	GetTimeline        GetTimelineExecutor
-	GetHome            GetHomeExecutor
-	DeleteMoment       DeleteMomentExecutor
-	ShareToCouple      ShareToCoupleExecutor
-	ReactToMoment      ReactToMomentExecutor
-	SavePerspective    SavePerspectiveExecutor
-	ReadModels         *application.ReadModels
+	RequestPhotoUpload  RequestPhotoUploadExecutor
+	PublishMoment       PublishMomentExecutor
+	UpdateMoment        UpdateMomentExecutor
+	GetTimeline         GetTimelineExecutor
+	GetHome             GetHomeExecutor
+	DeleteMoment        DeleteMomentExecutor
+	ShareToCouple       ShareToCoupleExecutor
+	ReactToMoment       ReactToMomentExecutor
+	SavePerspective     SavePerspectiveExecutor
+	GetResurfacedMemory GetResurfacedMemoryExecutor
+	ReadModels          *application.ReadModels
 }
 
 type Handler struct {
@@ -81,6 +85,19 @@ func (h *Handler) RegisterProtected(group *gin.RouterGroup) {
 	group.DELETE("/moments/:id/reactions/:reactionId", h.deleteReaction)
 	group.PUT("/moments/:id/perspective", h.savePerspective)
 	group.DELETE("/moments/:id/perspective", h.deletePerspective)
+	group.GET("/memories/resurface", h.resurface)
+}
+func (h *Handler) resurface(c *gin.Context) {
+	result, err := h.useCases.GetResurfacedMemory.Execute(c, application.GetResurfacedMemoryQuery{UserID: httpserver.UserID(c)})
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	var memory any
+	if result.Memory != nil {
+		memory = momentDTO(*result.Memory, result.PhotoURLs)
+	}
+	httpserver.WriteData(c, 200, gin.H{"memory": memory, "reason": result.Reason})
 }
 
 func (h *Handler) calendar(c *gin.Context) {

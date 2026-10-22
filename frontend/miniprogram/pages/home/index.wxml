@@ -7,6 +7,7 @@
     <view class="hero"><view class="hero-caption">TA 的此刻</view><status-orb moment="{{presenceMoment}}"/><view class="companion-actions"><button bindtap="editStatus">更新我的状态</button><button data-kind="miss_you" bindtap="sendNudge">♡ 想你了</button><button data-kind="hug" bindtap="sendNudge">抱抱</button><button data-kind="cheer_up" bindtap="sendNudge">加油</button></view></view>
     <pinned-anniversary-card wx:if="{{pinnedAnniversaries.length}}" items="{{pinnedAnniversaries}}" has-more="{{hasMorePinned}}" bind:open="openAnniversary" bind:openAll="openAnniversaries"/>
     <daily-question-card wx:if="{{dailyQuestion}}" question="{{dailyQuestion}}" bind:submit="submitDailyAnswer" bind:history="openDailyQuestions"/>
+    <memory-resurface-card wx:if="{{resurfacedMemory}}" value="{{resurfacedMemory}}" bind:open="openResurfacedMemory"/>
     <view class="section-head"><view>最近的小事</view><text>{{moments.length ? '慢慢收藏每个今天' : '从今天开始'}}</text></view>
     <empty-state wx:if="{{state === 'empty'}}"/>
     <empty-state wx:elif="{{state === 'error-empty'}}" title="暂时没有连上" description="可能只是网络打了个盹，等一下再看看。" action="重新加载" bind:action="retry"/>

@@ -8,6 +8,7 @@ const { anniversaryView}=require('../../utils/anniversary')
 const { userService } = require('../../services/users')
 const { togetherService } = require('../../services/together')
 const { reactOptimistically, promptTextReaction, editPerspective, deletePerspective } = require('../../utils/moment-page-actions')
+const { memoryResurfaceView } = require('../../utils/memory-resurface')
 
 const CACHE_KEY = 'homeSnapshot'
 // 后端签名图片 URL 有效期 10-15 分钟，缓存必须比它短，
@@ -25,7 +26,7 @@ function readFreshCache() {
 }
 
 Page({
-  data:{state:'loading',home:null,moments:[],pinnedAnniversaries:[],hasMorePinned:false,dailyQuestion:null,relationship:null,currentUser:{},companionship:null,presenceMoment:{},sendingNudge:'',partnerInitial:'♡',relationshipDays:0,currentUserId:0,currentUserAvatar:'',partnerAvatar:'',motionClass:'',error:''},
+  data:{state:'loading',home:null,moments:[],pinnedAnniversaries:[],hasMorePinned:false,dailyQuestion:null,resurfacedMemory:null,relationship:null,currentUser:{},companionship:null,presenceMoment:{},sendingNudge:'',partnerInitial:'♡',relationshipDays:0,currentUserId:0,currentUserAvatar:'',partnerAvatar:'',motionClass:'',error:''},
   onLoad(){ const session=sessionStore.snapshot();const user=session.user||{};this.setData({currentUser:user,currentUserId:Number(session.userId)||0,currentUserAvatar:user.avatarUrl||'',motionClass:getApp().globalData.reduceMotion?'reduce-motion':''}) },
   async onShow(){ const session=sessionStore.snapshot();if(!session.accessToken)return wx.reLaunch({url:'/pages/welcome/index'});const user=session.user||{};this.setData({currentUser:user,currentUserAvatar:user.avatarUrl||''});let relationship;try{relationship=await relationshipService.getCurrent()}catch(error){if(error.code==='NO_ACTIVE_COUPLE'){storage.remove(CACHE_KEY);this.setData({home:null,moments:[],pinnedAnniversaries:[]});return wx.reLaunch({url:'/pages/bind/index'})}return}const partner=relationship.partner||{};const boundAt=new Date(relationship.boundAt);const days=Number.isNaN(boundAt.getTime())?0:Math.max(1,Math.floor((Date.now()-boundAt.getTime())/86400000)+1);this.setData({relationship,partnerInitial:(partner.displayName||'♡').slice(0,1),partnerAvatar:partner.avatarUrl||'',relationshipDays:days});const cached=readFreshCache();if(!this.data.home&&cached)this.setData({home:cached,moments:cached.recent||[],pinnedAnniversaries:normalizeHighlights(cached.pinnedAnniversaries).map(item=>anniversaryView(item)),hasMorePinned:Boolean(cached.hasMorePinned)});this.refreshAvatar();this.load({quiet:Boolean(cached)}) },
   onPullDownRefresh(){ this.refreshAvatar(); this.load().finally(()=>wx.stopPullDownRefresh()) },
@@ -41,7 +42,7 @@ Page({
   },
   async load({quiet=false}={}){
     if(!quiet&&!this.data.home) this.setData({state:'loading',error:''})
-    try{ const [home,companionship,dailyQuestion]=await Promise.all([momentService.getHome(),companionshipService.getSnapshot(),togetherService.getDailyQuestion().catch(()=>null)]); const moments=home.recent||[];const pinnedAnniversaries=normalizeHighlights(home.pinnedAnniversaries).map(item=>anniversaryView(item));const presenceMoment=statusMoment(companionship.partnerPresence,home.partnerLatestStatus); storage.set(CACHE_KEY,{savedAt:Date.now(),payload:home}); this.setData({home,companionship,dailyQuestion,presenceMoment,moments,pinnedAnniversaries,hasMorePinned:Boolean(home.hasMorePinned),state:moments.length?'ready':'empty',error:''}) }
+    try{ const [home,companionship,dailyQuestion,memory]=await Promise.all([momentService.getHome(),companionshipService.getSnapshot(),togetherService.getDailyQuestion().catch(()=>null),momentService.getResurfacedMemory().catch(()=>null)]); const moments=home.recent||[];const pinnedAnniversaries=normalizeHighlights(home.pinnedAnniversaries).map(item=>anniversaryView(item));const presenceMoment=statusMoment(companionship.partnerPresence,home.partnerLatestStatus); storage.set(CACHE_KEY,{savedAt:Date.now(),payload:home}); this.setData({home,companionship,dailyQuestion,resurfacedMemory:memoryResurfaceView(memory),presenceMoment,moments,pinnedAnniversaries,hasMorePinned:Boolean(home.hasMorePinned),state:moments.length?'ready':'empty',error:''}) }
     catch(error){ const cached=this.data.home; this.setData({state:cached?'error-with-cache':'error-empty',error:'暂时没有连上，再试一次吧'}) }
   },
   retry(){this.load()},
@@ -66,4 +67,5 @@ Page({
   deletePerspective(event){deletePerspective(event,moment=>this.replaceMoment(moment))},
   async submitDailyAnswer(event){try{const dailyQuestion=await togetherService.submitDailyAnswer({questionId:this.data.dailyQuestion.id,text:event.detail.text});this.setData({dailyQuestion});event.detail.done();if(dailyQuestion.unlocked)this.load({quiet:true})}catch(error){event.detail.done();wx.showToast({title:'答案没有藏好，再试一次吧',icon:'none'})}},
   openDailyQuestions(){wx.navigateTo({url:'/pages/daily-questions/index'})},
+  openResurfacedMemory(){wx.switchTab({url:'/pages/timeline/index'})},
 })

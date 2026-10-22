@@ -1,0 +1,2 @@
+const test=require('node:test');const assert=require('node:assert/strict');const {memoryResurfaceView}=require('../utils/memory-resurface')
+test('resurfaced memory is optional and gets a safe reason',()=>{assert.equal(memoryResurfaceView(null),null);assert.deepEqual(memoryResurfaceView({memory:{id:1,text:'散步'},reason:'去年今天'}),{memory:{id:1,text:'散步'},reason:'去年今天',title:'那天的我们'});assert.equal(memoryResurfaceView({memory:{id:2},reason:''}).reason,'往日的小事')})

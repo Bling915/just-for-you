@@ -19,6 +19,7 @@ const momentService = {
   getCalendar: month => http.get(`/v1/moments/calendar?month=${encodeURIComponent(month)}`),
   getMap: ({from,to}) => http.get(`/v1/moments/map?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
   getMonthlyReport: month => http.get(`/v1/reports/monthly?month=${encodeURIComponent(month)}`),
+  getResurfacedMemory: () => http.get('/v1/memories/resurface'),
 }
 
 module.exports = { momentService }

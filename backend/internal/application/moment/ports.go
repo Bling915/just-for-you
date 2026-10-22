@@ -109,6 +109,7 @@ type MomentRepository interface {
 	SavePerspectiveWithGrants(context.Context, domain.Perspective, []UploadGrant, int64) (domain.Perspective, error)
 	DeletePerspective(context.Context, int64, int64) error
 	ListPerspectives(context.Context, []int64) (map[int64]domain.Perspective, error)
+	ResurfaceCandidates(context.Context, int64, time.Time, int) ([]domain.Moment, error)
 }
 type ReadRepository interface {
 	Calendar(context.Context, int64, time.Time, time.Time) ([]CalendarDay, error)

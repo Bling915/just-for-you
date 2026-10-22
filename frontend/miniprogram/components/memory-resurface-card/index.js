@@ -1,0 +1,1 @@
+Component({properties:{value:{type:Object,value:null}},methods:{open(){this.triggerEvent('open',{moment:this.data.value.memory})},preview(){const urls=(this.data.value.memory.photos||[]).map(item=>item.url).filter(Boolean);if(urls.length)wx.previewImage({urls,current:urls[0]})}}})

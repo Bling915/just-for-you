@@ -60,16 +60,17 @@ func (f fakeStorage) VerifyUploaded(context.Context, string, string, int64) erro
 }
 
 type memoryMoments struct {
-	saved             []momentdomain.Moment
-	saveErr           error
-	consumed          bool
-	existing          momentdomain.Moment
-	filter            TimelineFilter
-	lookup            MomentLookup
-	sharedCopy        momentdomain.Moment
-	reaction          momentdomain.Reaction
-	deletedReactionID int64
-	perspective       momentdomain.Perspective
+	saved               []momentdomain.Moment
+	saveErr             error
+	consumed            bool
+	existing            momentdomain.Moment
+	filter              TimelineFilter
+	lookup              MomentLookup
+	sharedCopy          momentdomain.Moment
+	reaction            momentdomain.Reaction
+	deletedReactionID   int64
+	perspective         momentdomain.Perspective
+	resurfaceCandidates []momentdomain.Moment
 }
 type PublishInput struct {
 	Text      string
@@ -148,6 +149,9 @@ func (r *memoryMoments) ListPerspectives(context.Context, []int64) (map[int64]mo
 		result[r.perspective.MomentID()] = r.perspective
 	}
 	return result, nil
+}
+func (r *memoryMoments) ResurfaceCandidates(context.Context, int64, time.Time, int) ([]momentdomain.Moment, error) {
+	return r.resurfaceCandidates, nil
 }
 
 func TestSavePerspectiveRequiresSharedMomentOtherPartnerAndValidUploads(t *testing.T) {
