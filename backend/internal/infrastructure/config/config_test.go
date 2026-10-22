@@ -55,3 +55,24 @@ func TestLoadEnablesSoloTestOnlyWhenExplicitlyTrue(t *testing.T) {
 		t.Fatal("EnableSoloTest=true without explicit opt-in")
 	}
 }
+
+func TestAIConfigurationIsOptionalAndLoadedAsAGroup(t *testing.T) {
+	setValidEnvironment(t)
+	t.Setenv("AI_BASE_URL", "")
+	t.Setenv("AI_API_KEY", "")
+	t.Setenv("AI_MODEL", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AIBaseURL != "" {
+		t.Fatalf("cfg=%+v", cfg)
+	}
+	t.Setenv("AI_BASE_URL", "https://ai.example/v1")
+	t.Setenv("AI_API_KEY", "test-key")
+	t.Setenv("AI_MODEL", "small")
+	cfg, err = Load()
+	if err != nil || cfg.AIModel != "small" {
+		t.Fatalf("cfg=%+v err=%v", cfg, err)
+	}
+}

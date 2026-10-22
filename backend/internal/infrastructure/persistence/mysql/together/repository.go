@@ -13,6 +13,28 @@ import (
 
 type Repository struct{ db *sql.DB }
 
+func (r Repository) AIPersonalizationEnabled(ctx context.Context, coupleID int64) (bool, error) {
+	var disabled int
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM notification_preferences WHERE couple_id=? AND ai_personalization_enabled=FALSE", coupleID).Scan(&disabled)
+	return disabled == 0, err
+}
+func (r Repository) RecentContextMoments(ctx context.Context, coupleID int64, limit int) ([]app.ContextMoment, error) {
+	rows, err := r.db.QueryContext(ctx, "SELECT body,status_code,place_name,space_type,visibility,occurred_at FROM moments WHERE couple_id=? AND space_type='shared' AND visibility='couple' AND deleted_at IS NULL ORDER BY occurred_at DESC LIMIT ?", coupleID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	values := []app.ContextMoment{}
+	for rows.Next() {
+		var value app.ContextMoment
+		if err = rows.Scan(&value.Text, &value.Status, &value.Place, &value.SpaceType, &value.Visibility, &value.OccurredAt); err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	return values, rows.Err()
+}
+
 func NewRepository(db *sql.DB) Repository { return Repository{db: db} }
 func (r Repository) GetActiveRelationship(ctx context.Context, userID int64) (app.ActiveRelationship, error) {
 	var v app.ActiveRelationship

@@ -12,10 +12,15 @@ type DailyQuestionService struct {
 	repo          DailyQuestionRepository
 	generator     QuestionGenerator
 	clock         Clock
+	contextReader QuestionContextReader
 }
 
-func NewDailyQuestionService(r RelationshipReader, repo DailyQuestionRepository, g QuestionGenerator, c Clock) *DailyQuestionService {
-	return &DailyQuestionService{r, repo, g, c}
+func NewDailyQuestionService(r RelationshipReader, repo DailyQuestionRepository, g QuestionGenerator, c Clock, readers ...QuestionContextReader) *DailyQuestionService {
+	var reader QuestionContextReader
+	if len(readers) > 0 {
+		reader = readers[0]
+	}
+	return &DailyQuestionService{relationships: r, repo: repo, generator: g, clock: c, contextReader: reader}
 }
 func shanghaiDay(value time.Time) time.Time {
 	loc, _ := time.LoadLocation("Asia/Shanghai")
@@ -35,7 +40,13 @@ func (s *DailyQuestionService) GetToday(ctx context.Context, userID int64) (doma
 	if !errors.Is(err, domain.ErrNotFound) {
 		return domain.DailyQuestion{}, err
 	}
-	generated, genErr := s.generator.Generate(ctx, QuestionContext{CoupleID: rel.ID, Date: day})
+	questionContext := QuestionContext{CoupleID: rel.ID, Date: day}
+	if s.contextReader != nil {
+		if values, e := s.contextReader.RecentContextMoments(ctx, rel.ID, 20); e == nil {
+			questionContext = (QuestionContextBuilder{}).Build(rel.ID, day, values)
+		}
+	}
+	generated, genErr := s.generator.Generate(ctx, questionContext)
 	if genErr != nil {
 		return domain.DailyQuestion{}, genErr
 	}

@@ -6,6 +6,9 @@ ALTER TABLE moments
   ADD COLUMN source_moment_id BIGINT UNSIGNED NULL AFTER kind,
   ADD COLUMN daily_question_id BIGINT UNSIGNED NULL AFTER source_moment_id;
 
+ALTER TABLE notification_preferences
+  ADD COLUMN ai_personalization_enabled BOOLEAN NOT NULL DEFAULT TRUE AFTER nudge_enabled;
+
 UPDATE moments
 SET space_type='shared', visibility='couple', kind='standard'
 WHERE space_type IS NULL OR visibility IS NULL OR kind IS NULL;

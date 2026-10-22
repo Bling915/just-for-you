@@ -3,10 +3,11 @@ package companionship
 import "context"
 
 type NotificationPreferences struct {
-	MomentEnabled   bool            `json:"momentEnabled"`
-	PresenceEnabled bool            `json:"presenceEnabled"`
-	NudgeEnabled    bool            `json:"nudgeEnabled"`
-	Available       map[string]bool `json:"available"`
+	MomentEnabled            bool            `json:"momentEnabled"`
+	PresenceEnabled          bool            `json:"presenceEnabled"`
+	NudgeEnabled             bool            `json:"nudgeEnabled"`
+	AIPersonalizationEnabled bool            `json:"aiPersonalizationEnabled"`
+	Available                map[string]bool `json:"available"`
 }
 type NotificationPreferenceRepository interface {
 	GetPreferences(context.Context, int64, int64) (NotificationPreferences, error)

@@ -12,6 +12,8 @@ import (
 	mysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/together"
 	cosstorage "github.com/nanfang/just-for-you/server/internal/infrastructure/storage/cos"
 	togetherhttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/together"
+	"net/http"
+	"time"
 )
 
 func coverKey() string {
@@ -27,6 +29,15 @@ func buildTogether(db *sql.DB, cfg config.Config) (*togetherhttp.Handler, error)
 	if err != nil {
 		return nil, err
 	}
-	daily := app.NewDailyQuestionService(repo, repo, ai.NewFallbackQuestions(), clock.System{})
+	fallback := ai.NewFallbackQuestions()
+	var primary app.QuestionGenerator
+	if cfg.AIBaseURL != "" && cfg.AIAPIKey != "" && cfg.AIModel != "" {
+		primary = ai.NewOpenAICompatible(cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel, &http.Client{Timeout: 3 * time.Second})
+	}
+	var generator app.QuestionGenerator = fallback
+	if primary != nil {
+		generator = app.PersonalizedQuestionGenerator{Preferences: repo, Primary: primary, Fallback: fallback}
+	}
+	daily := app.NewDailyQuestionService(repo, repo, generator, clock.System{}, repo)
 	return togetherhttp.NewHandler(app.NewServiceWithStorage(repo, repo, clock.System{}, storage, coverKey), daily), nil
 }

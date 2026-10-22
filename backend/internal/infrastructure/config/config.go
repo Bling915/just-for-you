@@ -19,6 +19,9 @@ type Config struct {
 	WeChatMomentTemplateID   string
 	WeChatPresenceTemplateID string
 	WeChatNudgeTemplateID    string
+	AIBaseURL                string
+	AIAPIKey                 string
+	AIModel                  string
 }
 
 func Load() (Config, error) {
@@ -29,6 +32,7 @@ func Load() (Config, error) {
 		COSSecretID: os.Getenv("COS_SECRET_ID"), COSSecretKey: os.Getenv("COS_SECRET_KEY"),
 		EnableSoloTest:         strings.EqualFold(strings.TrimSpace(os.Getenv("ENABLE_SOLO_TEST")), "true"),
 		WeChatMomentTemplateID: strings.TrimSpace(os.Getenv("WECHAT_TEMPLATE_MOMENT_ID")), WeChatPresenceTemplateID: strings.TrimSpace(os.Getenv("WECHAT_TEMPLATE_PRESENCE_ID")), WeChatNudgeTemplateID: strings.TrimSpace(os.Getenv("WECHAT_TEMPLATE_NUDGE_ID")),
+		AIBaseURL: strings.TrimSpace(os.Getenv("AI_BASE_URL")), AIAPIKey: strings.TrimSpace(os.Getenv("AI_API_KEY")), AIModel: strings.TrimSpace(os.Getenv("AI_MODEL")),
 	}
 	if cfg.HTTPAddr == "" {
 		cfg.HTTPAddr = ":8080"

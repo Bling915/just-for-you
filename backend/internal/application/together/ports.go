@@ -45,9 +45,16 @@ type GeneratedQuestion struct{ Text, Source, ContextVersion string }
 type QuestionContext struct {
 	CoupleID int64
 	Date     time.Time
+	Themes   []string
 }
 type QuestionGenerator interface {
 	Generate(context.Context, QuestionContext) (GeneratedQuestion, error)
+}
+type AIPersonalizationReader interface {
+	AIPersonalizationEnabled(context.Context, int64) (bool, error)
+}
+type QuestionContextReader interface {
+	RecentContextMoments(context.Context, int64, int) ([]ContextMoment, error)
 }
 type DailyQuestionRepository interface {
 	FindDailyQuestion(context.Context, int64, time.Time) (domain.DailyQuestion, error)

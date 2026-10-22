@@ -8,6 +8,9 @@ DROP TABLE moment_reactions;
 DROP TABLE moment_perspective_photos;
 DROP TABLE moment_perspectives;
 
+ALTER TABLE notification_preferences
+  DROP COLUMN ai_personalization_enabled;
+
 ALTER TABLE moments
   DROP FOREIGN KEY fk_moment_source,
   DROP CHECK chk_moment_kind_links,
