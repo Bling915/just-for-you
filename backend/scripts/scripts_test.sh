@@ -51,7 +51,10 @@ cat >/dev/null
 EOF
 cat >"$tmp_dir/bin/go" <<'EOF'
 #!/usr/bin/env bash
-printf 'go %s | cwd=%s\n' "$*" "$PWD" >>"$CALL_LOG"
+printf 'go %s | cwd=%s | dsn=%s\n' "$*" "$PWD" "$MYSQL_DSN" >>"$CALL_LOG"
+if [[ "${FAIL_MIGRATION_VERSION:-}" == "${*: -1}" ]]; then
+  exit 9
+fi
 EOF
 chmod +x "$tmp_dir/bin/mysqladmin" "$tmp_dir/bin/mysql" "$tmp_dir/bin/go"
 : >"$tmp_dir/setup.log"
@@ -63,5 +66,20 @@ assert_contains "$calls" 'go run ./cmd/migrate -direction up -version 2'
 assert_contains "$calls" 'go run ./cmd/migrate -direction up -version 3'
 assert_contains "$calls" "cwd=$backend_dir"
 [[ "$setup_output" != *'local-development'* ]] || fail 'setup-local-db.sh 输出了数据库密码'
+
+: >"$tmp_dir/custom-setup.log"
+CALL_LOG="$tmp_dir/custom-setup.log" MYSQL_HOST=192.0.2.10 MYSQL_PORT=3307 PATH="$tmp_dir/bin:$PATH" \
+  "$backend_dir/scripts/setup-local-db.sh" >/dev/null
+custom_calls="$(cat "$tmp_dir/custom-setup.log")"
+assert_contains "$custom_calls" 'dsn=just_for_you:local-development@tcp(192.0.2.10:3307)/just_for_you'
+
+: >"$tmp_dir/failing-setup.log"
+if CALL_LOG="$tmp_dir/failing-setup.log" FAIL_MIGRATION_VERSION=2 PATH="$tmp_dir/bin:$PATH" \
+  "$backend_dir/scripts/setup-local-db.sh" >/dev/null 2>&1; then
+  fail '迁移失败时 setup-local-db.sh 不应成功'
+fi
+failing_calls="$(cat "$tmp_dir/failing-setup.log")"
+assert_contains "$failing_calls" 'version 2'
+[[ "$failing_calls" != *'version 3'* ]] || fail '迁移 2 失败后仍执行了迁移 3'
 
 printf 'scripts_test: PASS\n'

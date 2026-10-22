@@ -30,7 +30,7 @@ backend/                          Go 后端（DDD 分层）
 
 ## 本地运行
 
-需要：Go 1.22+、Node.js 20+、MySQL 8.x、微信开发者工具。
+需要：Go 1.23+、Node.js 20+、MySQL 8.x、微信开发者工具。
 
 当前电脑已验证 Go `1.27.2` 和 Homebrew MySQL 可用。
 

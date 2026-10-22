@@ -9,7 +9,7 @@ if [[ ! -f "$env_file" ]]; then
   exit 1
 fi
 if ! command -v go >/dev/null 2>&1; then
-  printf '没有找到 Go，请先安装 Go 1.22 或更高版本。\n' >&2
+  printf '没有找到 Go，请先安装 Go 1.23 或更高版本。\n' >&2
   exit 1
 fi
 

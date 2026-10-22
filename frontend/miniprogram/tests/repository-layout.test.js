@@ -28,3 +28,19 @@ test('obsolete application roots are gone', () => {
     assert.equal(fs.existsSync(path.join(root, relativePath)), false, `${relativePath} still exists`);
   }
 });
+
+test('tracked repository root contains only delivery files', () => {
+  const trackedRootEntries = execFileSync('git', ['ls-files'], {
+    cwd: root,
+    encoding: 'utf8',
+  })
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .map((file) => file.split('/')[0]);
+
+  assert.deepEqual(
+    [...new Set(trackedRootEntries)].sort(),
+    ['.gitignore', 'README.md', 'backend', 'frontend'],
+  );
+});
