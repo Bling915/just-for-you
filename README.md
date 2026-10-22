@@ -1,6 +1,6 @@
 # 小事成双对
 
-一款原生微信情侣小程序：双方可以记录文字、状态、位置和最多九张照片，共享时间线、纪念日、共同待办、愿望、地图与月报。
+一款原生微信情侣小程序：双方可以记录文字、状态、位置和最多九张照片，在共同空间或个人空间保存日常，并通过轻回应、双视角、每日一句和回忆浮现一起珍藏小事。
 
 ## 目录地图
 
@@ -63,6 +63,8 @@ curl http://127.0.0.1:8080/healthz
 
 已有数据库不要重复执行迁移脚本；先检查 `backend/migrations/` 和当前表结构。
 
+本次功能依赖 `000004_personal_spaces_reflections` 迁移。它会保留旧的共同小事，并补齐 `shared/couple/standard` 默认字段，同时创建回应、双视角和每日问题表。部署前请先备份生产库，再按顺序执行迁移。
+
 后端测试：
 
 ```bash
@@ -87,6 +89,32 @@ npm test
 - 同一 Wi-Fi 的真机：`http://电脑局域网IP:8080`
 
 `config.js` 的本地值、`project.private.config.json` 和 `backend/.env` 都不应提交。
+
+## 新增功能与 API
+
+- 三个时间线：`GET /v1/moments?space=shared`、`space=personal&owner=me`、`space=personal&owner=partner`。
+- 发布目标和可见范围：`POST /v1/moments` 的 `spaceType` 与 `visibility`。
+- 分享与回应：`POST /v1/moments/:id/share-to-couple`、`POST/DELETE /v1/moments/:id/reactions`。
+- 双视角：`PUT/DELETE /v1/moments/:id/perspective`，最多三张照片。
+- 每日一句：`GET /v1/daily-question`、`PUT /v1/daily-question/answer`、`GET /v1/daily-questions`。
+- 回忆浮现：`GET /v1/memories/resurface`。
+
+每日一句始终有内置题库可用。要启用可选的 OpenAI-compatible 个性化生成，在 `.env` 中同时配置：
+
+```bash
+AI_BASE_URL=https://你的服务地址/v1
+AI_API_KEY=只保存在本机或服务器环境中的密钥
+AI_MODEL=模型名称
+```
+
+三项缺任意一项都不会阻止服务启动，而是直接使用内置题库。个性化上下文只包含当前关系共同小事的截断主题、宽泛情绪和非精确场景；不会发送个人空间内容、图片地址、对象键、经纬度或用户凭证。用户也可以在“消息与个性化”中关闭此功能。
+
+## 本期验收
+
+- 后端全量 `go test ./... -count=1` 与前端 `npm test` 已通过。
+- 在两个独立临时 MySQL 数据库完成 `000001` 至 `000004` 升级、旧数据保留检查和完整降级往返。
+- 使用独立端口启动当前后端，`/healthz` 返回 200，受保护的新接口未登录时正确返回 401。
+- 微信开发者工具和双真机流程仍需在你的两个真实微信账号上完成最终交互验收，尤其是弱网、九图、双视角三图和解绑后的立即失权。
 
 ## 用一个发布日记请求理解后端 DDD
 
