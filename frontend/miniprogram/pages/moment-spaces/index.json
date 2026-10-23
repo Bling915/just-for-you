@@ -1,0 +1,1 @@
+{"navigationStyle":"default","navigationBarTitleText":"小事空间","enablePullDownRefresh":true,"onReachBottomDistance":180,"backgroundColor":"#F8F5FB","usingComponents":{"moment-card":"/components/moment-card/index","empty-state":"/components/empty-state/index","skeleton-card":"/components/skeleton-card/index","floating-compose-button":"/components/floating-compose-button/index"}}

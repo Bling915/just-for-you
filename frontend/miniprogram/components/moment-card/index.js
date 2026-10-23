@@ -12,6 +12,7 @@ Component({
   lifetimes:{attached(){if(getApp().globalData.reduceMotion)this.setData({tiltClass:'reduce-motion',motionDelay:0})}},
   methods: {
     refreshMoment(){const value=this.data.moment;const index=Math.abs(Number(value&&value.id)||0)%9;this.setData({displayTime:formatRelativeTime(value&&(value.occurredAt||value.createdAt)),canReact:canReactToMoment(value,this.data.currentUserId),canShare:canShareToCouple(value,this.data.currentUserId),motionDelay:index*60,tiltClass:index%2?'tilt-right':'tilt-left'})},
+    openActions(){wx.showActionSheet({itemList:['编辑这件小事','删除这件小事'],success:result=>{if(result.tapIndex===0)this.edit();if(result.tapIndex===1)this.remove()}})},
     avatarError(){const own=this.data.moment.authorId===this.data.currentUserId;this.setData({[own?'currentUserAvatar':'partnerAvatar']:''})},
     remove(){ this.triggerEvent('delete',{id:this.data.moment.id}) },
     edit(){ this.triggerEvent('edit',{moment:this.data.moment}) },

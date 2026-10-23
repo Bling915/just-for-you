@@ -1,0 +1,10 @@
+<view class="page safe-page">
+  <view class="intro"><view class="eyebrow">LITTLE THINGS</view><view class="title">小事空间</view><view class="subtitle">共同珍藏，也留一处自己的角落</view></view>
+  <view class="scope-tabs"><button class="{{scope === 'shared' ? 'active' : ''}}" data-scope="shared" bindtap="changeScope">我们的小事</button><button class="{{scope === 'mine' ? 'active' : ''}}" data-scope="mine" bindtap="changeScope">我的小事</button><button class="{{scope === 'partner' ? 'active' : ''}}" data-scope="partner" bindtap="changeScope">TA 的小事</button></view>
+  <view wx:if="{{scope === 'shared'}}" class="shared-tools"><navigator url="/pages/calendar/index">日历</navigator><navigator url="/pages/memory-map/index">地图</navigator><navigator url="/pages/monthly-report/index">月报</navigator></view>
+  <block wx:if="{{loading}}"><skeleton-card/><skeleton-card/></block>
+  <empty-state wx:elif="{{error}}" title="暂时看不到" description="网络打了个盹，稍后再试。"/>
+  <empty-state wx:elif="{{!moments.length}}" title="这里还很安静" description="{{scope === 'shared' ? '从两个人的第一件小事开始。' : scope === 'mine' ? '记下一件只属于自己的小事吧。' : 'TA 还没有分享个人小事。'}}" action="{{scope === 'partner' ? '' : '记录小事'}}" bind:action="compose"/>
+  <block wx:else><moment-card wx:for="{{moments}}" wx:key="id" moment="{{item}}" current-user-id="{{currentUserId}}" current-user-avatar="{{currentUserAvatar}}" partner-avatar="{{partnerAvatar}}" bind:edit="edit" bind:delete="remove" bind:previewphotos="preview" bind:share="share" bind:react="react" bind:textreaction="textReaction" bind:editperspective="editPerspective" bind:deleteperspective="deletePerspective"/><view class="footer">{{loadingMore ? '正在翻开下一页…' : hasMore ? '继续向下' : '已经看到最早的小事了'}}</view></block>
+</view>
+<floating-compose-button wx:if="{{scope !== 'partner'}}" bind:compose="compose"/>
