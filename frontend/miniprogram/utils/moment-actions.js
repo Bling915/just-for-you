@@ -25,6 +25,10 @@ function canShareToCouple(moment, currentUserId) {
   return Boolean(moment && Number(moment.authorId) === Number(currentUserId) && moment.spaceType === 'personal' && (!moment.kind || moment.kind === 'standard'))
 }
 
+function canReactToMoment(moment, currentUserId) {
+  return Boolean(moment && Number(moment.authorId) !== Number(currentUserId))
+}
+
 function normalizeReactionText(value) {
   const text = String(value || '').trim()
   if (!text) throw new Error('请输入回应')
@@ -32,4 +36,4 @@ function normalizeReactionText(value) {
   return text
 }
 
-module.exports = { reactionView, toggleReaction, canShareToCouple, normalizeReactionText }
+module.exports = { reactionView, toggleReaction, canReactToMoment, canShareToCouple, normalizeReactionText }

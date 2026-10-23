@@ -3,6 +3,7 @@ Component({
   properties: {
     reactions: { type: Array, value: [], observer(){ this.refresh() } },
     currentUserId: { type: Number, value: 0, observer(){ this.refresh() } },
+    interactive: { type: Boolean, value: true },
   },
   data: { items: [], presets: [{ type: 'seen', icon: '👀' }, { type: 'hug', icon: '🫂' }, { type: 'together', icon: '✨' }, { type: 'collect', icon: '♡' }] },
   lifetimes: { attached(){ this.refresh() } },

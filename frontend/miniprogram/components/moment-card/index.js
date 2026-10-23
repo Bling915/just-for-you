@@ -1,16 +1,17 @@
 const { formatRelativeTime } = require('../../utils/date')
-const { canShareToCouple } = require('../../utils/moment-actions')
+const { canReactToMoment, canShareToCouple } = require('../../utils/moment-actions')
 Component({
   properties: {
-    moment: { type: Object, value: {}, observer(value){const index=Math.abs(Number(value&&value.id)||0)%9;this.setData({ displayTime: formatRelativeTime(value && (value.occurredAt || value.createdAt)), canShare:canShareToCouple(value,this.data.currentUserId),motionDelay:index*60,tiltClass:index%2?'tilt-right':'tilt-left' }) } },
-    currentUserId: { type: Number, value: 0 },
+    moment: { type: Object, value: {}, observer(){ this.refreshMoment() } },
+    currentUserId: { type: Number, value: 0, observer(){ this.refreshMoment() } },
     currentUserAvatar: { type: String, value: '' },
     partnerAvatar: { type: String, value: '' },
     motionIndex: { type: Number, value: 0, observer(value){this.setData({motionDelay:Math.min(Math.max(0,Number(value)||0),8)*60,tiltClass:Number(value)%2?'tilt-right':'tilt-left'})} },
   },
-  data: { displayTime: '', canShare:false,motionDelay:0,tiltClass:'tilt-left', labels: { in_class: '在上课', miss_you: '想你了', tired: '有点累' } },
+  data: { displayTime: '', canReact:false,canShare:false,motionDelay:0,tiltClass:'tilt-left', labels: { in_class: '在上课', miss_you: '想你了', tired: '有点累' } },
   lifetimes:{attached(){if(getApp().globalData.reduceMotion)this.setData({tiltClass:'reduce-motion',motionDelay:0})}},
   methods: {
+    refreshMoment(){const value=this.data.moment;const index=Math.abs(Number(value&&value.id)||0)%9;this.setData({displayTime:formatRelativeTime(value&&(value.occurredAt||value.createdAt)),canReact:canReactToMoment(value,this.data.currentUserId),canShare:canShareToCouple(value,this.data.currentUserId),motionDelay:index*60,tiltClass:index%2?'tilt-right':'tilt-left'})},
     avatarError(){const own=this.data.moment.authorId===this.data.currentUserId;this.setData({[own?'currentUserAvatar':'partnerAvatar']:''})},
     remove(){ this.triggerEvent('delete',{id:this.data.moment.id}) },
     edit(){ this.triggerEvent('edit',{moment:this.data.moment}) },
