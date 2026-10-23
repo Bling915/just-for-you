@@ -14,17 +14,26 @@ test('home keeps daily question and resurfaced memory inside one collapsible inb
   assert.match(view, /wx:if="{{inboxExpanded}}"[\s\S]*memory-resurface-card/)
 })
 
-test('compose button is outside the animated page so fixed positioning uses the viewport', () => {
+test('moment pages use inline compose actions instead of a floating button', () => {
   for (const page of ['home', 'timeline', 'personal-moments', 'moment-spaces']) {
     const view = read(`pages/${page}/index.wxml`)
-    assert.match(view, /<\/view>\s*<floating-compose-button/, `${page} compose button is still inside the page root`)
+    assert.doesNotMatch(view, /floating-compose-button/, `${page} still renders a floating compose button`)
+    assert.match(view, /class="[^"]*inline-compose/, `${page} has no inline compose action`)
   }
 })
 
-test('moment owner actions use one polished menu instead of bare edit and delete buttons', () => {
+test('moment owner actions use a compact card popover instead of the system action sheet', () => {
   const view = read('components/moment-card/index.wxml')
-  assert.match(view, /class="owner-menu"/)
+  assert.match(view, /class="owner-menu /)
   assert.match(view, /bindtap="openActions"/)
-  assert.doesNotMatch(view, />编辑<\/button>/)
-  assert.doesNotMatch(view, />删除<\/button>/)
+  assert.match(view, /class="owner-popover"/)
+  assert.match(view, /class="action-icon edit-icon"/)
+  assert.match(view, /class="action-icon delete-icon"/)
+  assert.doesNotMatch(read('components/moment-card/index.js'), /showActionSheet/)
+})
+
+test('moment spaces is a bottom tab alongside home timeline and me', () => {
+  const app = JSON.parse(read('app.json'))
+  const tabs = app.tabBar.list.map(item => item.pagePath)
+  assert.deepEqual(tabs, ['pages/home/index', 'pages/moment-spaces/index', 'pages/timeline/index', 'pages/me/index'])
 })

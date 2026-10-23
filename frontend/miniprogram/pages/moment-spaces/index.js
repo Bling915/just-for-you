@@ -22,6 +22,9 @@ Page({
   },
   async onShow() {
     if (!sessionStore.snapshot().accessToken) return wx.reLaunch({ url: '/pages/welcome/index' })
+    const requestedScope = storage.get('momentSpaceScope')
+    if (scopes[requestedScope]) this.setData({ scope: requestedScope })
+    storage.remove('momentSpaceScope')
     try {
       const relationship = await relationshipService.getCurrent()
       this.setData({ partnerAvatar: (relationship.partner && relationship.partner.avatarUrl) || '', soloTest: Boolean(relationship.soloTest) })

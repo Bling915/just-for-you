@@ -45,6 +45,7 @@
     "borderStyle": "white",
     "list": [
       {"pagePath":"pages/home/index","text":"首页"},
+      {"pagePath":"pages/moment-spaces/index","text":"小事"},
       {"pagePath":"pages/timeline/index","text":"时光"},
       {"pagePath":"pages/me/index","text":"我的"}
     ]

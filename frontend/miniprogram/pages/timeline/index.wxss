@@ -4,3 +4,4 @@
 .view-nav button{flex:1;margin:0;padding:0;height:64rpx;line-height:64rpx;border:0;border-radius:999rpx;background:transparent;color:var(--color-text-muted);font-size:24rpx;font-weight:600;letter-spacing:2rpx;transition:background var(--motion-fast),color var(--motion-fast),box-shadow var(--motion-fast)}
 .view-nav button::after{border:0}
 .view-nav button:active{background:var(--color-primary-soft);color:var(--color-primary-deep)}
+.inline-compose{height:64rpx;margin:0;padding:0 24rpx;border:0;border-radius:999rpx;color:#fff;background:linear-gradient(135deg,var(--color-primary),var(--color-primary-deep));box-shadow:0 10rpx 25rpx rgba(128,106,168,.2);font-size:22rpx;line-height:64rpx}.inline-compose::after{border:0}
