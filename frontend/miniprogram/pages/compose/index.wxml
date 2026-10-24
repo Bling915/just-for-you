@@ -8,11 +8,12 @@
   </view>
   <view class="sheet">
     <textarea value="{{text}}" maxlength="-1" auto-height placeholder="今天发生了什么小事？" bindinput="inputText"/><view class="count">{{textCount}} / 500</view>
-    <view class="label">此刻的状态</view><view class="statuses"><view wx:for="{{statuses}}" wx:key="code" class="status {{status === item.code ? 'active' : ''}}" data-code="{{item.code}}" bindtap="selectStatus"><text>{{item.icon}}</text>{{item.label}}</view></view>
+    <view class="label">此刻的状态</view><view class="statuses"><view wx:for="{{statuses}}" wx:key="value" class="status {{selectedQuickStatus === item.value ? 'active' : ''}}" data-value="{{item.value}}" bindtap="selectStatus"><text>{{item.icon}}</text>{{item.value}}</view></view>
+    <input class="custom-status" value="{{customStatus}}" maxlength="40" placeholder="或者写下自己的状态" bindinput="inputStatus"/><view class="count {{statusTooLong ? 'limit-error' : ''}}">{{statusTooLong ? '状态最多 20 个字 · ' : ''}}{{statusCount}} / 20</view>
     <view class="label">照片</view><photo-picker files="{{files}}" bind:change="filesChanged" bind:retry="retryPhoto"/>
     <view class="label">发生时间</view><view class="row"><picker mode="date" value="{{occurredDate}}" end="{{today}}" bindchange="changeDate"><view class="field">{{occurredDate}}</view></picker><picker mode="time" value="{{occurredTime}}" bindchange="changeTime"><view class="field">{{occurredTime}}</view></picker></view>
     <view class="label">在哪里</view><input value="{{placeName}}" maxlength="-1" placeholder="地点名称（可选）" bindinput="inputPlace"/><view class="location-actions"><button bindtap="chooseLocation">{{latitude !== null ? '重新选位置' : '选择位置'}}</button><button wx:if="{{placeName || latitude !== null}}" bindtap="clearLocation">清除</button></view><view wx:if="{{latitude !== null}}" class="located">⌖ 已标记位置{{spaceType === 'shared' ? '，将显示在共同地图上' : ''}}</view><view class="count">{{placeCount}} / 80</view>
   </view>
   <view wx:if="{{publishing && total}}" class="progress">正在处理 {{completed}} / {{total}} 张照片</view>
-  <button class="publish" loading="{{publishing}}" disabled="{{publishing}}" bindtap="publish">{{publishing ? '正在珍藏…' : publishLabel}}</button>
+  <button class="publish" loading="{{publishing}}" disabled="{{publishing || statusTooLong}}" bindtap="publish">{{publishing ? '正在珍藏…' : publishLabel}}</button>
 </view>

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { hasContent, decideOnExit, isDraftEmpty, buildDraftPayload, restoreDraft } = require('../utils/compose-guard');
+const { hasContent, decideOnExit, isDraftEmpty, buildDraftPayload, restoreDraft, restoreStatusEditor, selectQuickStatus, inputCustomStatus } = require('../utils/compose-guard');
 
 /**
  * 新增记录页的离开决策。
@@ -20,7 +20,7 @@ test('有文字内容时弹窗询问', () => {
 });
 
 test('只有状态标签也算有内容', () => {
-  assert.equal(decideOnExit({ status: 'miss_you' }, {}).action, 'confirm');
+  assert.equal(decideOnExit({ status: '想你了' }, {}).action, 'confirm');
 });
 
 test('只有地点也算有内容', () => {
@@ -54,7 +54,7 @@ test('hasContent 判定与 decideOnExit 一致', () => {
     [{}, false],
     [{ text: ' ' }, false],
     [{ text: 'x' }, true],
-    [{ status: 'tired' }, true],
+    [{ status: '有点累' }, true],
     [{ placeName: '家' }, true],
     [{ latitude: 0, longitude: 0 }, true], // 0 是有效坐标，不能被当成空
     [{ latitude: null }, false],
@@ -102,7 +102,7 @@ test('发布成功后清空即回到全新一页', () => {
 test('草稿不保存照片：临时文件路径跨会话必然失效', () => {
   const payload = buildDraftPayload({
     text: '今天去了海边',
-    status: 'miss_you',
+    status: '想你了',
     placeName: '外滩',
     latitude: 31.23,
     longitude: 121.47,
@@ -128,7 +128,7 @@ test('草稿缺字段时补成安全的空值', () => {
 test('恢复草稿时丢弃照片，其余字段原样带回', () => {
   const form = restoreDraft({
     text: '上次写到一半',
-    status: 'tired',
+    status: '有点累',
     placeName: '家',
     latitude: 31.2,
     longitude: 121.4,
@@ -139,12 +139,23 @@ test('恢复草稿时丢弃照片，其余字段原样带回', () => {
   });
   assert.deepEqual(form.files, []);
   assert.equal(form.text, '上次写到一半');
-  assert.equal(form.status, 'tired');
+  assert.equal(form.status, '有点累');
   assert.equal(form.placeName, '家');
   assert.equal(form.latitude, 31.2);
   assert.equal(form.longitude, 121.4);
 	assert.equal(form.spaceType, 'personal');
 	assert.equal(form.visibility, 'partner');
+});
+
+test('快捷状态和自定义状态共用一个 status 字段且互斥', () => {
+  assert.deepEqual(selectQuickStatus('', '想你了'), { status: '想你了', selectedQuickStatus: '想你了', customStatus: '' });
+  assert.deepEqual(inputCustomStatus('今天很开心'), { status: '今天很开心', selectedQuickStatus: '', customStatus: '今天很开心' });
+  assert.deepEqual(selectQuickStatus('想你了', '想你了'), { status: '', selectedQuickStatus: '', customStatus: '' });
+});
+
+test('恢复草稿时快捷值恢复为选中态，自定义值恢复到输入框', () => {
+  assert.deepEqual(restoreStatusEditor('在上课'), { status: '在上课', selectedQuickStatus: '在上课', customStatus: '' });
+  assert.deepEqual(restoreStatusEditor('等你下班'), { status: '等你下班', selectedQuickStatus: '', customStatus: '等你下班' });
 });
 
 test('草稿保留显式空间，新草稿仍由发布页默认到共同空间', () => {

@@ -1,5 +1,6 @@
 const test=require('node:test');const assert=require('node:assert/strict')
 const {statusMoment,normalizeHighlights}=require('../utils/home-view-model')
 test('status orb always receives an object when no partner status exists',()=>{assert.deepEqual(statusMoment(null,null),{})})
-test('live presence takes precedence over latest moment status',()=>{assert.deepEqual(statusMoment({preset:'tired',customText:'有点困'},{status:'miss_you'}),{status:'tired',text:'有点困'})})
+test('live presence takes precedence over latest moment status',()=>{assert.deepEqual(statusMoment({preset:'tired',customText:'有点困'},{status:'想你了'}),{status:'tired',displayStatus:'有点累',text:'有点困'})})
+test('latest moment status keeps its original custom text',()=>{assert.deepEqual(statusMoment(null,{status:'等你下班'}),{status:'等你下班',displayStatus:'等你下班'})})
 test('missing or malformed highlights normalize to an empty list',()=>{for(const value of [undefined,null,{},'bad'])assert.deepEqual(normalizeHighlights(value),[]);assert.deepEqual(normalizeHighlights([{id:1},null,{id:2}]).map(x=>x.id),[1,2])})

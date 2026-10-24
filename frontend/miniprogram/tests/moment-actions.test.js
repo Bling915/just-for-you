@@ -1,6 +1,8 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const { reactionView, toggleReaction, canReactToMoment, canShareToCouple, normalizeReactionText } = require('../utils/moment-actions')
+const fs = require('node:fs')
+const path = require('node:path')
 
 test('reaction view aggregates counts and marks my reaction', () => {
   const reactions = [{ id: 1, type: 'hug', userId: 2 }, { id: 2, type: 'hug', userId: 1 }, { id: 3, type: 'seen', userId: 2 }]
@@ -8,6 +10,13 @@ test('reaction view aggregates counts and marks my reaction', () => {
     { type: 'seen', count: 1, reactedByMe: false },
     { type: 'hug', count: 2, reactedByMe: true },
   ])
+})
+
+test('moment card renders the original custom status instead of legacy code labels', () => {
+  const template = fs.readFileSync(path.join(__dirname, '../components/moment-card/index.wxml'), 'utf8')
+  const component = fs.readFileSync(path.join(__dirname, '../components/moment-card/index.js'), 'utf8')
+  assert.match(template, /\{\{moment\.status\}\}/)
+  assert.doesNotMatch(component, /in_class|miss_you|tired/)
 })
 
 test('toggle reaction is optimistic and returns rollback state', () => {

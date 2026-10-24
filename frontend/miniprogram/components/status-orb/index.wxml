@@ -1,8 +1,8 @@
 <view class="orb-wrap">
   <view class="orb {{moment ? '' : 'orb--quiet'}}">
     <view class="glow"></view>
-    <view class="symbol">{{moment && moment.status === 'miss_you' ? '♡' : moment && moment.status === 'tired' ? '☾' : '✦'}}</view>
+    <view class="symbol">{{moment && (moment.status === 'miss_you' || moment.status === '想你了') ? '♡' : moment && (moment.status === 'tired' || moment.status === '有点累') ? '☾' : '✦'}}</view>
   </view>
-  <view class="label">{{moment ? labels[moment.status] : '此刻安静地陪伴着'}}</view>
+  <view class="label">{{moment ? moment.displayStatus : '此刻安静地陪伴着'}}</view>
   <view wx:if="{{moment && moment.text}}" class="note">{{moment.text}}</view>
 </view>

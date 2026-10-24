@@ -21,6 +21,22 @@ const { normalizeSpaceSelection } = require('./space-model')
  * 所以草稿只留文字 / 状态 / 地点 / 时间，照片交给用户重选。
  */
 const DRAFT_FIELDS = ['text', 'status', 'placeName', 'latitude', 'longitude', 'occurredAt', 'spaceType', 'visibility']
+const QUICK_STATUSES = ['在上课', '想你了', '有点累']
+
+function restoreStatusEditor(value) {
+  const status = String(value || '')
+  const selectedQuickStatus = QUICK_STATUSES.includes(status) ? status : ''
+  return { status, selectedQuickStatus, customStatus: selectedQuickStatus ? '' : status }
+}
+
+function selectQuickStatus(currentQuickStatus, value) {
+  return restoreStatusEditor(currentQuickStatus === value ? '' : value)
+}
+
+function inputCustomStatus(value) {
+  const status = String(value || '')
+  return { status, selectedQuickStatus: '', customStatus: status }
+}
 
 /** 页面当前是否算「有内容」，用于决定要不要打扰用户 */
 function hasContent(form = {}) {
@@ -91,4 +107,7 @@ module.exports = {
   buildDraftPayload,
   restoreDraft,
   countRunes,
+  restoreStatusEditor,
+  selectQuickStatus,
+  inputCustomStatus,
 }
