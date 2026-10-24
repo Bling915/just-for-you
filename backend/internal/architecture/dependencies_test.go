@@ -9,6 +9,16 @@ import (
 
 const internalPrefix = "github.com/nanfang/just-for-you/server/internal/"
 
+var legacyRoots = []string{
+	"application/companionship", "application/identity", "application/moment", "application/relationship", "application/shared", "application/together",
+	"domain/companionship", "domain/identity", "domain/moment", "domain/relationship", "domain/together",
+	"infrastructure/ai", "infrastructure/clock", "infrastructure/config", "infrastructure/identity", "infrastructure/notification",
+	"infrastructure/persistence/mysql/companionship", "infrastructure/persistence/mysql/identity", "infrastructure/persistence/mysql/moment",
+	"infrastructure/persistence/mysql/relationship", "infrastructure/persistence/mysql/shared", "infrastructure/persistence/mysql/together",
+	"infrastructure/security", "infrastructure/storage",
+	"interfaces/http/companionship", "interfaces/http/identity", "interfaces/http/moment", "interfaces/http/relationship", "interfaces/http/shared", "interfaces/http/together",
+}
+
 type goPackage struct {
 	ImportPath string
 	Imports    []string
@@ -18,6 +28,9 @@ func TestInternalPackagesUseGlobalLayers(t *testing.T) {
 	for _, pkg := range listInternalPackages(t) {
 		relative := strings.TrimPrefix(pkg.ImportPath, internalPrefix)
 		top := strings.Split(relative, "/")[0]
+		if !isLegacyGlobalLayer(top) {
+			continue
+		}
 		if !allowedTopLevel(top) {
 			t.Errorf("package %s uses forbidden domain-first top-level directory %q", pkg.ImportPath, top)
 		}
@@ -27,6 +40,9 @@ func TestInternalPackagesUseGlobalLayers(t *testing.T) {
 func TestGlobalLayerDependencies(t *testing.T) {
 	for _, pkg := range listInternalPackages(t) {
 		from := layerOf(pkg.ImportPath)
+		if !isLegacyGlobalLayer(from) {
+			continue
+		}
 		for _, imported := range pkg.Imports {
 			if !strings.HasPrefix(imported, internalPrefix) {
 				if from == "domain" && !isStandardLibrary(imported) {
@@ -39,6 +55,79 @@ func TestGlobalLayerDependencies(t *testing.T) {
 				t.Errorf("forbidden dependency: %s (%s) -> %s (%s)", pkg.ImportPath, from, imported, to)
 			}
 		}
+	}
+}
+
+func TestVerticalSliceDependencies(t *testing.T) {
+	for _, pkg := range listInternalPackages(t) {
+		relative := strings.TrimPrefix(pkg.ImportPath, internalPrefix)
+		parts := strings.Split(relative, "/")
+		if len(parts) == 0 {
+			continue
+		}
+		if isLegacyGlobalLayer(parts[0]) {
+			if !legacyRootAllowed(relative) {
+				t.Errorf("legacy global layer is not allowlisted: %s", pkg.ImportPath)
+			}
+			continue
+		}
+		if parts[0] == "architecture" || parts[0] == "bootstrap" || parts[0] == "platform" {
+			continue
+		}
+		if len(parts) < 2 || !isSliceLayer(parts[1]) {
+			t.Errorf("package %s is not inside a domain slice layer", pkg.ImportPath)
+			continue
+		}
+		fromContext, fromLayer := parts[0], parts[1]
+		for _, imported := range pkg.Imports {
+			if !strings.HasPrefix(imported, internalPrefix) {
+				if fromLayer == "domain" && !isStandardLibrary(imported) {
+					t.Errorf("domain package %s imports non-standard dependency %s", pkg.ImportPath, imported)
+				}
+				continue
+			}
+			importedParts := strings.Split(strings.TrimPrefix(imported, internalPrefix), "/")
+			if len(importedParts) < 2 {
+				continue
+			}
+			toContext, toLayer := importedParts[0], importedParts[1]
+			if fromLayer == "domain" {
+				t.Errorf("domain package %s imports internal package %s", pkg.ImportPath, imported)
+			}
+			if fromLayer == "application" && (toLayer == "infrastructure" || toLayer == "interfaces" || toContext == "bootstrap") {
+				t.Errorf("application package %s imports outward package %s", pkg.ImportPath, imported)
+			}
+			if fromContext != toContext && (toLayer == "infrastructure" || toLayer == "interfaces") {
+				t.Errorf("cross-context concrete dependency: %s -> %s", pkg.ImportPath, imported)
+			}
+		}
+	}
+}
+
+func legacyRootAllowed(relative string) bool {
+	for _, root := range legacyRoots {
+		if relative == root || strings.HasPrefix(relative, root+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+func isLegacyGlobalLayer(name string) bool {
+	switch name {
+	case "application", "domain", "infrastructure", "interfaces":
+		return true
+	default:
+		return false
+	}
+}
+
+func isSliceLayer(name string) bool {
+	switch name {
+	case "domain", "application", "infrastructure", "interfaces":
+		return true
+	default:
+		return false
 	}
 }
 
