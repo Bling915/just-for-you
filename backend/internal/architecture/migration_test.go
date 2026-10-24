@@ -1,6 +1,7 @@
 package architecture
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -10,47 +11,42 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	database "github.com/nanfang/just-for-you/server/internal/platform/database"
 )
 
-func TestAvatarAnniversaryMigrationShape(t *testing.T) {
-	up := migrationSQL(t, "000003_avatar_anniversary_experience.up.sql")
-	down := migrationSQL(t, "000003_avatar_anniversary_experience.down.sql")
-	for _, fragment := range []string{"count_mode", "pinned", "cover_ref", "message", "purpose", "resource_id", "moment_photo"} {
+func TestBaselineMigrationDefinition(t *testing.T) {
+	up := migrationSQL(t, "000001_baseline.up.sql")
+	down := migrationSQL(t, "000001_baseline.down.sql")
+	required := []string{
+		"status VARCHAR(80) NOT NULL DEFAULT ''",
+		"uq_moment_daily_question",
+		"idx_moments_timeline",
+		"idx_moments_calendar",
+		"idx_moments_personal_timeline",
+		"idx_daily_questions_couple_created",
+		"schema_migrations",
+	}
+	for _, fragment := range required {
 		if !strings.Contains(up, fragment) {
-			t.Fatalf("up migration missing %q", fragment)
+			t.Fatalf("baseline up migration missing %q", fragment)
 		}
 	}
-	for _, fragment := range []string{"DROP COLUMN count_mode", "DROP COLUMN pinned", "DROP COLUMN cover_ref", "DROP COLUMN message", "DROP COLUMN purpose", "DROP COLUMN resource_id"} {
-		if !strings.Contains(down, fragment) {
-			t.Fatalf("down migration missing %q", fragment)
+	for _, forbidden := range []string{"status" + "_code", "notification_" + "deliveries"} {
+		if strings.Contains(up, forbidden) || strings.Contains(down, forbidden) {
+			t.Fatalf("baseline still contains removed schema %q", forbidden)
 		}
+	}
+	removedKind := "k" + "ind"
+	momentStart := strings.Index(up, "CREATE TABLE moments")
+	momentEnd := strings.Index(up[momentStart:], ";\n\nCREATE TABLE")
+	momentDefinition := up[momentStart : momentStart+momentEnd]
+	if strings.Contains(momentDefinition, " "+removedKind+" ") ||
+		strings.Contains(momentDefinition, "`"+removedKind+"`") {
+		t.Fatal("baseline still contains removed moment discriminator column")
 	}
 }
 
-func TestPersonalSpacesMigrationShape(t *testing.T) {
-	up := migrationSQL(t, "000004_personal_spaces_reflections.up.sql")
-	down := migrationSQL(t, "000004_personal_spaces_reflections.down.sql")
-	for _, fragment := range []string{
-		"space_type", "visibility", "kind", "source_moment_id", "daily_question_id",
-		"moment_perspectives", "moment_perspective_photos", "moment_reactions", "daily_questions", "daily_answers",
-	} {
-		if !strings.Contains(up, fragment) {
-			t.Fatalf("up migration missing %q", fragment)
-		}
-	}
-	for _, fragment := range []string{
-		"DROP TABLE daily_answers", "DROP TABLE daily_questions", "DROP TABLE moment_reactions",
-		"DROP TABLE moment_perspective_photos", "DROP TABLE moment_perspectives",
-		"DROP COLUMN daily_question_id", "DROP COLUMN source_moment_id", "DROP COLUMN kind",
-		"DROP COLUMN visibility", "DROP COLUMN space_type",
-	} {
-		if !strings.Contains(down, fragment) {
-			t.Fatalf("down migration missing %q", fragment)
-		}
-	}
-}
-
-func TestPersonalSpacesMigrationPreservesExistingMoments(t *testing.T) {
+func TestBaselineMigrationUpDownUpAndTracking(t *testing.T) {
 	root, err := sql.Open("mysql", migrationTestDSN())
 	if err != nil {
 		t.Fatal(err)
@@ -59,123 +55,105 @@ func TestPersonalSpacesMigrationPreservesExistingMoments(t *testing.T) {
 	if err := root.Ping(); err != nil {
 		t.Skipf("migration test MySQL is unavailable: %v", err)
 	}
-
-	databaseName := fmt.Sprintf("just_for_you_personal_spaces_%d", time.Now().UnixNano())
+	databaseName := fmt.Sprintf("just_for_you_baseline_%d", time.Now().UnixNano())
 	if _, err := root.Exec("CREATE DATABASE " + databaseName + " CHARACTER SET utf8mb4"); err != nil {
 		t.Fatal(err)
 	}
 	defer root.Exec("DROP DATABASE " + databaseName)
-
 	db, err := sql.Open("mysql", migrationDatabaseDSN(databaseName))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	for _, name := range []string{
-		"000001_init.up.sql", "000002_couple_experience.up.sql", "000003_avatar_anniversary_experience.up.sql",
+	ctx := context.Background()
+	migrations := filepath.Join("..", "..", "migrations")
+
+	if err = database.ApplyMigrations(ctx, db, migrations, "up", 0); err != nil {
+		t.Fatalf("apply baseline: %v", err)
+	}
+	if err = database.ApplyMigrations(ctx, db, migrations, "up", 0); err != nil {
+		t.Fatalf("reapply baseline must be idempotent: %v", err)
+	}
+	assertMigrationCount(t, db, 1)
+	assertTableExists(t, db, "moments", true)
+	assertTableExists(t, db, "notification_"+"deliveries", false)
+	assertColumnExists(t, db, "moments", "status", true)
+	assertColumnExists(t, db, "moments", "status"+"_code", false)
+	assertColumnExists(t, db, "moments", "k"+"ind", false)
+	assertColumnType(t, db, "moments", "status", 80)
+	for _, index := range []string{
+		"idx_moments_timeline",
+		"idx_moments_calendar",
+		"idx_moments_personal_timeline",
+		"uq_moment_daily_question",
+		"idx_daily_questions_couple_created",
 	} {
-		if _, err := db.Exec(migrationSQL(t, name)); err != nil {
-			t.Fatalf("apply %s: %v", name, err)
-		}
+		assertIndexExists(t, db, index, true)
 	}
 
-	occurredAt := time.Date(2026, 10, 20, 9, 30, 0, 0, time.UTC)
-	if _, err := db.Exec("INSERT INTO users(id,wechat_openid) VALUES(1,'a'),(2,'b')"); err != nil {
+	now := time.Date(2026, 10, 24, 10, 0, 0, 0, time.UTC)
+	if _, err = db.Exec(
+		"INSERT INTO users(id,wechat_openid) VALUES(1,'baseline-a'),(2,'baseline-b')",
+	); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("INSERT INTO couples(id,user_a_id,user_b_id,status) VALUES(7,1,2,'active')"); err != nil {
+	if _, err = db.Exec(
+		"INSERT INTO couples(id,user_a_id,user_b_id,status,bound_at) VALUES(7,1,2,'active',?)",
+		now,
+	); err != nil {
 		t.Fatal(err)
 	}
-	result, err := db.Exec("INSERT INTO moments(couple_id,author_user_id,body,status_code,place_name,occurred_at,created_at,updated_at) VALUES(7,1,'旧记录','','',?,?,?)", occurredAt, occurredAt, occurredAt)
+	result, err := db.Exec(
+		"INSERT INTO moments(couple_id,author_user_id,space_type,visibility,body,status,place_name,latitude,longitude,occurred_at,created_at,updated_at) VALUES(7,1,'shared','couple','基线记录','想你了','',NULL,NULL,?,?,?)",
+		now,
+		now,
+		now,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	momentID, _ := result.LastInsertId()
-	if _, err := db.Exec("INSERT INTO moment_photos(moment_id,object_key,sort_order) VALUES(?,?,1)", momentID, "legacy/photo.jpg"); err != nil {
+	if momentID == 0 {
+		t.Fatal("moment insert did not return id")
+	}
+	if _, err = db.Exec(
+		"INSERT INTO daily_questions(id,couple_id,question_date,question_text,source,created_at,updated_at) VALUES(3,7,?,?,?,?,?)",
+		"2026-10-24",
+		"今天最开心的小事？",
+		"fallback",
+		now,
+		now,
+	); err != nil {
 		t.Fatal(err)
 	}
-
-	if _, err := db.Exec(migrationSQL(t, "000004_personal_spaces_reflections.up.sql")); err != nil {
-		t.Fatalf("apply personal spaces migration: %v", err)
-	}
-	var spaceType, visibility, kind, body, objectKey string
-	var authorID, photoCount int64
-	var gotOccurredAt time.Time
-	err = db.QueryRow(`SELECT m.space_type,m.visibility,m.kind,m.author_user_id,m.body,m.occurred_at,
-		(SELECT COUNT(*) FROM moment_photos p WHERE p.moment_id=m.id),
-		(SELECT object_key FROM moment_photos p WHERE p.moment_id=m.id LIMIT 1)
-		FROM moments m WHERE m.id=?`, momentID).Scan(&spaceType, &visibility, &kind, &authorID, &body, &gotOccurredAt, &photoCount, &objectKey)
-	if err != nil {
+	if _, err = db.Exec(
+		"INSERT INTO moments(couple_id,author_user_id,space_type,visibility,daily_question_id,body,status,place_name,occurred_at,created_at,updated_at) VALUES(7,1,'shared','couple',3,'每日一句','','',?,?,?)",
+		now,
+		now,
+		now,
+	); err != nil {
 		t.Fatal(err)
 	}
-	if spaceType != "shared" || visibility != "couple" || kind != "standard" || authorID != 1 || body != "旧记录" || photoCount != 1 || objectKey != "legacy/photo.jpg" || !gotOccurredAt.Equal(occurredAt) {
-		t.Fatalf("migrated moment = space:%s visibility:%s kind:%s author:%d body:%q occurred:%s photos:%d key:%q", spaceType, visibility, kind, authorID, body, gotOccurredAt, photoCount, objectKey)
+	if _, err = db.Exec(
+		"INSERT INTO moments(couple_id,author_user_id,space_type,visibility,daily_question_id,body,status,place_name,occurred_at,created_at,updated_at) VALUES(7,2,'shared','couple',3,'重复投影','','',?,?,?)",
+		now,
+		now,
+		now,
+	); err == nil {
+		t.Fatal("daily question projection must be unique")
 	}
 
-	if _, err := db.Exec(migrationSQL(t, "000004_personal_spaces_reflections.down.sql")); err != nil {
-		t.Fatalf("rollback personal spaces migration: %v", err)
+	if err = database.ApplyMigrations(ctx, db, migrations, "down", 0); err != nil {
+		t.Fatalf("apply baseline down: %v", err)
 	}
-	for _, table := range []string{"moment_perspectives", "moment_perspective_photos", "moment_reactions", "daily_questions", "daily_answers"} {
-		assertTableExists(t, db, table, false)
+	assertTableExists(t, db, "moments", false)
+	assertTableExists(t, db, "daily_questions", false)
+	assertMigrationCount(t, db, 0)
+	if err = database.ApplyMigrations(ctx, db, migrations, "up", 0); err != nil {
+		t.Fatalf("reapply baseline after down: %v", err)
 	}
-	for _, column := range []string{"space_type", "visibility", "kind", "source_moment_id", "daily_question_id"} {
-		assertColumnExists(t, db, "moments", column, false)
-	}
-}
-
-func TestCoupleExperienceMigration(t *testing.T) {
-	up := migrationSQL(t, "000002_couple_experience.up.sql")
-	down := migrationSQL(t, "000002_couple_experience.down.sql")
-
-	root, err := sql.Open("mysql", migrationTestDSN())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer root.Close()
-	if err := root.Ping(); err != nil {
-		t.Skipf("migration test MySQL is unavailable: %v", err)
-	}
-
-	databaseName := fmt.Sprintf("just_for_you_migration_%d", time.Now().UnixNano())
-	if _, err := root.Exec("CREATE DATABASE " + databaseName + " CHARACTER SET utf8mb4"); err != nil {
-		t.Fatal(err)
-	}
-	defer root.Exec("DROP DATABASE " + databaseName)
-
-	db, err := sql.Open("mysql", migrationDatabaseDSN(databaseName))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	if _, err := db.Exec(migrationSQL(t, "000001_init.up.sql")); err != nil {
-		t.Fatalf("apply initial migration: %v", err)
-	}
-	if _, err := db.Exec(up); err != nil {
-		t.Fatalf("apply couple-experience migration: %v", err)
-	}
-
-	for _, table := range []string{"presences", "nudges", "notification_preferences", "notification_deliveries", "anniversaries", "todos", "wishes"} {
-		assertTableExists(t, db, table, true)
-	}
-	for _, column := range []string{"occurred_at", "updated_at", "latitude", "longitude"} {
-		assertColumnExists(t, db, "moments", column, true)
-	}
-	for _, index := range []string{"idx_moments_calendar", "idx_presences_couple_updated", "idx_nudges_couple_created", "idx_anniversaries_couple_date", "idx_todos_couple_status", "idx_wishes_couple_status"} {
-		assertIndexExists(t, db, index, true)
-	}
-
-	if _, err := db.Exec(down); err != nil {
-		t.Fatalf("apply couple-experience down migration: %v", err)
-	}
-	assertTableExists(t, db, "users", true)
 	assertTableExists(t, db, "moments", true)
-	for _, table := range []string{"presences", "nudges", "notification_preferences", "notification_deliveries", "anniversaries", "todos", "wishes"} {
-		assertTableExists(t, db, table, false)
-	}
-	for _, column := range []string{"occurred_at", "updated_at", "latitude", "longitude"} {
-		assertColumnExists(t, db, "moments", column, false)
-	}
+	assertMigrationCount(t, db, 1)
 }
 
 func migrationSQL(t *testing.T, name string) string {
@@ -195,13 +173,36 @@ func migrationTestDSN() string {
 }
 
 func migrationDatabaseDSN(databaseName string) string {
+	if configured := os.Getenv("MIGRATION_TEST_DSN"); configured != "" {
+		if index := strings.Index(configured, ")/"); index >= 0 {
+			query := ""
+			if queryIndex := strings.Index(configured[index+2:], "?"); queryIndex >= 0 {
+				query = configured[index+2+queryIndex:]
+			}
+			return configured[:index+2] + databaseName + query
+		}
+	}
 	return "root@unix(/tmp/mysql.sock)/" + databaseName + "?parseTime=true&multiStatements=true"
+}
+
+func assertMigrationCount(t *testing.T, db *sql.DB, want int) {
+	t.Helper()
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != want {
+		t.Fatalf("schema_migrations count=%d want=%d", count, want)
+	}
 }
 
 func assertTableExists(t *testing.T, db *sql.DB, table string, want bool) {
 	t.Helper()
 	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=?", table).Scan(&count); err != nil {
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=?",
+		table,
+	).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if got := count == 1; got != want {
@@ -212,7 +213,11 @@ func assertTableExists(t *testing.T, db *sql.DB, table string, want bool) {
 func assertColumnExists(t *testing.T, db *sql.DB, table, column string, want bool) {
 	t.Helper()
 	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?", table, column).Scan(&count); err != nil {
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?",
+		table,
+		column,
+	).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if got := count == 1; got != want {
@@ -220,10 +225,28 @@ func assertColumnExists(t *testing.T, db *sql.DB, table, column string, want boo
 	}
 }
 
+func assertColumnType(t *testing.T, db *sql.DB, table, column string, maxRunes int) {
+	t.Helper()
+	var length int
+	if err := db.QueryRow(
+		"SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name=? AND column_name=?",
+		table,
+		column,
+	).Scan(&length); err != nil {
+		t.Fatal(err)
+	}
+	if length != maxRunes {
+		t.Fatalf("%s.%s max length=%d want=%d", table, column, length, maxRunes)
+	}
+}
+
 func assertIndexExists(t *testing.T, db *sql.DB, index string, want bool) {
 	t.Helper()
 	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND index_name=?", index).Scan(&count); err != nil {
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND index_name=?",
+		index,
+	).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if got := count > 0; got != want {

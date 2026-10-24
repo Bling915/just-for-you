@@ -28,7 +28,7 @@ func TestSaveWithGrantsPersistsPhotoOrderAndConsumesGrantAtomically(t *testing.T
 		mock.ExpectQuery("SELECT user_id,expires_at,consumed_at FROM upload_grants").WithArgs(key).WillReturnRows(sqlmock.NewRows([]string{"user_id", "expires_at", "consumed_at"}).AddRow(1, now.Add(time.Minute), nil))
 	}
 	mock.ExpectQuery("SELECT id FROM couples").WithArgs(int64(9), int64(1), int64(1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(9))
-	mock.ExpectExec("INSERT INTO moments").WithArgs(int64(9), int64(1), string(domain.SpaceShared), string(domain.VisibilityCouple), "standard", nil, nil, "hello", string(domain.StatusNone), "", nil, nil, now, now, now).WillReturnResult(sqlmock.NewResult(20, 1))
+	mock.ExpectExec("INSERT INTO moments").WithArgs(int64(9), int64(1), string(domain.SpaceShared), string(domain.VisibilityCouple), nil, nil, "hello", string(domain.StatusNone), "", nil, nil, now, now, now).WillReturnResult(sqlmock.NewResult(20, 1))
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO moment_photos(moment_id,object_key,sort_order) VALUES(?,?,?)")).WithArgs(int64(20), "a", 1).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO moment_photos(moment_id,object_key,sort_order) VALUES(?,?,?)")).WithArgs(int64(20), "b", 2).WillReturnResult(sqlmock.NewResult(2, 1))
 	for _, key := range []string{"a", "b"} {
@@ -212,10 +212,10 @@ func TestShareToCoupleCopiesSourceAndPhotosAtomically(t *testing.T) {
 	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 	occurred := now.Add(-24 * time.Hour)
 	mock.ExpectBegin()
-	mock.ExpectQuery("SELECT author_user_id,space_type,kind,body,status_code,place_name,latitude,longitude,occurred_at FROM moments").WithArgs(int64(7), int64(1)).WillReturnRows(sqlmock.NewRows([]string{"author_user_id", "space_type", "kind", "body", "status_code", "place_name", "latitude", "longitude", "occurred_at"}).AddRow(1, "personal", "standard", "原记录", "miss_you", "公园", nil, nil, occurred))
+	mock.ExpectQuery("SELECT author_user_id,space_type,body,status,place_name,latitude,longitude,occurred_at FROM moments").WithArgs(int64(7), int64(1)).WillReturnRows(sqlmock.NewRows([]string{"author_user_id", "space_type", "body", "status", "place_name", "latitude", "longitude", "occurred_at"}).AddRow(1, "personal", "原记录", "想你了", "公园", nil, nil, occurred))
 	mock.ExpectQuery("SELECT object_key,sort_order FROM moment_photos").WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"object_key", "sort_order"}).AddRow("users/1/a.jpg", 1))
 	mock.ExpectQuery("SELECT id FROM couples").WithArgs(int64(9), int64(1), int64(1)).WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(9))
-	mock.ExpectExec("INSERT INTO moments").WithArgs(int64(9), int64(1), "shared", "couple", "standard", int64(7), nil, "也放进我们的故事", "miss_you", "公园", nil, nil, occurred, now, now).WillReturnResult(sqlmock.NewResult(20, 1))
+	mock.ExpectExec("INSERT INTO moments").WithArgs(int64(9), int64(1), "shared", "couple", int64(7), nil, "也放进我们的故事", "想你了", "公园", nil, nil, occurred, now, now).WillReturnResult(sqlmock.NewResult(20, 1))
 	mock.ExpectExec("INSERT INTO moment_photos").WithArgs(int64(20), int64(7)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 	shared, err := NewMySQLMomentStore(db).ShareToCouple(context.Background(), 7, 1, 9, "也放进我们的故事", now)

@@ -17,14 +17,7 @@ import (
 
 type MySQLMomentStore struct{ db *sql.DB }
 
-const momentSelectColumns = "id,author_user_id,couple_id,space_type,visibility,kind,source_moment_id,daily_question_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at,deleted_at"
-
-func storedKind(value domain.Moment) string {
-	if value.DailyQuestionID() != nil {
-		return "daily_question"
-	}
-	return "standard"
-}
+const momentSelectColumns = "id,author_user_id,couple_id,space_type,visibility,source_moment_id,daily_question_id,body,status,place_name,latitude,longitude,occurred_at,created_at,updated_at,deleted_at"
 
 func (r MySQLMomentStore) Calendar(ctx context.Context, coupleID int64, from, to time.Time) ([]application.CalendarDay, error) {
 	rows, e := r.db.QueryContext(ctx, "SELECT DATE_FORMAT(CONVERT_TZ(occurred_at,'+00:00','+08:00'),'%Y-%m-%d'),COUNT(*) FROM moments WHERE couple_id=? AND space_type='shared' AND occurred_at>=? AND occurred_at<? AND deleted_at IS NULL GROUP BY 1 ORDER BY 1", coupleID, from.UTC(), to.UTC())
@@ -65,7 +58,7 @@ func (r MySQLMomentStore) MonthlyReport(ctx context.Context, coupleID int64, fro
 		return v, e
 	}
 	_ = r.db.QueryRowContext(ctx, "SELECT place_name FROM moments WHERE couple_id=? AND space_type='shared' AND occurred_at>=? AND occurred_at<? AND deleted_at IS NULL AND place_name<>'' GROUP BY place_name ORDER BY COUNT(*) DESC,place_name LIMIT 1", coupleID, from.UTC(), to.UTC()).Scan(&v.TopPlace)
-	_ = r.db.QueryRowContext(ctx, "SELECT status_code FROM moments WHERE couple_id=? AND space_type='shared' AND occurred_at>=? AND occurred_at<? AND deleted_at IS NULL AND status_code<>'' GROUP BY status_code ORDER BY COUNT(*) DESC,status_code LIMIT 1", coupleID, from.UTC(), to.UTC()).Scan(&v.CommonStatus)
+	_ = r.db.QueryRowContext(ctx, "SELECT status FROM moments WHERE couple_id=? AND space_type='shared' AND occurred_at>=? AND occurred_at<? AND deleted_at IS NULL AND status<>'' GROUP BY status ORDER BY COUNT(*) DESC,status LIMIT 1", coupleID, from.UTC(), to.UTC()).Scan(&v.CommonStatus)
 	return v, nil
 }
 
@@ -122,7 +115,7 @@ func (r MySQLMomentStore) SaveWithGrants(ctx context.Context, moment domain.Mome
 			return domain.Moment{}, err
 		}
 	}
-	result, err := tx.ExecContext(ctx, "INSERT INTO moments(couple_id,author_user_id,space_type,visibility,kind,source_moment_id,daily_question_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", nullablePositiveID(moment.CoupleID()), moment.AuthorID(), string(moment.SpaceType()), string(moment.Visibility()), storedKind(moment), moment.SourceMomentID(), moment.DailyQuestionID(), moment.Text(), string(moment.Status()), moment.Place(), moment.Latitude(), moment.Longitude(), moment.OccurredAt(), moment.CreatedAt(), moment.UpdatedAt())
+	result, err := tx.ExecContext(ctx, "INSERT INTO moments(couple_id,author_user_id,space_type,visibility,source_moment_id,daily_question_id,body,status,place_name,latitude,longitude,occurred_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", nullablePositiveID(moment.CoupleID()), moment.AuthorID(), string(moment.SpaceType()), string(moment.Visibility()), moment.SourceMomentID(), moment.DailyQuestionID(), moment.Text(), string(moment.Status()), moment.Place(), moment.Latitude(), moment.Longitude(), moment.OccurredAt(), moment.CreatedAt(), moment.UpdatedAt())
 	if err != nil {
 		return domain.Moment{}, err
 	}
@@ -176,7 +169,7 @@ func (r MySQLMomentStore) UpdateWithGrants(ctx context.Context, moment domain.Mo
 			return domain.Moment{}, err
 		}
 	}
-	result, err := tx.ExecContext(ctx, "UPDATE moments SET couple_id=?,visibility=?,body=?,status_code=?,place_name=?,latitude=?,longitude=?,occurred_at=?,updated_at=? WHERE id=? AND author_user_id=? AND space_type=? AND updated_at=? AND deleted_at IS NULL", nullablePositiveID(moment.CoupleID()), string(moment.Visibility()), moment.Text(), string(moment.Status()), moment.Place(), moment.Latitude(), moment.Longitude(), moment.OccurredAt(), moment.UpdatedAt(), moment.ID(), moment.AuthorID(), string(moment.SpaceType()), version)
+	result, err := tx.ExecContext(ctx, "UPDATE moments SET couple_id=?,visibility=?,body=?,status=?,place_name=?,latitude=?,longitude=?,occurred_at=?,updated_at=? WHERE id=? AND author_user_id=? AND space_type=? AND updated_at=? AND deleted_at IS NULL", nullablePositiveID(moment.CoupleID()), string(moment.Visibility()), moment.Text(), string(moment.Status()), moment.Place(), moment.Latitude(), moment.Longitude(), moment.OccurredAt(), moment.UpdatedAt(), moment.ID(), moment.AuthorID(), string(moment.SpaceType()), version)
 	if err != nil {
 		return domain.Moment{}, err
 	}
@@ -258,11 +251,11 @@ type scanner interface{ Scan(...any) error }
 func (r MySQLMomentStore) scanMoment(ctx context.Context, row scanner) (domain.Moment, error) {
 	var id, author int64
 	var relationship, sourceMoment, dailyQuestion sql.NullInt64
-	var text, status, place, spaceType, visibility, kind string
+	var text, status, place, spaceType, visibility string
 	var latitude, longitude sql.NullFloat64
 	var occurred, created, updated time.Time
 	var deleted sql.NullTime
-	if err := row.Scan(&id, &author, &relationship, &spaceType, &visibility, &kind, &sourceMoment, &dailyQuestion, &text, &status, &place, &latitude, &longitude, &occurred, &created, &updated, &deleted); err != nil {
+	if err := row.Scan(&id, &author, &relationship, &spaceType, &visibility, &sourceMoment, &dailyQuestion, &text, &status, &place, &latitude, &longitude, &occurred, &created, &updated, &deleted); err != nil {
 		return domain.Moment{}, err
 	}
 	photoRows, err := r.db.QueryContext(ctx, "SELECT object_key,sort_order FROM moment_photos WHERE moment_id=? ORDER BY sort_order", id)
@@ -304,7 +297,7 @@ func (r MySQLMomentStore) Recent(ctx context.Context, filter application.Timelin
 	return page.Moments, err
 }
 func (r MySQLMomentStore) LatestStatusByAuthor(ctx context.Context, relationshipID, authorID int64) (*domain.Moment, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT "+momentSelectColumns+" FROM moments WHERE couple_id=? AND space_type='shared' AND author_user_id=? AND status_code<>'' AND deleted_at IS NULL ORDER BY occurred_at DESC,id DESC LIMIT 1", relationshipID, authorID)
+	row := r.db.QueryRowContext(ctx, "SELECT "+momentSelectColumns+" FROM moments WHERE couple_id=? AND space_type='shared' AND author_user_id=? AND status<>'' AND deleted_at IS NULL ORDER BY occurred_at DESC,id DESC LIMIT 1", relationshipID, authorID)
 	moment, err := r.scanMoment(ctx, row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -338,17 +331,17 @@ func (r MySQLMomentStore) ShareToCouple(ctx context.Context, sourceID, authorID,
 	}
 	defer tx.Rollback()
 	var sourceAuthor int64
-	var spaceType, kind, body, status, place string
+	var spaceType, body, status, place string
 	var latitude, longitude sql.NullFloat64
 	var occurredAt time.Time
-	err = tx.QueryRowContext(ctx, "SELECT author_user_id,space_type,kind,body,status_code,place_name,latitude,longitude,occurred_at FROM moments WHERE id=? AND author_user_id=? AND deleted_at IS NULL FOR UPDATE", sourceID, authorID).Scan(&sourceAuthor, &spaceType, &kind, &body, &status, &place, &latitude, &longitude, &occurredAt)
+	err = tx.QueryRowContext(ctx, "SELECT author_user_id,space_type,body,status,place_name,latitude,longitude,occurred_at FROM moments WHERE id=? AND author_user_id=? AND deleted_at IS NULL FOR UPDATE", sourceID, authorID).Scan(&sourceAuthor, &spaceType, &body, &status, &place, &latitude, &longitude, &occurredAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Moment{}, domain.ErrMomentNotFound
 	}
 	if err != nil {
 		return domain.Moment{}, err
 	}
-	if spaceType != string(domain.SpacePersonal) || kind != "standard" {
+	if spaceType != string(domain.SpacePersonal) {
 		return domain.Moment{}, application.ErrCannotShareMoment
 	}
 	photoRows, err := tx.QueryContext(ctx, "SELECT object_key,sort_order FROM moment_photos WHERE moment_id=? ORDER BY sort_order", sourceID)
@@ -385,7 +378,7 @@ func (r MySQLMomentStore) ShareToCouple(ctx context.Context, sourceID, authorID,
 	if err != nil {
 		return domain.Moment{}, err
 	}
-	result, err := tx.ExecContext(ctx, "INSERT INTO moments(couple_id,author_user_id,space_type,visibility,kind,source_moment_id,daily_question_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", relationshipID, authorID, "shared", "couple", "standard", sourceID, nil, copyMoment.Text(), string(copyMoment.Status()), copyMoment.Place(), copyMoment.Latitude(), copyMoment.Longitude(), copyMoment.OccurredAt(), now, now)
+	result, err := tx.ExecContext(ctx, "INSERT INTO moments(couple_id,author_user_id,space_type,visibility,source_moment_id,daily_question_id,body,status,place_name,latitude,longitude,occurred_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", relationshipID, authorID, "shared", "couple", sourceID, nil, copyMoment.Text(), string(copyMoment.Status()), copyMoment.Place(), copyMoment.Latitude(), copyMoment.Longitude(), copyMoment.OccurredAt(), now, now)
 	if err != nil {
 		return domain.Moment{}, err
 	}

@@ -38,7 +38,7 @@ func (repository MySQLQuestionStore) RecentContextMoments(
 ) ([]app.ContextMoment, error) {
 	rows, err := repository.db.QueryContext(
 		ctx,
-		"SELECT body,status_code,place_name,space_type,visibility,occurred_at FROM moments WHERE couple_id=? AND space_type='shared' AND visibility='couple' AND deleted_at IS NULL ORDER BY occurred_at DESC LIMIT ?",
+		"SELECT body,status,place_name,space_type,visibility,occurred_at FROM moments WHERE couple_id=? AND space_type='shared' AND visibility='couple' AND deleted_at IS NULL ORDER BY occurred_at DESC LIMIT ?",
 		coupleID,
 		limit,
 	)

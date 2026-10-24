@@ -94,7 +94,7 @@ func (store MySQLAnswerSubmissionStore) Submit(
 		}
 		if _, err = tx.ExecContext(
 			ctx,
-			"INSERT IGNORE INTO moments(couple_id,author_user_id,space_type,visibility,kind,daily_question_id,body,status_code,place_name,occurred_at,created_at,updated_at) VALUES(?,?,'shared','couple','daily_question',?,?,'','',?,?,?)",
+			"INSERT IGNORE INTO moments(couple_id,author_user_id,space_type,visibility,daily_question_id,body,status,place_name,occurred_at,created_at,updated_at) VALUES(?,?,'shared','couple',?,?,'','',?,?,?)",
 			coupleID,
 			command.UserID,
 			command.QuestionID,

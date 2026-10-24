@@ -1,29 +1,21 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"flag"
-	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 
 	_ "github.com/go-sql-driver/mysql"
+	database "github.com/nanfang/just-for-you/server/internal/platform/database"
 )
 
 func main() {
 	direction := flag.String("direction", "up", "up or down")
-	version := flag.Int("version", 2, "migration version")
+	version := flag.Int("version", 0, "single migration version; 0 applies every pending version")
+	directory := flag.String("dir", "migrations", "migration directory")
 	flag.Parse()
-	prefix := fmt.Sprintf("%06d_", *version)
-	matches, err := filepath.Glob(filepath.Join("migrations", prefix+"*."+*direction+".sql"))
-	if err != nil || len(matches) != 1 {
-		log.Fatalf("migration version %d not found", *version)
-	}
-	contents, err := os.ReadFile(matches[0])
-	if err != nil {
-		log.Fatal(err)
-	}
 	dsn := os.Getenv("MYSQL_DSN")
 	if dsn == "" {
 		dsn = "just_for_you:local-development@tcp(127.0.0.1:3306)/just_for_you?parseTime=true&multiStatements=true"
@@ -33,8 +25,14 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
-	if _, err := db.Exec(string(contents)); err != nil {
+	if err = database.ApplyMigrations(
+		context.Background(),
+		db,
+		*directory,
+		*direction,
+		*version,
+	); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("applied", filepath.Base(matches[0]))
+	log.Printf("migrations %s complete", *direction)
 }
