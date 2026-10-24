@@ -7,7 +7,7 @@ import (
 
 func TestTokenServiceIssuesAndParsesAccessToken(t *testing.T) {
 	service := NewTokenService([]byte("01234567890123456789012345678901"))
-	now := time.Date(2026, 10, 24, 6, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Truncate(time.Second)
 	raw, expiresAt, err := service.IssueAccess(42, now)
 	if err != nil {
 		t.Fatal(err)
