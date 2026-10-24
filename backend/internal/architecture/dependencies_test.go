@@ -10,12 +10,12 @@ import (
 const internalPrefix = "github.com/nanfang/just-for-you/server/internal/"
 
 var legacyRoots = []string{
-	"application/companionship", "application/moment", "application/together",
-	"domain/companionship", "domain/moment", "domain/together",
+	"application/companionship", "application/together",
+	"domain/companionship", "domain/together",
 	"infrastructure/ai", "infrastructure/notification",
-	"infrastructure/persistence/mysql/companionship", "infrastructure/persistence/mysql/moment",
+	"infrastructure/persistence/mysql/companionship",
 	"infrastructure/persistence/mysql/together",
-	"interfaces/http/companionship", "interfaces/http/moment", "interfaces/http/shared", "interfaces/http/together",
+	"interfaces/http/companionship", "interfaces/http/shared", "interfaces/http/together",
 }
 
 type goPackage struct {
@@ -173,11 +173,11 @@ func dependencyAllowed(from, to string) bool {
 	case "domain":
 		return false
 	case "application":
-		return to == "domain" || to == "platform" || to == "account" || to == "couple"
+		return to == "domain" || to == "platform" || to == "account" || to == "couple" || to == "moment"
 	case "interfaces":
-		return to == "application" || to == "domain" || to == "platform" || to == "account" || to == "couple"
+		return to == "application" || to == "domain" || to == "platform" || to == "account" || to == "couple" || to == "moment"
 	case "infrastructure":
-		return to == "application" || to == "domain" || to == "platform" || to == "account" || to == "couple"
+		return to == "application" || to == "domain" || to == "platform" || to == "account" || to == "couple" || to == "moment"
 	case "bootstrap", "architecture":
 		return true
 	default:

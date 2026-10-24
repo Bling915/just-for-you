@@ -1,0 +1,74 @@
+package application
+
+import (
+	"context"
+	"errors"
+
+	domain "github.com/nanfang/just-for-you/server/internal/moment/domain"
+	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
+)
+
+var ErrPerspectiveOnlyForShared = errors.New("perspective only for shared moment")
+var ErrPerspectiveRequiresPartner = errors.New("perspective must be written by the other partner")
+
+type SavePerspectiveCommand struct {
+	UserID, MomentID int64
+	Text             string
+	PhotoKeys        []string
+}
+type DeletePerspectiveCommand struct{ UserID, MomentID int64 }
+type SavePerspective struct {
+	relationships ActiveCoupleReader
+	uploads       UploadAuthorizer
+	moments       momentStore
+	photos        PhotoStorage
+	clock         appshared.Clock
+}
+
+func NewSavePerspective(r ActiveCoupleReader, u UploadAuthorizer, m momentStore, p PhotoStorage, c appshared.Clock) *SavePerspective {
+	return &SavePerspective{r, u, m, p, c}
+}
+func (u *SavePerspective) Execute(ctx context.Context, command SavePerspectiveCommand) (domain.Perspective, error) {
+	rel, err := u.relationships.GetActiveCouple(ctx, command.UserID)
+	if err != nil {
+		return domain.Perspective{}, err
+	}
+	moment, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, CoupleID: rel.ID, MomentID: command.MomentID})
+	if err != nil {
+		return domain.Perspective{}, err
+	}
+	if moment.SpaceType() != domain.SpaceShared || moment.CoupleID() != rel.ID {
+		return domain.Perspective{}, ErrPerspectiveOnlyForShared
+	}
+	if moment.AuthorID() == command.UserID {
+		return domain.Perspective{}, ErrPerspectiveRequiresPartner
+	}
+	value, err := domain.NewPerspective(command.MomentID, command.UserID, command.Text, command.PhotoKeys, u.clock.Now())
+	if err != nil {
+		return domain.Perspective{}, err
+	}
+	grants, err := u.uploads.ValidateGrants(ctx, command.UserID, command.PhotoKeys, u.clock.Now())
+	if err != nil {
+		return domain.Perspective{}, err
+	}
+	for _, grant := range grants {
+		if err = u.photos.VerifyUploaded(ctx, grant.ObjectKey, grant.ContentType, 10<<20); err != nil {
+			return domain.Perspective{}, domain.ErrInvalidUpload
+		}
+	}
+	return u.moments.SavePerspectiveWithGrants(ctx, value, grants, rel.ID)
+}
+func (u *SavePerspective) Delete(ctx context.Context, command DeletePerspectiveCommand) error {
+	rel, err := u.relationships.GetActiveCouple(ctx, command.UserID)
+	if err != nil {
+		return err
+	}
+	moment, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, CoupleID: rel.ID, MomentID: command.MomentID})
+	if err != nil {
+		return err
+	}
+	if moment.SpaceType() != domain.SpaceShared {
+		return ErrPerspectiveOnlyForShared
+	}
+	return u.moments.DeletePerspective(ctx, command.MomentID, command.UserID)
+}

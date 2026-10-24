@@ -3,7 +3,7 @@ package togethermysql
 import (
 	"context"
 	"database/sql"
-	moment "github.com/nanfang/just-for-you/server/internal/application/moment"
+	moment "github.com/nanfang/just-for-you/server/internal/moment/application"
 )
 
 type HighlightReader struct{ db *sql.DB }

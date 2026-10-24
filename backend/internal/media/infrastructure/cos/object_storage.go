@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
+	domain "github.com/nanfang/just-for-you/server/internal/moment/domain"
 	cos "github.com/tencentyun/cos-go-sdk-v5"
 )
 
