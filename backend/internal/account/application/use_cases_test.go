@@ -1,4 +1,4 @@
-package identity
+package application
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	domain "github.com/nanfang/just-for-you/server/internal/domain/identity"
+	domain "github.com/nanfang/just-for-you/server/internal/account/domain"
 )
 
 type fixedClock struct{ now time.Time }
@@ -121,7 +121,7 @@ func tokenGenerator(values ...string) func() (string, error) {
 func TestLoginExecuteReusesExistingUserAndIssuesSession(t *testing.T) {
 	now := time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC)
 	repo := newMemoryRepository()
-	useCase := NewLoginUseCase(fakeIdentityProvider{ExternalIdentity{OpenID: "same"}}, repo, fakeTokens{}, fixedClock{now}, tokenGenerator("first", "second"))
+	useCase := NewLogin(fakeIdentityProvider{ExternalIdentity{OpenID: "same"}}, repo, fakeTokens{}, fixedClock{now}, tokenGenerator("first", "second"))
 	first, err := useCase.Execute(context.Background(), LoginCommand{Code: "one"})
 	if err != nil {
 		t.Fatal(err)
@@ -142,12 +142,12 @@ func TestLoginExecuteReusesExistingUserAndIssuesSession(t *testing.T) {
 func TestRefreshSessionExecuteRotatesRefreshToken(t *testing.T) {
 	now := time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC)
 	repo := newMemoryRepository()
-	login := NewLoginUseCase(fakeIdentityProvider{ExternalIdentity{OpenID: "same"}}, repo, fakeTokens{}, fixedClock{now}, tokenGenerator("old"))
+	login := NewLogin(fakeIdentityProvider{ExternalIdentity{OpenID: "same"}}, repo, fakeTokens{}, fixedClock{now}, tokenGenerator("old"))
 	session, err := login.Execute(context.Background(), LoginCommand{Code: "code"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	refresh := NewRefreshSessionUseCase(repo, fakeTokens{}, fixedClock{now}, tokenGenerator("new", "unused"))
+	refresh := NewRefreshSession(repo, fakeTokens{}, fixedClock{now}, tokenGenerator("new", "unused"))
 	next, err := refresh.Execute(context.Background(), RefreshSessionCommand{RefreshToken: session.RefreshToken})
 	if err != nil || next.RefreshToken != "new" {
 		t.Fatalf("session = %+v, error = %v", next, err)
@@ -161,7 +161,7 @@ func TestLogoutExecuteRevokesRefreshToken(t *testing.T) {
 	now := time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC)
 	repo := newMemoryRepository()
 	repo.refresh[sha256.Sum256([]byte("token"))] = domain.NewRefreshToken(sha256.Sum256([]byte("token")), 7, now.Add(time.Hour))
-	if err := NewLogoutUseCase(repo, fixedClock{now}).Execute(context.Background(), LogoutCommand{RefreshToken: "token"}); err != nil {
+	if err := NewLogout(repo, fixedClock{now}).Execute(context.Background(), LogoutCommand{RefreshToken: "token"}); err != nil {
 		t.Fatal(err)
 	}
 	if repo.refresh[sha256.Sum256([]byte("token"))].IsUsableAt(now.Add(time.Minute)) {
@@ -186,7 +186,7 @@ func TestGetProfileExecuteReturnsSignedAvatarURL(t *testing.T) {
 	user, _ := repo.FindOrCreateUser(context.Background(), "open-id")
 	_ = user.UpdateProfile("小南", "users/1/avatars/a.jpg")
 	_ = repo.UpdateUser(context.Background(), user)
-	got, err := NewGetProfileUseCase(repo, fakeAvatarStorage{}, fixedClock{time.Now()}).Execute(context.Background(), GetProfileQuery{UserID: user.ID()})
+	got, err := NewGetProfile(repo, fakeAvatarStorage{}, fixedClock{time.Now()}).Execute(context.Background(), GetProfileQuery{UserID: user.ID()})
 	if err != nil || got.User.ID() != user.ID() || got.AvatarURL != "https://read/users/1/avatars/a.jpg" {
 		t.Fatalf("user = %+v, error = %v", got, err)
 	}
@@ -195,7 +195,7 @@ func TestGetProfileExecuteReturnsSignedAvatarURL(t *testing.T) {
 func TestUpdateProfileExecuteValidatesAndPersistsUser(t *testing.T) {
 	repo := newMemoryRepository()
 	user, _ := repo.FindOrCreateUser(context.Background(), "open-id")
-	useCase := NewUpdateProfileUseCase(repo, fakeAvatarStorage{}, fixedClock{time.Now()})
+	useCase := NewUpdateProfile(repo, fakeAvatarStorage{}, fixedClock{time.Now()})
 	if _, err := useCase.Execute(context.Background(), UpdateProfileCommand{UserID: user.ID(), DisplayName: " ", AvatarRef: "avatar"}); !errors.Is(err, domain.ErrInvalidNickname) {
 		t.Fatalf("invalid name error = %v", err)
 	}
@@ -208,7 +208,7 @@ func TestUpdateProfileExecuteValidatesAndPersistsUser(t *testing.T) {
 func TestRequestAvatarUploadAcceptsImagesUpToFiveMiB(t *testing.T) {
 	now := time.Date(2026, 10, 22, 10, 0, 0, 0, time.UTC)
 	repo := newMemoryRepository()
-	u := NewRequestAvatarUploadUseCase(repo, fakeAvatarStorage{}, fixedClock{now}, func() string { return "fixed" })
+	u := NewRequestAvatarUpload(repo, fakeAvatarStorage{}, fixedClock{now}, func() string { return "fixed" })
 	for _, kind := range []string{"image/jpeg", "image/png", "image/webp"} {
 		g, err := u.Execute(context.Background(), RequestAvatarUploadCommand{UserID: 7, ContentType: kind, Size: 5 << 20})
 		if err != nil || g.ObjectKey != "users/7/avatars/fixed" || g.UploadURL == "" {
@@ -245,7 +245,7 @@ func TestUpdateProfileRequiresVerifiedUsableOwnedAvatarGrant(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			repo.grants = map[string]AvatarGrant{tc.grant.ObjectKey: tc.grant}
-			u := NewUpdateProfileUseCase(repo, fakeAvatarStorage{verifyErr: tc.verify}, fixedClock{now})
+			u := NewUpdateProfile(repo, fakeAvatarStorage{verifyErr: tc.verify}, fixedClock{now})
 			_, err := u.Execute(context.Background(), UpdateProfileCommand{UserID: 1, DisplayName: "新昵称", AvatarRef: tc.key})
 			if !errors.Is(err, domain.ErrInvalidAvatar) {
 				t.Fatalf("err=%v", err)
@@ -257,7 +257,7 @@ func TestUpdateProfileRequiresVerifiedUsableOwnedAvatarGrant(t *testing.T) {
 		})
 	}
 	repo.grants = map[string]AvatarGrant{valid.ObjectKey: valid}
-	u := NewUpdateProfileUseCase(repo, fakeAvatarStorage{}, fixedClock{now})
+	u := NewUpdateProfile(repo, fakeAvatarStorage{}, fixedClock{now})
 	updated, err := u.Execute(context.Background(), UpdateProfileCommand{UserID: 1, DisplayName: "新昵称", AvatarRef: valid.ObjectKey})
 	if err != nil || updated.AvatarRef() != valid.ObjectKey || repo.grants[valid.ObjectKey].ConsumedAt == nil {
 		t.Fatalf("updated=%+v grant=%+v err=%v", updated, repo.grants[valid.ObjectKey], err)

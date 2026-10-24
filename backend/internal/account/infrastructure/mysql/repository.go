@@ -1,4 +1,4 @@
-package infrastructure
+package mysql
 
 import (
 	"context"
@@ -6,13 +6,13 @@ import (
 	"errors"
 	"time"
 
-	application "github.com/nanfang/just-for-you/server/internal/application/identity"
-	domain "github.com/nanfang/just-for-you/server/internal/domain/identity"
+	application "github.com/nanfang/just-for-you/server/internal/account/application"
+	domain "github.com/nanfang/just-for-you/server/internal/account/domain"
 )
 
-type MySQLRepository struct{ DB *sql.DB }
+type MySQLAccountStore struct{ DB *sql.DB }
 
-func (r MySQLRepository) FindOrCreateUser(ctx context.Context, openID string) (domain.User, error) {
+func (r MySQLAccountStore) FindOrCreateUser(ctx context.Context, openID string) (domain.User, error) {
 	user, err := r.findByOpenID(ctx, openID)
 	if err == nil {
 		return user, nil
@@ -30,13 +30,13 @@ func (r MySQLRepository) FindOrCreateUser(ctx context.Context, openID string) (d
 	}
 	return domain.NewUser(id, openID), nil
 }
-func (r MySQLRepository) findByOpenID(ctx context.Context, openID string) (domain.User, error) {
+func (r MySQLAccountStore) findByOpenID(ctx context.Context, openID string) (domain.User, error) {
 	var id int64
 	var name, avatar string
 	err := r.DB.QueryRowContext(ctx, "SELECT id,display_name,avatar_ref FROM users WHERE wechat_openid=?", openID).Scan(&id, &name, &avatar)
 	return domain.RestoreUser(id, openID, name, avatar), err
 }
-func (r MySQLRepository) GetUser(ctx context.Context, id int64) (domain.User, error) {
+func (r MySQLAccountStore) GetUser(ctx context.Context, id int64) (domain.User, error) {
 	var openID, name, avatar string
 	err := r.DB.QueryRowContext(ctx, "SELECT wechat_openid,display_name,avatar_ref FROM users WHERE id=?", id).Scan(&openID, &name, &avatar)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -44,15 +44,19 @@ func (r MySQLRepository) GetUser(ctx context.Context, id int64) (domain.User, er
 	}
 	return domain.RestoreUser(id, openID, name, avatar), err
 }
-func (r MySQLRepository) UpdateUser(ctx context.Context, user domain.User) error {
+
+func (r MySQLAccountStore) GetAccount(ctx context.Context, id int64) (domain.User, error) {
+	return r.GetUser(ctx, id)
+}
+func (r MySQLAccountStore) UpdateUser(ctx context.Context, user domain.User) error {
 	_, err := r.DB.ExecContext(ctx, "UPDATE users SET display_name=?,avatar_ref=? WHERE id=?", user.DisplayName(), user.AvatarRef(), user.ID())
 	return err
 }
-func (r MySQLRepository) CreateAvatarGrant(ctx context.Context, grant application.AvatarGrant) error {
+func (r MySQLAccountStore) CreateAvatarGrant(ctx context.Context, grant application.AvatarGrant) error {
 	_, err := r.DB.ExecContext(ctx, "INSERT INTO upload_grants(user_id,object_key,content_type,purpose,resource_id,expires_at) VALUES(?,?,?,?,NULL,?)", grant.OwnerID, grant.ObjectKey, grant.ContentType, grant.Purpose, grant.ExpiresAt)
 	return err
 }
-func (r MySQLRepository) GetAvatarGrant(ctx context.Context, key string) (application.AvatarGrant, error) {
+func (r MySQLAccountStore) GetAvatarGrant(ctx context.Context, key string) (application.AvatarGrant, error) {
 	var g application.AvatarGrant
 	var consumed sql.NullTime
 	err := r.DB.QueryRowContext(ctx, "SELECT object_key,user_id,content_type,purpose,expires_at,consumed_at FROM upload_grants WHERE object_key=?", key).Scan(&g.ObjectKey, &g.OwnerID, &g.ContentType, &g.Purpose, &g.ExpiresAt, &consumed)
@@ -64,7 +68,7 @@ func (r MySQLRepository) GetAvatarGrant(ctx context.Context, key string) (applic
 	}
 	return g, err
 }
-func (r MySQLRepository) UpdateUserWithAvatarGrant(ctx context.Context, user domain.User, key string, now time.Time) error {
+func (r MySQLAccountStore) UpdateUserWithAvatarGrant(ctx context.Context, user domain.User, key string, now time.Time) error {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -85,12 +89,12 @@ func (r MySQLRepository) UpdateUserWithAvatarGrant(ctx context.Context, user dom
 	}
 	return tx.Commit()
 }
-func (r MySQLRepository) StoreRefresh(ctx context.Context, token domain.RefreshToken) error {
+func (r MySQLAccountStore) StoreRefresh(ctx context.Context, token domain.RefreshToken) error {
 	hash := token.Hash()
 	_, err := r.DB.ExecContext(ctx, "INSERT INTO refresh_tokens(token_hash,user_id,expires_at) VALUES(?,?,?)", hash[:], token.UserID(), token.ExpiresAt())
 	return err
 }
-func (r MySQLRepository) RotateRefresh(ctx context.Context, old [32]byte, next domain.RefreshToken, now time.Time) (int64, error) {
+func (r MySQLAccountStore) RotateRefresh(ctx context.Context, old [32]byte, next domain.RefreshToken, now time.Time) (int64, error) {
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
@@ -111,7 +115,7 @@ func (r MySQLRepository) RotateRefresh(ctx context.Context, old [32]byte, next d
 	}
 	return userID, tx.Commit()
 }
-func (r MySQLRepository) RevokeRefresh(ctx context.Context, hash [32]byte, now time.Time) error {
+func (r MySQLAccountStore) RevokeRefresh(ctx context.Context, hash [32]byte, now time.Time) error {
 	result, err := r.DB.ExecContext(ctx, "UPDATE refresh_tokens SET revoked_at=? WHERE token_hash=? AND revoked_at IS NULL", now, hash[:])
 	if err != nil {
 		return err

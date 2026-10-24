@@ -1,25 +1,25 @@
-package identity
+package application
 
 import (
 	"context"
 	"strings"
 
+	domain "github.com/nanfang/just-for-you/server/internal/account/domain"
 	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
-	domain "github.com/nanfang/just-for-you/server/internal/domain/identity"
 )
 
 type LoginCommand struct{ Code string }
 
-type LoginUseCase struct {
+type Login struct {
 	provider IdentityProvider
 	sessions sessionIssuer
 }
 
-func NewLoginUseCase(provider IdentityProvider, repository Repository, tokens AccessTokenIssuer, clock appshared.Clock, generator func() (string, error)) *LoginUseCase {
-	return &LoginUseCase{provider: provider, sessions: sessionIssuer{repository: repository, tokens: tokens, clock: clock, generateRefresh: generator}}
+func NewLogin(provider IdentityProvider, repository AccountStore, tokens AccessTokenIssuer, clock appshared.Clock, generator func() (string, error)) *Login {
+	return &Login{provider: provider, sessions: sessionIssuer{repository: repository, tokens: tokens, clock: clock, generateRefresh: generator}}
 }
 
-func (u *LoginUseCase) Execute(ctx context.Context, command LoginCommand) (Session, error) {
+func (u *Login) Execute(ctx context.Context, command LoginCommand) (Session, error) {
 	if strings.TrimSpace(command.Code) == "" {
 		return Session{}, domain.ErrCodeRequired
 	}

@@ -1,4 +1,4 @@
-package identityhttp
+package accounthttp
 
 import (
 	"bytes"
@@ -9,8 +9,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	application "github.com/nanfang/just-for-you/server/internal/application/identity"
-	domain "github.com/nanfang/just-for-you/server/internal/domain/identity"
+	application "github.com/nanfang/just-for-you/server/internal/account/application"
+	domain "github.com/nanfang/just-for-you/server/internal/account/domain"
 )
 
 type fakeLogin struct{ err error }
@@ -47,8 +47,8 @@ func (f fakeAvatarUpload) Execute(context.Context, application.RequestAvatarUplo
 	return application.UploadGrant{ObjectKey: "users/1/avatars/a.jpg", UploadURL: "https://upload/avatar", ContentType: "image/jpeg"}, f.err
 }
 
-func fakeUseCases(loginErr error) UseCases {
-	return UseCases{
+func fakeUseCases(loginErr error) Dependencies {
+	return Dependencies{
 		Login: fakeLogin{err: loginErr}, RefreshSession: fakeRefresh{}, Logout: fakeLogout{},
 		GetProfile: fakeGetProfile{}, UpdateProfile: fakeUpdateProfile{}, RequestAvatarUpload: fakeAvatarUpload{},
 	}

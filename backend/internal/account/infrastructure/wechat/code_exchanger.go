@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
-	application "github.com/nanfang/just-for-you/server/internal/application/identity"
+	application "github.com/nanfang/just-for-you/server/internal/account/application"
 )
 
 type WeChatIdentityProvider struct {

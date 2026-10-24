@@ -1,4 +1,4 @@
-package infrastructure
+package mysql
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	domain "github.com/nanfang/just-for-you/server/internal/domain/identity"
+	domain "github.com/nanfang/just-for-you/server/internal/account/domain"
 )
 
 func TestUpdateUserWithAvatarGrantConsumesGrantAtomically(t *testing.T) {
@@ -22,7 +22,7 @@ func TestUpdateUserWithAvatarGrantConsumesGrantAtomically(t *testing.T) {
 	mock.ExpectExec("UPDATE users SET display_name=.*,avatar_ref=").WithArgs("小南", "users/7/avatars/new.jpg", int64(7)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("UPDATE upload_grants SET consumed_at=").WithArgs(now, "users/7/avatars/new.jpg").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
-	if err = (MySQLRepository{DB: db}).UpdateUserWithAvatarGrant(context.Background(), user, user.AvatarRef(), now); err != nil {
+	if err = (MySQLAccountStore{DB: db}).UpdateUserWithAvatarGrant(context.Background(), user, user.AvatarRef(), now); err != nil {
 		t.Fatal(err)
 	}
 	if err = mock.ExpectationsWereMet(); err != nil {

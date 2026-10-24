@@ -1,12 +1,12 @@
-package identity
+package application
 
 import (
 	"context"
 	"crypto/sha256"
 	"time"
 
+	domain "github.com/nanfang/just-for-you/server/internal/account/domain"
 	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
-	domain "github.com/nanfang/just-for-you/server/internal/domain/identity"
 )
 
 type Session struct {
@@ -17,7 +17,7 @@ type Session struct {
 }
 
 type sessionIssuer struct {
-	repository      Repository
+	repository      AccountStore
 	tokens          AccessTokenIssuer
 	clock           appshared.Clock
 	generateRefresh func() (string, error)

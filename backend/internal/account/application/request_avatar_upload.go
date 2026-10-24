@@ -1,11 +1,11 @@
-package identity
+package application
 
 import (
 	"context"
 	"fmt"
 	"time"
 
-	domain "github.com/nanfang/just-for-you/server/internal/domain/identity"
+	domain "github.com/nanfang/just-for-you/server/internal/account/domain"
 )
 
 type AvatarGrant struct {
@@ -27,17 +27,17 @@ type RequestAvatarUploadCommand struct {
 	ContentType string
 	Size        int64
 }
-type RequestAvatarUploadUseCase struct {
-	repo    Repository
+type RequestAvatarUpload struct {
+	repo    AccountStore
 	storage AvatarStorage
 	clock   Clock
 	key     func() string
 }
 
-func NewRequestAvatarUploadUseCase(r Repository, s AvatarStorage, c Clock, key func() string) *RequestAvatarUploadUseCase {
-	return &RequestAvatarUploadUseCase{r, s, c, key}
+func NewRequestAvatarUpload(r AccountStore, s AvatarStorage, c Clock, key func() string) *RequestAvatarUpload {
+	return &RequestAvatarUpload{r, s, c, key}
 }
-func (u *RequestAvatarUploadUseCase) Execute(ctx context.Context, c RequestAvatarUploadCommand) (UploadGrant, error) {
+func (u *RequestAvatarUpload) Execute(ctx context.Context, c RequestAvatarUploadCommand) (UploadGrant, error) {
 	if c.Size < 1 || c.Size > 5<<20 || (c.ContentType != "image/jpeg" && c.ContentType != "image/png" && c.ContentType != "image/webp") {
 		return UploadGrant{}, domain.ErrInvalidAvatar
 	}

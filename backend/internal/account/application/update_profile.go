@@ -1,4 +1,4 @@
-package identity
+package application
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	domain "github.com/nanfang/just-for-you/server/internal/domain/identity"
+	domain "github.com/nanfang/just-for-you/server/internal/account/domain"
 )
 
 type UpdateProfileCommand struct {
@@ -15,17 +15,17 @@ type UpdateProfileCommand struct {
 	AvatarRef   string
 }
 
-type UpdateProfileUseCase struct {
-	repository Repository
+type UpdateProfile struct {
+	repository AccountStore
 	storage    AvatarStorage
 	clock      Clock
 }
 
-func NewUpdateProfileUseCase(repository Repository, storage AvatarStorage, clock Clock) *UpdateProfileUseCase {
-	return &UpdateProfileUseCase{repository: repository, storage: storage, clock: clock}
+func NewUpdateProfile(repository AccountStore, storage AvatarStorage, clock Clock) *UpdateProfile {
+	return &UpdateProfile{repository: repository, storage: storage, clock: clock}
 }
 
-func (u *UpdateProfileUseCase) Execute(ctx context.Context, command UpdateProfileCommand) (Profile, error) {
+func (u *UpdateProfile) Execute(ctx context.Context, command UpdateProfileCommand) (Profile, error) {
 	user, err := u.repository.GetUser(ctx, command.UserID)
 	if err != nil {
 		return Profile{}, err

@@ -1,10 +1,10 @@
-package identity
+package application
 
 import (
 	"context"
 	"time"
 
-	domain "github.com/nanfang/just-for-you/server/internal/domain/identity"
+	domain "github.com/nanfang/just-for-you/server/internal/account/domain"
 )
 
 type ExternalIdentity struct {
@@ -16,7 +16,11 @@ type IdentityProvider interface {
 	Exchange(context.Context, string) (ExternalIdentity, error)
 }
 
-type Repository interface {
+type FindAccount interface {
+	GetAccount(context.Context, int64) (domain.User, error)
+}
+
+type AccountStore interface {
 	FindOrCreateUser(context.Context, string) (domain.User, error)
 	GetUser(context.Context, int64) (domain.User, error)
 	UpdateUser(context.Context, domain.User) error

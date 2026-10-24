@@ -1,4 +1,4 @@
-package identityhttp
+package accounthttp
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	application "github.com/nanfang/just-for-you/server/internal/application/identity"
-	domain "github.com/nanfang/just-for-you/server/internal/domain/identity"
+	application "github.com/nanfang/just-for-you/server/internal/account/application"
+	domain "github.com/nanfang/just-for-you/server/internal/account/domain"
 	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 )
 
@@ -29,7 +29,7 @@ type UpdateProfileExecutor interface {
 type RequestAvatarUploadExecutor interface {
 	Execute(context.Context, application.RequestAvatarUploadCommand) (application.UploadGrant, error)
 }
-type UseCases struct {
+type Dependencies struct {
 	Login               LoginExecutor
 	RefreshSession      RefreshSessionExecutor
 	Logout              LogoutExecutor
@@ -37,9 +37,9 @@ type UseCases struct {
 	UpdateProfile       UpdateProfileExecutor
 	RequestAvatarUpload RequestAvatarUploadExecutor
 }
-type Handler struct{ useCases UseCases }
+type Handler struct{ useCases Dependencies }
 
-func NewHandler(useCases UseCases) *Handler { return &Handler{useCases: useCases} }
+func NewHandler(useCases Dependencies) *Handler { return &Handler{useCases: useCases} }
 func (h *Handler) RegisterPublic(router *gin.Engine) {
 	router.POST("/v1/auth/wechat", h.login)
 	router.POST("/v1/auth/refresh", h.refresh)

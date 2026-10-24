@@ -1,4 +1,4 @@
-package identity
+package application
 
 import (
 	"context"
@@ -9,15 +9,15 @@ import (
 
 type LogoutCommand struct{ RefreshToken string }
 
-type LogoutUseCase struct {
-	repository Repository
+type Logout struct {
+	repository AccountStore
 	clock      appshared.Clock
 }
 
-func NewLogoutUseCase(repository Repository, clock appshared.Clock) *LogoutUseCase {
-	return &LogoutUseCase{repository: repository, clock: clock}
+func NewLogout(repository AccountStore, clock appshared.Clock) *Logout {
+	return &Logout{repository: repository, clock: clock}
 }
 
-func (u *LogoutUseCase) Execute(ctx context.Context, command LogoutCommand) error {
+func (u *Logout) Execute(ctx context.Context, command LogoutCommand) error {
 	return u.repository.RevokeRefresh(ctx, sha256.Sum256([]byte(command.RefreshToken)), u.clock.Now())
 }

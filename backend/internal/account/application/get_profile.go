@@ -1,10 +1,10 @@
-package identity
+package application
 
 import (
 	"context"
 	"time"
 
-	domain "github.com/nanfang/just-for-you/server/internal/domain/identity"
+	domain "github.com/nanfang/just-for-you/server/internal/account/domain"
 )
 
 type GetProfileQuery struct{ UserID int64 }
@@ -13,17 +13,17 @@ type Profile struct {
 	AvatarURL string `json:"avatarUrl"`
 }
 
-type GetProfileUseCase struct {
-	repository Repository
+type GetProfile struct {
+	repository AccountStore
 	avatars    AvatarStorage
 	clock      Clock
 }
 
-func NewGetProfileUseCase(repository Repository, avatars AvatarStorage, clock Clock) *GetProfileUseCase {
-	return &GetProfileUseCase{repository: repository, avatars: avatars, clock: clock}
+func NewGetProfile(repository AccountStore, avatars AvatarStorage, clock Clock) *GetProfile {
+	return &GetProfile{repository: repository, avatars: avatars, clock: clock}
 }
 
-func (u *GetProfileUseCase) Execute(ctx context.Context, query GetProfileQuery) (Profile, error) {
+func (u *GetProfile) Execute(ctx context.Context, query GetProfileQuery) (Profile, error) {
 	user, err := u.repository.GetUser(ctx, query.UserID)
 	if err != nil {
 		return Profile{}, err
