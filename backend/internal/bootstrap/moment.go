@@ -6,15 +6,15 @@ import (
 	coupleapp "github.com/nanfang/just-for-you/server/internal/couple/application"
 	momentmysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/moment"
 	togethermysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/together"
-	cos "github.com/nanfang/just-for-you/server/internal/infrastructure/storage/cos"
 	momenthttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/moment"
+	cos "github.com/nanfang/just-for-you/server/internal/media/infrastructure/cos"
 	"github.com/nanfang/just-for-you/server/internal/platform/clock"
 	"github.com/nanfang/just-for-you/server/internal/platform/config"
 )
 
 func buildMoment(cfg config.Config, db *sql.DB, get *coupleapp.GetCurrentCouple) (*momenthttp.Handler, error) {
 	repo := momentmysql.NewMySQLRepository(db)
-	photos, err := cos.NewCOSStorage(cfg.COSBucketURL, cfg.COSSecretID, cfg.COSSecretKey)
+	photos, err := cos.NewObjectStorage(cfg.COSBucketURL, cfg.COSSecretID, cfg.COSSecretKey)
 	if err != nil {
 		return nil, err
 	}

@@ -14,7 +14,7 @@ var legacyRoots = []string{
 	"domain/companionship", "domain/moment", "domain/together",
 	"infrastructure/ai", "infrastructure/notification",
 	"infrastructure/persistence/mysql/companionship", "infrastructure/persistence/mysql/moment",
-	"infrastructure/persistence/mysql/together", "infrastructure/storage",
+	"infrastructure/persistence/mysql/together",
 	"interfaces/http/companionship", "interfaces/http/moment", "interfaces/http/shared", "interfaces/http/together",
 }
 

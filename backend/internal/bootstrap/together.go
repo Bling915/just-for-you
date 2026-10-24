@@ -8,8 +8,8 @@ import (
 	app "github.com/nanfang/just-for-you/server/internal/application/together"
 	"github.com/nanfang/just-for-you/server/internal/infrastructure/ai"
 	mysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/together"
-	cosstorage "github.com/nanfang/just-for-you/server/internal/infrastructure/storage/cos"
 	togetherhttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/together"
+	cosstorage "github.com/nanfang/just-for-you/server/internal/media/infrastructure/cos"
 	"github.com/nanfang/just-for-you/server/internal/platform/clock"
 	"github.com/nanfang/just-for-you/server/internal/platform/config"
 	"net/http"
@@ -25,7 +25,7 @@ func coverKey() string {
 }
 func buildTogether(db *sql.DB, cfg config.Config) (*togetherhttp.Handler, error) {
 	repo := mysql.NewRepository(db)
-	storage, err := cosstorage.NewCOSStorage(cfg.COSBucketURL, cfg.COSSecretID, cfg.COSSecretKey)
+	storage, err := cosstorage.NewObjectStorage(cfg.COSBucketURL, cfg.COSSecretID, cfg.COSSecretKey)
 	if err != nil {
 		return nil, err
 	}

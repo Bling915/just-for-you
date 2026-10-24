@@ -9,7 +9,7 @@ import (
 	identitymysql "github.com/nanfang/just-for-you/server/internal/account/infrastructure/mysql"
 	wechat "github.com/nanfang/just-for-you/server/internal/account/infrastructure/wechat"
 	identityhttp "github.com/nanfang/just-for-you/server/internal/account/interfaces/http"
-	cosstorage "github.com/nanfang/just-for-you/server/internal/infrastructure/storage/cos"
+	cosstorage "github.com/nanfang/just-for-you/server/internal/media/infrastructure/cos"
 	"github.com/nanfang/just-for-you/server/internal/platform/auth"
 	"github.com/nanfang/just-for-you/server/internal/platform/clock"
 	"github.com/nanfang/just-for-you/server/internal/platform/config"
@@ -24,10 +24,10 @@ func avatarKey() string {
 	}
 	return hex.EncodeToString(b)
 }
-func buildIdentity(cfg config.Config, db *sql.DB) (*identityhttp.Handler, auth.TokenService, cosstorage.COSStorage, error) {
+func buildIdentity(cfg config.Config, db *sql.DB) (*identityhttp.Handler, auth.TokenService, cosstorage.ObjectStorage, error) {
 	tokens := auth.NewTokenService([]byte(cfg.JWTSecret))
 	repo := identitymysql.MySQLAccountStore{DB: db}
-	avatars, err := cosstorage.NewCOSStorage(cfg.COSBucketURL, cfg.COSSecretID, cfg.COSSecretKey)
+	avatars, err := cosstorage.NewObjectStorage(cfg.COSBucketURL, cfg.COSSecretID, cfg.COSSecretKey)
 	if err != nil {
 		return nil, tokens, avatars, err
 	}
