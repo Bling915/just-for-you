@@ -1,10 +1,10 @@
-package togetherhttp
+package dailyquestionhttp
 
 import (
 	"testing"
 	"time"
 
-	domain "github.com/nanfang/just-for-you/server/internal/domain/together"
+	domain "github.com/nanfang/just-for-you/server/internal/dailyquestion/domain"
 )
 
 func TestDailyQuestionDTOHidesPartnerAnswerUntilUnlocked(t *testing.T) {

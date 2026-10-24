@@ -1,4 +1,4 @@
-package togethermysql
+package dailyquestionmysql
 
 import (
 	"database/sql/driver"

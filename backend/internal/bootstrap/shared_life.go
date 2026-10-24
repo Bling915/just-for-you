@@ -10,12 +10,12 @@ import (
 	anniversaryapp "github.com/nanfang/just-for-you/server/internal/anniversary/application"
 	anniversarymysql "github.com/nanfang/just-for-you/server/internal/anniversary/infrastructure/mysql"
 	anniversaryhttp "github.com/nanfang/just-for-you/server/internal/anniversary/interfaces/http"
-	togetherapp "github.com/nanfang/just-for-you/server/internal/application/together"
 	coupleapp "github.com/nanfang/just-for-you/server/internal/couple/application"
-	"github.com/nanfang/just-for-you/server/internal/infrastructure/ai"
-	togethermysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/together"
+	dailyquestionapp "github.com/nanfang/just-for-you/server/internal/dailyquestion/application"
+	dailyai "github.com/nanfang/just-for-you/server/internal/dailyquestion/infrastructure/ai"
+	dailyquestionmysql "github.com/nanfang/just-for-you/server/internal/dailyquestion/infrastructure/mysql"
+	dailyquestionhttp "github.com/nanfang/just-for-you/server/internal/dailyquestion/interfaces/http"
 	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
-	togetherhttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/together"
 	cosstorage "github.com/nanfang/just-for-you/server/internal/media/infrastructure/cos"
 	"github.com/nanfang/just-for-you/server/internal/platform/clock"
 	"github.com/nanfang/just-for-you/server/internal/platform/config"
@@ -99,36 +99,44 @@ func buildSharedLife(
 		Delete: wishapp.NewDeleteWish(wishRelationships, wishStore),
 	})
 
-	dailyStore := togethermysql.NewRepository(db)
-	fallback := ai.NewFallbackQuestions()
-	var primary togetherapp.QuestionGenerator
+	dailyStore := dailyquestionmysql.NewMySQLQuestionStore(db)
+	fallback := dailyai.NewFallbackQuestions()
+	var primary dailyquestionapp.QuestionGenerator
 	if cfg.AIBaseURL != "" && cfg.AIAPIKey != "" && cfg.AIModel != "" {
-		primary = ai.NewOpenAICompatible(
+		primary = dailyai.NewOpenAICompatible(
 			cfg.AIBaseURL,
 			cfg.AIAPIKey,
 			cfg.AIModel,
 			&http.Client{Timeout: 3 * time.Second},
 		)
 	}
-	var generator togetherapp.QuestionGenerator = fallback
+	var generator dailyquestionapp.QuestionGenerator = fallback
 	if primary != nil {
-		generator = togetherapp.PersonalizedQuestionGenerator{
+		generator = dailyquestionapp.PersonalizedQuestionGenerator{
 			Preferences: dailyStore,
 			Primary:     primary,
 			Fallback:    fallback,
 		}
 	}
-	daily := togetherapp.NewDailyQuestionService(
-		newDailyQuestionCoupleReader(getCouple),
+	dailyRelationships := newDailyQuestionCoupleReader(getCouple)
+	today := dailyquestionapp.NewGetDailyQuestion(
+		dailyRelationships,
 		dailyStore,
 		generator,
 		clock.System{},
 		dailyStore,
 	)
-	dailyHandler := togetherhttp.NewHandler(togetherhttp.Dependencies{
-		GetToday:     daily,
-		SubmitAnswer: daily,
-		List:         daily,
+	submit := dailyquestionapp.NewSubmitDailyAnswer(
+		dailyRelationships,
+		dailyquestionmysql.NewMySQLAnswerSubmissionStore(db, dailyStore),
+		clock.System{},
+		today,
+	)
+	list := dailyquestionapp.NewListDailyQuestions(dailyRelationships, dailyStore)
+	dailyHandler := dailyquestionhttp.NewHandler(dailyquestionhttp.Dependencies{
+		GetToday:     today,
+		SubmitAnswer: submit,
+		List:         list,
 	})
 
 	return []httpserver.RouteRegistrar{

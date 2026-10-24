@@ -1,4 +1,4 @@
-package together
+package dailyquestion
 
 import "errors"
 

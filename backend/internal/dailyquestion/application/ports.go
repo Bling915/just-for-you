@@ -1,16 +1,26 @@
-package together
+package dailyquestion
 
 import (
 	"context"
 	"time"
 
-	domain "github.com/nanfang/just-for-you/server/internal/domain/together"
+	domain "github.com/nanfang/just-for-you/server/internal/dailyquestion/domain"
 )
 
 type ActiveCouple struct {
 	ID      int64
 	UserAID int64
 	UserBID int64
+}
+
+func (relationship ActiveCouple) PartnerOf(userID int64) int64 {
+	if userID == relationship.UserAID {
+		return relationship.UserBID
+	}
+	if userID == relationship.UserBID {
+		return relationship.UserAID
+	}
+	return 0
 }
 
 type ActiveCoupleReader interface {
@@ -45,10 +55,21 @@ type QuestionContextReader interface {
 	RecentContextMoments(context.Context, int64, int) ([]ContextMoment, error)
 }
 
-type DailyQuestionStore interface {
+type QuestionStore interface {
 	Find(context.Context, int64, time.Time) (domain.DailyQuestion, error)
 	FindByID(context.Context, int64, int64) (domain.DailyQuestion, error)
 	Create(context.Context, domain.DailyQuestion) (domain.DailyQuestion, error)
-	SubmitAnswer(context.Context, int64, int64, int64, string, time.Time) (domain.DailyQuestion, error)
 	List(context.Context, int64, int) ([]domain.DailyQuestion, error)
+}
+
+type SubmitAnswerTransaction struct {
+	QuestionID int64
+	UserID     int64
+	PartnerID  int64
+	Text       string
+	Now        time.Time
+}
+
+type AnswerSubmissionStore interface {
+	Submit(context.Context, SubmitAnswerTransaction) (domain.DailyQuestion, error)
 }

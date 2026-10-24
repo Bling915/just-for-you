@@ -1,4 +1,4 @@
-package togetherhttp
+package dailyquestionhttp
 
 import (
 	"context"
@@ -6,22 +6,22 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	app "github.com/nanfang/just-for-you/server/internal/application/together"
 	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
-	domain "github.com/nanfang/just-for-you/server/internal/domain/together"
+	app "github.com/nanfang/just-for-you/server/internal/dailyquestion/application"
+	domain "github.com/nanfang/just-for-you/server/internal/dailyquestion/domain"
 	shared "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 )
 
 type GetDailyQuestionExecutor interface {
-	GetToday(context.Context, int64) (domain.DailyQuestion, error)
+	Execute(context.Context, app.GetDailyQuestionQuery) (domain.DailyQuestion, error)
 }
 
 type SubmitDailyAnswerExecutor interface {
-	SubmitAnswer(context.Context, app.SubmitDailyAnswerCommand) (domain.DailyQuestion, error)
+	Execute(context.Context, app.SubmitDailyAnswerCommand) (domain.DailyQuestion, error)
 }
 
 type ListDailyQuestionsExecutor interface {
-	List(context.Context, int64) ([]domain.DailyQuestion, error)
+	Execute(context.Context, app.ListDailyQuestionsQuery) ([]domain.DailyQuestion, error)
 }
 
 type Dependencies struct {
@@ -47,7 +47,10 @@ func (handler *Handler) RegisterProtected(group *gin.RouterGroup) {
 }
 
 func (handler *Handler) getToday(c *gin.Context) {
-	item, err := handler.dependencies.GetToday.GetToday(c, shared.UserID(c))
+	item, err := handler.dependencies.GetToday.Execute(
+		c,
+		app.GetDailyQuestionQuery{UserID: shared.UserID(c)},
+	)
 	if err != nil {
 		fail(c, err)
 		return
@@ -64,7 +67,7 @@ func (handler *Handler) submitAnswer(c *gin.Context) {
 		shared.WriteError(c, http.StatusBadRequest, "INVALID_ARGUMENT", "回答内容不正确")
 		return
 	}
-	item, err := handler.dependencies.SubmitAnswer.SubmitAnswer(
+	item, err := handler.dependencies.SubmitAnswer.Execute(
 		c,
 		app.SubmitDailyAnswerCommand{
 			UserID:     shared.UserID(c),
@@ -80,7 +83,10 @@ func (handler *Handler) submitAnswer(c *gin.Context) {
 }
 
 func (handler *Handler) list(c *gin.Context) {
-	items, err := handler.dependencies.List.List(c, shared.UserID(c))
+	items, err := handler.dependencies.List.Execute(
+		c,
+		app.ListDailyQuestionsQuery{UserID: shared.UserID(c)},
+	)
 	if err != nil {
 		fail(c, err)
 		return
@@ -90,32 +96,6 @@ func (handler *Handler) list(c *gin.Context) {
 		out = append(out, dailyQuestionDTO(item, shared.UserID(c)))
 	}
 	shared.WriteData(c, http.StatusOK, out)
-}
-
-func dailyQuestionDTO(value domain.DailyQuestion, userID int64) gin.H {
-	answers := value.Answers()
-	var mine any
-	if answer, ok := answers[userID]; ok {
-		mine = gin.H{"text": answer.Text, "submittedAt": answer.SubmittedAt}
-	}
-	var partner any
-	if value.Unlocked() {
-		for id, answer := range answers {
-			if id != userID {
-				partner = gin.H{"text": answer.Text, "submittedAt": answer.SubmittedAt}
-			}
-		}
-	}
-	return gin.H{
-		"id":            value.ID(),
-		"date":          value.Date(),
-		"question":      value.Text(),
-		"source":        value.Source(),
-		"unlocked":      value.Unlocked(),
-		"myAnswer":      mine,
-		"partnerAnswer": partner,
-		"answered":      mine != nil,
-	}
 }
 
 func fail(c *gin.Context, err error) {

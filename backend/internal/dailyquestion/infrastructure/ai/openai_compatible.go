@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	app "github.com/nanfang/just-for-you/server/internal/application/together"
+	app "github.com/nanfang/just-for-you/server/internal/dailyquestion/application"
 	"net/http"
 	"strings"
 	"time"

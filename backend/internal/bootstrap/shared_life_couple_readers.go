@@ -4,8 +4,8 @@ import (
 	"context"
 
 	anniversaryapp "github.com/nanfang/just-for-you/server/internal/anniversary/application"
-	togetherapp "github.com/nanfang/just-for-you/server/internal/application/together"
 	coupleapp "github.com/nanfang/just-for-you/server/internal/couple/application"
+	dailyquestionapp "github.com/nanfang/just-for-you/server/internal/dailyquestion/application"
 	todoapp "github.com/nanfang/just-for-you/server/internal/todo/application"
 	wishapp "github.com/nanfang/just-for-you/server/internal/wish/application"
 )
@@ -84,13 +84,13 @@ func newDailyQuestionCoupleReader(service currentCoupleService) dailyQuestionCou
 func (reader dailyQuestionCoupleReader) GetActiveCouple(
 	ctx context.Context,
 	userID int64,
-) (togetherapp.ActiveCouple, error) {
+) (dailyquestionapp.ActiveCouple, error) {
 	current, err := reader.service.Execute(ctx, coupleapp.GetCoupleQuery{UserID: userID})
 	if err != nil {
-		return togetherapp.ActiveCouple{}, err
+		return dailyquestionapp.ActiveCouple{}, err
 	}
 	couple := current.Couple
-	return togetherapp.ActiveCouple{
+	return dailyquestionapp.ActiveCouple{
 		ID:      couple.ID(),
 		UserAID: couple.UserAID(),
 		UserBID: couple.UserBID(),

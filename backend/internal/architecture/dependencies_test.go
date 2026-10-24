@@ -10,11 +10,7 @@ import (
 const internalPrefix = "github.com/nanfang/just-for-you/server/internal/"
 
 var legacyRoots = []string{
-	"application/together",
-	"domain/together",
-	"infrastructure/ai",
-	"infrastructure/persistence/mysql/together",
-	"interfaces/http/shared", "interfaces/http/together",
+	"interfaces/http/shared",
 }
 
 type goPackage struct {

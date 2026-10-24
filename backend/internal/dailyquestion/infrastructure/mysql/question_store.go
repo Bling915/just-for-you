@@ -1,25 +1,24 @@
-package togethermysql
+package dailyquestionmysql
 
 import (
 	"context"
 	"database/sql"
 	"errors"
-	"strings"
 	"time"
 
-	app "github.com/nanfang/just-for-you/server/internal/application/together"
-	domain "github.com/nanfang/just-for-you/server/internal/domain/together"
+	app "github.com/nanfang/just-for-you/server/internal/dailyquestion/application"
+	domain "github.com/nanfang/just-for-you/server/internal/dailyquestion/domain"
 )
 
-type Repository struct {
+type MySQLQuestionStore struct {
 	db *sql.DB
 }
 
-func NewRepository(db *sql.DB) Repository {
-	return Repository{db: db}
+func NewMySQLQuestionStore(db *sql.DB) MySQLQuestionStore {
+	return MySQLQuestionStore{db: db}
 }
 
-func (repository Repository) AIPersonalizationEnabled(
+func (repository MySQLQuestionStore) AIPersonalizationEnabled(
 	ctx context.Context,
 	coupleID int64,
 ) (bool, error) {
@@ -32,7 +31,7 @@ func (repository Repository) AIPersonalizationEnabled(
 	return disabled == 0, err
 }
 
-func (repository Repository) RecentContextMoments(
+func (repository MySQLQuestionStore) RecentContextMoments(
 	ctx context.Context,
 	coupleID int64,
 	limit int,
@@ -67,7 +66,7 @@ func (repository Repository) RecentContextMoments(
 
 const dailyQuestionColumns = "id,couple_id,question_date,question_text,source,context_version,unlocked_at,created_at,updated_at"
 
-func (repository Repository) Find(
+func (repository MySQLQuestionStore) Find(
 	ctx context.Context,
 	coupleID int64,
 	date time.Time,
@@ -83,7 +82,7 @@ func (repository Repository) Find(
 	)
 }
 
-func (repository Repository) FindByID(
+func (repository MySQLQuestionStore) FindByID(
 	ctx context.Context,
 	coupleID, id int64,
 ) (domain.DailyQuestion, error) {
@@ -98,7 +97,7 @@ func (repository Repository) FindByID(
 	)
 }
 
-func (repository Repository) scanDailyQuestion(
+func (repository MySQLQuestionStore) scanDailyQuestion(
 	ctx context.Context,
 	scan func(...any) error,
 ) (domain.DailyQuestion, error) {
@@ -159,7 +158,7 @@ func (repository Repository) scanDailyQuestion(
 	), rows.Err()
 }
 
-func (repository Repository) Create(
+func (repository MySQLQuestionStore) Create(
 	ctx context.Context,
 	value domain.DailyQuestion,
 ) (domain.DailyQuestion, error) {
@@ -180,110 +179,7 @@ func (repository Repository) Create(
 	return repository.Find(ctx, value.CoupleID(), value.Date())
 }
 
-func (repository Repository) SubmitAnswer(
-	ctx context.Context,
-	questionID, userID, partnerID int64,
-	text string,
-	now time.Time,
-) (domain.DailyQuestion, error) {
-	answerText := strings.TrimSpace(text)
-	if answerText == "" || len([]rune(answerText)) > 500 {
-		return domain.DailyQuestion{}, domain.ErrInvalidDailyAnswer
-	}
-	tx, err := repository.db.BeginTx(ctx, nil)
-	if err != nil {
-		return domain.DailyQuestion{}, err
-	}
-	defer tx.Rollback()
-	var coupleID int64
-	var questionText string
-	var unlocked sql.NullTime
-	err = tx.QueryRowContext(
-		ctx,
-		"SELECT q.couple_id,q.question_text,q.unlocked_at FROM daily_questions q JOIN couples c ON c.id=q.couple_id WHERE q.id=? AND c.status='active' AND (c.user_a_id=? OR c.user_b_id=?) FOR UPDATE",
-		questionID,
-		userID,
-		userID,
-	).Scan(&coupleID, &questionText, &unlocked)
-	if errors.Is(err, sql.ErrNoRows) {
-		return domain.DailyQuestion{}, domain.ErrNotFound
-	}
-	if err != nil {
-		return domain.DailyQuestion{}, err
-	}
-	if unlocked.Valid {
-		return domain.DailyQuestion{}, domain.ErrDailyQuestionFrozen
-	}
-	_, err = tx.ExecContext(
-		ctx,
-		"INSERT INTO daily_answers(daily_question_id,user_id,answer_text,submitted_at,updated_at) VALUES(?,?,?,?,?) ON DUPLICATE KEY UPDATE answer_text=VALUES(answer_text),submitted_at=VALUES(submitted_at),updated_at=VALUES(updated_at)",
-		questionID,
-		userID,
-		answerText,
-		now,
-		now,
-	)
-	if err != nil {
-		return domain.DailyQuestion{}, err
-	}
-	var partnerCount int
-	if err = tx.QueryRowContext(
-		ctx,
-		"SELECT COUNT(*) FROM daily_answers WHERE daily_question_id=? AND user_id=?",
-		questionID,
-		partnerID,
-	).Scan(&partnerCount); err != nil {
-		return domain.DailyQuestion{}, err
-	}
-	if partnerCount > 0 {
-		if _, err = tx.ExecContext(
-			ctx,
-			"UPDATE daily_questions SET unlocked_at=?,updated_at=? WHERE id=? AND unlocked_at IS NULL",
-			now,
-			now,
-			questionID,
-		); err != nil {
-			return domain.DailyQuestion{}, err
-		}
-		rows, err := tx.QueryContext(
-			ctx,
-			"SELECT answer_text FROM daily_answers WHERE daily_question_id=? ORDER BY user_id",
-			questionID,
-		)
-		if err != nil {
-			return domain.DailyQuestion{}, err
-		}
-		body := "每日一句 · " + questionText
-		for rows.Next() {
-			var answer string
-			if err = rows.Scan(&answer); err != nil {
-				rows.Close()
-				return domain.DailyQuestion{}, err
-			}
-			body += "\n" + answer
-		}
-		rows.Close()
-		if _, err = tx.ExecContext(
-			ctx,
-			"INSERT IGNORE INTO moments(couple_id,author_user_id,space_type,visibility,kind,daily_question_id,body,status_code,place_name,occurred_at,created_at,updated_at) VALUES(?,?,'shared','couple','daily_question',?,?,'','',?,?,?)",
-			coupleID,
-			userID,
-			questionID,
-			body,
-			now,
-			now,
-			now,
-		); err != nil {
-			return domain.DailyQuestion{}, err
-		}
-	}
-	if err = tx.Commit(); err != nil {
-		return domain.DailyQuestion{}, err
-	}
-	return repository.FindByID(ctx, coupleID, questionID)
-}
-
-func (repository Repository) List(
+func (repository MySQLQuestionStore) List(
 	ctx context.Context,
 	coupleID int64,
 	limit int,

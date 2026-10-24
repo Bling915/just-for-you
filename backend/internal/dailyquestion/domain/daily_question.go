@@ -1,4 +1,4 @@
-package together
+package dailyquestion
 
 import (
 	"strings"
@@ -38,8 +38,8 @@ func (q DailyQuestion) Submit(userID int64, text string, partnerID int64, now ti
 	if q.unlockedAt != nil {
 		return q, false, ErrDailyQuestionFrozen
 	}
-	text = strings.TrimSpace(text)
-	if userID <= 0 || partnerID <= 0 || userID == partnerID || text == "" || utf8.RuneCountInString(text) > 500 {
+	text, err := ValidateAnswer(text)
+	if err != nil || userID <= 0 || partnerID <= 0 || userID == partnerID {
 		return q, false, ErrInvalidDailyAnswer
 	}
 	if q.answers == nil {
@@ -54,6 +54,14 @@ func (q DailyQuestion) Submit(userID int64, text string, partnerID int64, now ti
 	}
 	q.updatedAt = now
 	return q, unlocked, nil
+}
+
+func ValidateAnswer(value string) (string, error) {
+	text := strings.TrimSpace(value)
+	if text == "" || utf8.RuneCountInString(text) > 500 {
+		return "", ErrInvalidDailyAnswer
+	}
+	return text, nil
 }
 func (q DailyQuestion) ID() int64              { return q.id }
 func (q DailyQuestion) CoupleID() int64        { return q.coupleID }

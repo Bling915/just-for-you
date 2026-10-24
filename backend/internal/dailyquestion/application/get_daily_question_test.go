@@ -1,8 +1,8 @@
-package together
+package dailyquestion
 
 import (
 	"context"
-	domain "github.com/nanfang/just-for-you/server/internal/domain/together"
+	domain "github.com/nanfang/just-for-you/server/internal/dailyquestion/domain"
 	"testing"
 	"time"
 )
@@ -59,17 +59,17 @@ func TestGetTodayUsesShanghaiDayAndCreatesOnlyOnce(t *testing.T) {
 	now := time.Date(2026, 10, 21, 16, 30, 0, 0, time.UTC)
 	repo := &dailyRepoFake{}
 	generator := &generatorFake{}
-	service := NewDailyQuestionService(
+	service := NewGetDailyQuestion(
 		dailyCoupleFake{relationship: ActiveCouple{ID: 9, UserAID: 1, UserBID: 2}},
 		repo,
 		generator,
 		dailyClockFake{now: now},
 	)
-	first, err := service.GetToday(context.Background(), 1)
+	first, err := service.Execute(context.Background(), GetDailyQuestionQuery{UserID: 1})
 	if err != nil || first.Date().Day() != 22 || first.ContextVersion() != "v1" || generator.calls != 1 {
 		t.Fatalf("first=%+v calls=%d err=%v", first, generator.calls, err)
 	}
-	_, err = service.GetToday(context.Background(), 1)
+	_, err = service.Execute(context.Background(), GetDailyQuestionQuery{UserID: 1})
 	if err != nil || generator.calls != 1 || repo.created != 1 {
 		t.Fatalf("calls=%d created=%d err=%v", generator.calls, repo.created, err)
 	}

@@ -120,10 +120,11 @@ type validatedFields struct {
 }
 
 func validateFields(input UpdateInput, now time.Time) (validatedFields, error) {
-	text, place := strings.TrimSpace(input.Text), strings.TrimSpace(input.Place)
-	if utf8.RuneCountInString(text) > 500 {
-		return validatedFields{}, ErrTextTooLong
+	text, err := ValidateText(input.Text)
+	if err != nil {
+		return validatedFields{}, err
 	}
+	place := strings.TrimSpace(input.Place)
 	if utf8.RuneCountInString(place) > 80 {
 		return validatedFields{}, ErrPlaceTooLong
 	}
@@ -145,6 +146,14 @@ func validateFields(input UpdateInput, now time.Time) (validatedFields, error) {
 		return validatedFields{}, ErrEmptyMoment
 	}
 	return validatedFields{text: text, place: place, status: status, photos: photos}, nil
+}
+
+func ValidateText(value string) (string, error) {
+	text := strings.TrimSpace(value)
+	if utf8.RuneCountInString(text) > 500 {
+		return "", ErrTextTooLong
+	}
+	return text, nil
 }
 func makePhotos(keys []string) ([]Photo, error) {
 	if len(keys) > 9 {
