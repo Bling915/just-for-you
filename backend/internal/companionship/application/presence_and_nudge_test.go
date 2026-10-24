@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	domain "github.com/nanfang/just-for-you/server/internal/companionship/domain"
 	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
-	domain "github.com/nanfang/just-for-you/server/internal/domain/companionship"
 )
 
 type fixedClock struct{ now time.Time }
@@ -26,6 +26,16 @@ func (r memoryCouples) GetActiveCouple(context.Context, int64) (ActiveCouple, er
 type memoryRepository struct {
 	presences []domain.Presence
 	nudges    []domain.Nudge
+}
+
+type memoryPreferences struct{ value NotificationPreferences }
+
+func (m *memoryPreferences) GetPreferences(context.Context, int64, int64) (NotificationPreferences, error) {
+	return m.value, nil
+}
+func (m *memoryPreferences) SavePreferences(_ context.Context, _, _ int64, value NotificationPreferences) (NotificationPreferences, error) {
+	m.value = value
+	return value, nil
 }
 
 func (r *memoryRepository) SavePresence(_ context.Context, presence domain.Presence) (domain.Presence, error) {
@@ -65,14 +75,14 @@ func (r *memoryRepository) LatestNudge(_ context.Context, coupleID int64) (*doma
 func TestUpdatePresenceRequiresActiveCoupleAndStoresStatus(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	repo := &memoryRepository{}
-	useCase := NewUpdatePresenceUseCase(memoryCouples{relationship: ActiveCouple{ID: 9, UserAID: 7, UserBID: 8}}, repo, fixedClock{now})
+	useCase := NewUpdatePresence(memoryCouples{relationship: ActiveCouple{ID: 9, UserAID: 7, UserBID: 8}}, repo, fixedClock{now})
 
 	result, err := useCase.Execute(context.Background(), UpdatePresenceCommand{UserID: 7, Preset: "in_class", ExpiresAt: timePointer(now.Add(time.Hour))})
 	if err != nil || result.UserID() != 7 || len(repo.presences) != 1 {
 		t.Fatalf("result=%+v stored=%d err=%v", result, len(repo.presences), err)
 	}
 
-	ended := NewUpdatePresenceUseCase(memoryCouples{err: coupledomain.ErrNoActiveCouple}, repo, fixedClock{now})
+	ended := NewUpdatePresence(memoryCouples{err: coupledomain.ErrNoActiveCouple}, repo, fixedClock{now})
 	if _, err = ended.Execute(context.Background(), UpdatePresenceCommand{UserID: 7, Preset: "tired"}); !errors.Is(err, coupledomain.ErrNoActiveCouple) {
 		t.Fatalf("err=%v", err)
 	}
@@ -82,7 +92,7 @@ func TestGetSnapshotHidesExpiredPresence(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	expires := now.Add(-time.Second)
 	repo := &memoryRepository{presences: []domain.Presence{domain.RestorePresence(1, 9, 8, domain.PresetTired, "", &expires, now.Add(-time.Hour))}}
-	useCase := NewGetSnapshotUseCase(memoryCouples{relationship: ActiveCouple{ID: 9, UserAID: 7, UserBID: 8}}, repo, fixedClock{now})
+	useCase := NewGetSnapshot(memoryCouples{relationship: ActiveCouple{ID: 9, UserAID: 7, UserBID: 8}}, repo, repo, fixedClock{now})
 
 	result, err := useCase.Execute(context.Background(), GetSnapshotQuery{UserID: 7})
 	if err != nil || result.PartnerPresence != nil {
@@ -93,7 +103,7 @@ func TestGetSnapshotHidesExpiredPresence(t *testing.T) {
 func TestSendNudgeTargetsPartnerAndThrottlesRapidRepeats(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	repo := &memoryRepository{}
-	useCase := NewSendNudgeUseCase(memoryCouples{relationship: ActiveCouple{ID: 9, UserAID: 7, UserBID: 8}}, repo, fixedClock{now})
+	useCase := NewSendNudge(memoryCouples{relationship: ActiveCouple{ID: 9, UserAID: 7, UserBID: 8}}, repo, fixedClock{now})
 
 	nudge, err := useCase.Execute(context.Background(), SendNudgeCommand{UserID: 7, Kind: "hug"})
 	if err != nil || nudge.RecipientID() != 8 {
@@ -101,6 +111,26 @@ func TestSendNudgeTargetsPartnerAndThrottlesRapidRepeats(t *testing.T) {
 	}
 	if _, err = useCase.Execute(context.Background(), SendNudgeCommand{UserID: 7, Kind: "hug"}); !errors.Is(err, domain.ErrNudgeThrottled) {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestNotificationPreferencesUseSeparateQueriesAndCommands(t *testing.T) {
+	relationships := memoryCouples{relationship: ActiveCouple{ID: 9, UserAID: 7, UserBID: 8}}
+	store := &memoryPreferences{}
+	available := map[string]bool{"moment": true, "presence": false, "nudge": true}
+	update := NewUpdateNotificationPreferences(relationships, store, available)
+	get := NewGetNotificationPreferences(relationships, store, available)
+
+	_, err := update.Execute(context.Background(), UpdateNotificationPreferencesCommand{UserID: 7, Preferences: NotificationPreferences{MomentEnabled: true, PresenceEnabled: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := get.Execute(context.Background(), GetNotificationPreferencesQuery{UserID: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.MomentEnabled || result.PresenceEnabled || !result.Available["nudge"] {
+		t.Fatalf("result=%+v", result)
 	}
 }
 

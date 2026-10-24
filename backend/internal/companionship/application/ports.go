@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	domain "github.com/nanfang/just-for-you/server/internal/domain/companionship"
+	domain "github.com/nanfang/just-for-you/server/internal/companionship/domain"
 )
 
 type ActiveCouple struct{ ID, UserAID, UserBID int64 }
@@ -19,12 +19,16 @@ func (r ActiveCouple) PartnerOf(userID int64) int64 {
 	return 0
 }
 
-type CoupleReader interface {
+type ActiveCoupleReader interface {
 	GetActiveCouple(context.Context, int64) (ActiveCouple, error)
 }
-type Repository interface {
+
+type PresenceStore interface {
 	SavePresence(context.Context, domain.Presence) (domain.Presence, error)
 	LatestPresence(context.Context, int64, int64) (*domain.Presence, error)
+}
+
+type NudgeStore interface {
 	LastNudgeAt(context.Context, int64, int64) (*time.Time, error)
 	SaveNudge(context.Context, domain.Nudge) (domain.Nudge, error)
 	LatestNudge(context.Context, int64) (*domain.Nudge, error)

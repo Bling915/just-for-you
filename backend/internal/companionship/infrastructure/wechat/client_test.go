@@ -3,7 +3,7 @@ package wechatnotification
 import (
 	"context"
 	"encoding/json"
-	application "github.com/nanfang/just-for-you/server/internal/application/companionship"
+	application "github.com/nanfang/just-for-you/server/internal/companionship/application"
 	"net/http"
 	"net/http/httptest"
 	"testing"

@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	application "github.com/nanfang/just-for-you/server/internal/application/companionship"
+	application "github.com/nanfang/just-for-you/server/internal/companionship/application"
 	"net/http"
 	"net/url"
 	"time"

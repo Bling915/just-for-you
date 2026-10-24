@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"github.com/gin-gonic/gin"
-	application "github.com/nanfang/just-for-you/server/internal/application/companionship"
+	application "github.com/nanfang/just-for-you/server/internal/companionship/application"
+	domain "github.com/nanfang/just-for-you/server/internal/companionship/domain"
 	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
-	domain "github.com/nanfang/just-for-you/server/internal/domain/companionship"
 	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 	"net/http"
 	"time"
@@ -21,22 +21,25 @@ type SendNudgeExecutor interface {
 type GetSnapshotExecutor interface {
 	Execute(context.Context, application.GetSnapshotQuery) (application.Snapshot, error)
 }
-type UseCases struct {
-	UpdatePresence UpdatePresenceExecutor
-	SendNudge      SendNudgeExecutor
-	GetSnapshot    GetSnapshotExecutor
+type GetNotificationPreferencesExecutor interface {
+	Execute(context.Context, application.GetNotificationPreferencesQuery) (application.NotificationPreferences, error)
+}
+type UpdateNotificationPreferencesExecutor interface {
+	Execute(context.Context, application.UpdateNotificationPreferencesCommand) (application.NotificationPreferences, error)
+}
+type Dependencies struct {
+	UpdatePresence                UpdatePresenceExecutor
+	SendNudge                     SendNudgeExecutor
+	GetSnapshot                   GetSnapshotExecutor
+	GetNotificationPreferences    GetNotificationPreferencesExecutor
+	UpdateNotificationPreferences UpdateNotificationPreferencesExecutor
 }
 type Handler struct {
-	useCases          UseCases
-	preferenceService *application.NotificationPreferencesService
+	dependencies Dependencies
 }
 
-func (h *Handler) SetNotificationPreferences(service *application.NotificationPreferencesService) {
-	h.preferenceService = service
-}
-
-func NewHandler(useCases UseCases) *Handler { return &Handler{useCases: useCases} }
-func (*Handler) RegisterPublic(*gin.Engine) {}
+func NewHandler(dependencies Dependencies) *Handler { return &Handler{dependencies: dependencies} }
+func (*Handler) RegisterPublic(*gin.Engine)         {}
 func (h *Handler) RegisterProtected(group *gin.RouterGroup) {
 	group.PUT("/presence", h.updatePresence)
 	group.GET("/presence", h.snapshot)
@@ -45,11 +48,11 @@ func (h *Handler) RegisterProtected(group *gin.RouterGroup) {
 	group.PUT("/notification-preferences", h.updatePreferences)
 }
 func (h *Handler) getPreferences(c *gin.Context) {
-	if h.preferenceService == nil {
+	if h.dependencies.GetNotificationPreferences == nil {
 		httpserver.WriteError(c, 503, "NOTIFICATION_UNAVAILABLE", "通知暂不可用")
 		return
 	}
-	v, e := h.preferenceService.Get(c, httpserver.UserID(c))
+	v, e := h.dependencies.GetNotificationPreferences.Execute(c, application.GetNotificationPreferencesQuery{UserID: httpserver.UserID(c)})
 	if e != nil {
 		writeError(c, e)
 		return
@@ -62,7 +65,7 @@ func (h *Handler) updatePreferences(c *gin.Context) {
 		httpserver.WriteError(c, 400, "INVALID_ARGUMENT", "通知设置无效")
 		return
 	}
-	out, e := h.preferenceService.Update(c, httpserver.UserID(c), v)
+	out, e := h.dependencies.UpdateNotificationPreferences.Execute(c, application.UpdateNotificationPreferencesCommand{UserID: httpserver.UserID(c), Preferences: v})
 	if e != nil {
 		writeError(c, e)
 		return
@@ -79,7 +82,7 @@ func (h *Handler) updatePresence(c *gin.Context) {
 		httpserver.WriteError(c, http.StatusBadRequest, "INVALID_PRESENCE", "状态内容不正确")
 		return
 	}
-	result, err := h.useCases.UpdatePresence.Execute(c, application.UpdatePresenceCommand{UserID: httpserver.UserID(c), Preset: input.Preset, CustomText: input.CustomText, ExpiresAt: input.ExpiresAt})
+	result, err := h.dependencies.UpdatePresence.Execute(c, application.UpdatePresenceCommand{UserID: httpserver.UserID(c), Preset: input.Preset, CustomText: input.CustomText, ExpiresAt: input.ExpiresAt})
 	if err != nil {
 		writeError(c, err)
 		return
@@ -87,7 +90,7 @@ func (h *Handler) updatePresence(c *gin.Context) {
 	httpserver.WriteData(c, http.StatusOK, presenceDTO(&result))
 }
 func (h *Handler) snapshot(c *gin.Context) {
-	result, err := h.useCases.GetSnapshot.Execute(c, application.GetSnapshotQuery{UserID: httpserver.UserID(c)})
+	result, err := h.dependencies.GetSnapshot.Execute(c, application.GetSnapshotQuery{UserID: httpserver.UserID(c)})
 	if err != nil {
 		writeError(c, err)
 		return
@@ -106,7 +109,7 @@ func (h *Handler) sendNudge(c *gin.Context) {
 		httpserver.WriteError(c, http.StatusBadRequest, "INVALID_NUDGE", "互动类型不正确")
 		return
 	}
-	result, err := h.useCases.SendNudge.Execute(c, application.SendNudgeCommand{UserID: httpserver.UserID(c), Kind: input.Kind})
+	result, err := h.dependencies.SendNudge.Execute(c, application.SendNudgeCommand{UserID: httpserver.UserID(c), Kind: input.Kind})
 	if err != nil {
 		writeError(c, err)
 		return

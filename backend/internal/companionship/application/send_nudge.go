@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	domain "github.com/nanfang/just-for-you/server/internal/domain/companionship"
+	domain "github.com/nanfang/just-for-you/server/internal/companionship/domain"
 	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 )
 
@@ -14,22 +14,22 @@ type SendNudgeCommand struct {
 	UserID int64
 	Kind   string
 }
-type SendNudgeUseCase struct {
-	relationships CoupleReader
-	repository    Repository
+type SendNudge struct {
+	relationships ActiveCoupleReader
+	nudges        NudgeStore
 	clock         appshared.Clock
 }
 
-func NewSendNudgeUseCase(r CoupleReader, repo Repository, c appshared.Clock) *SendNudgeUseCase {
-	return &SendNudgeUseCase{r, repo, c}
+func NewSendNudge(r ActiveCoupleReader, store NudgeStore, clock appshared.Clock) *SendNudge {
+	return &SendNudge{relationships: r, nudges: store, clock: clock}
 }
-func (u *SendNudgeUseCase) Execute(ctx context.Context, command SendNudgeCommand) (domain.Nudge, error) {
+func (u *SendNudge) Execute(ctx context.Context, command SendNudgeCommand) (domain.Nudge, error) {
 	relationship, err := u.relationships.GetActiveCouple(ctx, command.UserID)
 	if err != nil {
 		return domain.Nudge{}, err
 	}
 	now := u.clock.Now()
-	last, err := u.repository.LastNudgeAt(ctx, relationship.ID, command.UserID)
+	last, err := u.nudges.LastNudgeAt(ctx, relationship.ID, command.UserID)
 	if err != nil {
 		return domain.Nudge{}, err
 	}
@@ -40,5 +40,5 @@ func (u *SendNudgeUseCase) Execute(ctx context.Context, command SendNudgeCommand
 	if err != nil {
 		return domain.Nudge{}, err
 	}
-	return u.repository.SaveNudge(ctx, nudge)
+	return u.nudges.SaveNudge(ctx, nudge)
 }

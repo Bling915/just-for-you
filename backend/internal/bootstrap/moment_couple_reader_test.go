@@ -29,3 +29,15 @@ func TestMomentCoupleReaderTranslatesCurrentCoupleAtCompositionRoot(t *testing.T
 		t.Fatalf("result=%+v", result)
 	}
 }
+
+func TestCompanionshipCoupleReaderTranslatesCurrentCoupleAtCompositionRoot(t *testing.T) {
+	reader := newCompanionshipCoupleReader(stubCurrentCouple{})
+
+	result, err := reader.GetActiveCouple(context.Background(), 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ID != 12 || result.UserAID != 7 || result.UserBID != 8 {
+		t.Fatalf("result=%+v", result)
+	}
+}
