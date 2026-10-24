@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
-	shared "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
+	shared "github.com/nanfang/just-for-you/server/internal/platform/httpapi"
 	app "github.com/nanfang/just-for-you/server/internal/wish/application"
 	domain "github.com/nanfang/just-for-you/server/internal/wish/domain"
 )

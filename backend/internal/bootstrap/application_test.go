@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 )
 
 type testTokens struct{}
@@ -24,7 +23,7 @@ func (testRegistrar) RegisterProtected(r *gin.RouterGroup) {
 }
 
 func TestApplicationBuildsRegisteredRoutes(t *testing.T) {
-	app := newApplicationForTest(httpserver.Dependencies{Tokens: testTokens{}, Registrars: []httpserver.RouteRegistrar{testRegistrar{}}})
+	app := newApplicationForTest(Dependencies{Tokens: testTokens{}, Registrars: []RouteRegistrar{testRegistrar{}}})
 	if app.server.MaxHeaderBytes != 1<<20 {
 		t.Fatalf("expected bounded headers, got %d", app.server.MaxHeaderBytes)
 	}

@@ -7,7 +7,7 @@ import (
 	application "github.com/nanfang/just-for-you/server/internal/companionship/application"
 	domain "github.com/nanfang/just-for-you/server/internal/companionship/domain"
 	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
-	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
+	httpserver "github.com/nanfang/just-for-you/server/internal/platform/httpapi"
 	"net/http"
 	"time"
 )

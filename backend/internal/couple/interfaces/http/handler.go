@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	application "github.com/nanfang/just-for-you/server/internal/couple/application"
 	domain "github.com/nanfang/just-for-you/server/internal/couple/domain"
-	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
+	httpserver "github.com/nanfang/just-for-you/server/internal/platform/httpapi"
 	"net/http"
 )
 

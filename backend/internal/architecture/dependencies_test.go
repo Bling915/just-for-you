@@ -9,13 +9,17 @@ import (
 
 const internalPrefix = "github.com/nanfang/just-for-you/server/internal/"
 
-var legacyRoots = []string{
-	"interfaces/http/shared",
-}
+var legacyRoots = []string{}
 
 type goPackage struct {
 	ImportPath string
 	Imports    []string
+}
+
+func TestLegacyRootAllowlistIsEmpty(t *testing.T) {
+	if len(legacyRoots) != 0 {
+		t.Fatalf("legacy root allowlist must be empty, got %v", legacyRoots)
+	}
 }
 
 func TestInternalPackagesUseGlobalLayers(t *testing.T) {

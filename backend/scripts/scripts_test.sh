@@ -39,7 +39,7 @@ dev_output="$(cd / && CALL_LOG="$tmp_dir/dev" ENV_FILE="$tmp_dir/dev.env" PATH="
 [[ "$(cat "$tmp_dir/dev.bool")" == 'true' ]] || fail 'dev.sh 没有去掉 dotenv 值外层引号'
 [[ "$dev_output" != *'secret-dsn'* && "$dev_output" != *'test-key'* ]] || fail 'dev.sh 泄露了配置值'
 
-# setup-local-db.sh 必须探活、建库，并依次执行 1/2/3 号迁移。
+# setup-local-db.sh 必须探活、建库，并执行迁移目录中所有未应用版本。
 cat >"$tmp_dir/bin/mysqladmin" <<'EOF'
 #!/usr/bin/env bash
 printf 'ping\n' >>"$CALL_LOG"
@@ -52,7 +52,7 @@ EOF
 cat >"$tmp_dir/bin/go" <<'EOF'
 #!/usr/bin/env bash
 printf 'go %s | cwd=%s | dsn=%s\n' "$*" "$PWD" "$MYSQL_DSN" >>"$CALL_LOG"
-if [[ "${FAIL_MIGRATION_VERSION:-}" == "${*: -1}" ]]; then
+if [[ "${FAIL_MIGRATION:-}" == "1" ]]; then
   exit 9
 fi
 EOF
@@ -61,9 +61,7 @@ chmod +x "$tmp_dir/bin/mysqladmin" "$tmp_dir/bin/mysql" "$tmp_dir/bin/go"
 setup_output="$(cd / && CALL_LOG="$tmp_dir/setup.log" PATH="$tmp_dir/bin:$PATH" "$backend_dir/scripts/setup-local-db.sh")"
 calls="$(cat "$tmp_dir/setup.log")"
 assert_contains "$calls" 'ping'
-assert_contains "$calls" 'go run ./cmd/migrate -direction up -version 1'
-assert_contains "$calls" 'go run ./cmd/migrate -direction up -version 2'
-assert_contains "$calls" 'go run ./cmd/migrate -direction up -version 3'
+assert_contains "$calls" 'go run ./cmd/migrate -direction up'
 assert_contains "$calls" "cwd=$backend_dir"
 [[ "$setup_output" != *'local-development'* ]] || fail 'setup-local-db.sh 输出了数据库密码'
 
@@ -74,12 +72,11 @@ custom_calls="$(cat "$tmp_dir/custom-setup.log")"
 assert_contains "$custom_calls" 'dsn=just_for_you:local-development@tcp(192.0.2.10:3307)/just_for_you'
 
 : >"$tmp_dir/failing-setup.log"
-if CALL_LOG="$tmp_dir/failing-setup.log" FAIL_MIGRATION_VERSION=2 PATH="$tmp_dir/bin:$PATH" \
+if CALL_LOG="$tmp_dir/failing-setup.log" FAIL_MIGRATION=1 PATH="$tmp_dir/bin:$PATH" \
   "$backend_dir/scripts/setup-local-db.sh" >/dev/null 2>&1; then
   fail '迁移失败时 setup-local-db.sh 不应成功'
 fi
 failing_calls="$(cat "$tmp_dir/failing-setup.log")"
-assert_contains "$failing_calls" 'version 2'
-[[ "$failing_calls" != *'version 3'* ]] || fail '迁移 2 失败后仍执行了迁移 3'
+assert_contains "$failing_calls" 'go run ./cmd/migrate -direction up'
 
 printf 'scripts_test: PASS\n'

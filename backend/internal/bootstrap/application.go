@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 	"github.com/nanfang/just-for-you/server/internal/platform/config"
 	database "github.com/nanfang/just-for-you/server/internal/platform/database"
 )
@@ -43,14 +42,14 @@ func New() (*Application, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	registrars := []httpserver.RouteRegistrar{identity, relationship, companionship, moment}
+	registrars := []RouteRegistrar{identity, relationship, companionship, moment}
 	registrars = append(registrars, sharedLife...)
-	router := httpserver.NewRouter(httpserver.Dependencies{Tokens: tokens, Registrars: registrars})
+	router := NewRouter(Dependencies{Tokens: tokens, Registrars: registrars})
 	return &Application{server: newHTTPServer(cfg.HTTPAddr, router), database: db}, nil
 }
 
-func newApplicationForTest(deps httpserver.Dependencies) *Application {
-	return &Application{server: newHTTPServer(":0", httpserver.NewRouter(deps))}
+func newApplicationForTest(deps Dependencies) *Application {
+	return &Application{server: newHTTPServer(":0", NewRouter(deps))}
 }
 func newHTTPServer(addr string, handler http.Handler) *http.Server {
 	return &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}

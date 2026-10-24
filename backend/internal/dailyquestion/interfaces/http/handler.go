@@ -9,7 +9,7 @@ import (
 	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	app "github.com/nanfang/just-for-you/server/internal/dailyquestion/application"
 	domain "github.com/nanfang/just-for-you/server/internal/dailyquestion/domain"
-	shared "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
+	shared "github.com/nanfang/just-for-you/server/internal/platform/httpapi"
 )
 
 type GetDailyQuestionExecutor interface {

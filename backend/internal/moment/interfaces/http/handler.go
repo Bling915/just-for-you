@@ -9,9 +9,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
-	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 	application "github.com/nanfang/just-for-you/server/internal/moment/application"
 	domain "github.com/nanfang/just-for-you/server/internal/moment/domain"
+	httpserver "github.com/nanfang/just-for-you/server/internal/platform/httpapi"
 )
 
 type RequestPhotoUploadExecutor interface {

@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	application "github.com/nanfang/just-for-you/server/internal/account/application"
 	domain "github.com/nanfang/just-for-you/server/internal/account/domain"
-	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
+	httpserver "github.com/nanfang/just-for-you/server/internal/platform/httpapi"
 )
 
 type LoginExecutor interface {

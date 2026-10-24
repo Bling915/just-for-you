@@ -11,7 +11,7 @@ import (
 	app "github.com/nanfang/just-for-you/server/internal/anniversary/application"
 	domain "github.com/nanfang/just-for-you/server/internal/anniversary/domain"
 	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
-	shared "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
+	shared "github.com/nanfang/just-for-you/server/internal/platform/httpapi"
 )
 
 type ListAnniversariesExecutor interface {

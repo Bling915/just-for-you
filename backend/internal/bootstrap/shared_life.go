@@ -15,7 +15,6 @@ import (
 	dailyai "github.com/nanfang/just-for-you/server/internal/dailyquestion/infrastructure/ai"
 	dailyquestionmysql "github.com/nanfang/just-for-you/server/internal/dailyquestion/infrastructure/mysql"
 	dailyquestionhttp "github.com/nanfang/just-for-you/server/internal/dailyquestion/interfaces/http"
-	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 	cosstorage "github.com/nanfang/just-for-you/server/internal/media/infrastructure/cos"
 	"github.com/nanfang/just-for-you/server/internal/platform/clock"
 	"github.com/nanfang/just-for-you/server/internal/platform/config"
@@ -39,7 +38,7 @@ func buildSharedLife(
 	db *sql.DB,
 	cfg config.Config,
 	getCouple *coupleapp.GetCurrentCouple,
-) ([]httpserver.RouteRegistrar, error) {
+) ([]RouteRegistrar, error) {
 	storage, err := cosstorage.NewObjectStorage(
 		cfg.COSBucketURL,
 		cfg.COSSecretID,
@@ -139,7 +138,7 @@ func buildSharedLife(
 		List:         list,
 	})
 
-	return []httpserver.RouteRegistrar{
+	return []RouteRegistrar{
 		anniversaryHandler,
 		todoHandler,
 		wishHandler,

@@ -1,11 +1,11 @@
-package httpserver
+package bootstrap
 
 import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/nanfang/just-for-you/server/internal/platform/auth"
-	"github.com/nanfang/just-for-you/server/internal/platform/httpresponse"
+	"github.com/nanfang/just-for-you/server/internal/platform/httpapi"
 )
 
 type RouteRegistrar interface {
@@ -24,7 +24,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
 		c.Next()
 	})
-	router.GET("/healthz", func(c *gin.Context) { httpresponse.WriteData(c, http.StatusOK, gin.H{"status": "ok"}) })
+	router.GET("/healthz", func(c *gin.Context) { httpapi.WriteData(c, http.StatusOK, gin.H{"status": "ok"}) })
 	for _, registrar := range deps.Registrars {
 		registrar.RegisterPublic(router)
 	}
@@ -34,7 +34,3 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	}
 	return router
 }
-
-var WriteData = httpresponse.WriteData
-var WriteError = httpresponse.WriteError
-var UserID = auth.UserID

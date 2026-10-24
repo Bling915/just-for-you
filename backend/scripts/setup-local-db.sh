@@ -33,7 +33,5 @@ unset MYSQL_PWD
 
 export MYSQL_DSN="just_for_you:local-development@tcp(${mysql_host}:${mysql_port})/just_for_you?parseTime=true&charset=utf8mb4&multiStatements=true"
 cd "$backend_dir"
-for version in 1 2 3; do
-  go run ./cmd/migrate -direction up -version "$version"
-done
-printf '本地数据库和 3 个迁移已准备完成。\n'
+go run ./cmd/migrate -direction up
+printf '本地数据库和基线迁移已准备完成。\n'
