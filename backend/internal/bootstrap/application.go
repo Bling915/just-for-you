@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/nanfang/just-for-you/server/internal/infrastructure/config"
-	database "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/shared"
 	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
+	"github.com/nanfang/just-for-you/server/internal/platform/config"
+	database "github.com/nanfang/just-for-you/server/internal/platform/database"
 )
 
 type Application struct {

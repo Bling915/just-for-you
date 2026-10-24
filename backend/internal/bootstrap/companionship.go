@@ -3,10 +3,10 @@ package bootstrap
 import (
 	"database/sql"
 	companionshipapp "github.com/nanfang/just-for-you/server/internal/application/companionship"
-	"github.com/nanfang/just-for-you/server/internal/infrastructure/clock"
-	"github.com/nanfang/just-for-you/server/internal/infrastructure/config"
 	companionshipmysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/companionship"
 	companionshiphttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/companionship"
+	"github.com/nanfang/just-for-you/server/internal/platform/clock"
+	"github.com/nanfang/just-for-you/server/internal/platform/config"
 )
 
 func buildCompanionship(db *sql.DB, cfg config.Config) *companionshiphttp.Handler {

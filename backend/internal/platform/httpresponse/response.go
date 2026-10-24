@@ -1,4 +1,4 @@
-package httpserver
+package httpresponse
 
 import "github.com/gin-gonic/gin"
 

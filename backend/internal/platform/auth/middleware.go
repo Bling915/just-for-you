@@ -1,10 +1,12 @@
-package httpserver
+package auth
 
 import (
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/nanfang/just-for-you/server/internal/platform/httpresponse"
 )
 
 const userIDKey = "userID"
@@ -16,7 +18,7 @@ func Authenticate(verifier AccessTokenVerifier) gin.HandlerFunc {
 		raw := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
 		userID, err := verifier.ParseAccess(raw)
 		if err != nil {
-			WriteError(c, http.StatusUnauthorized, "UNAUTHORIZED", "请重新登录")
+			httpresponse.WriteError(c, http.StatusUnauthorized, "UNAUTHORIZED", "请重新登录")
 			c.Abort()
 			return
 		}

@@ -10,12 +10,11 @@ import (
 const internalPrefix = "github.com/nanfang/just-for-you/server/internal/"
 
 var legacyRoots = []string{
-	"application/companionship", "application/identity", "application/moment", "application/relationship", "application/shared", "application/together",
+	"application/companionship", "application/identity", "application/moment", "application/relationship", "application/together",
 	"domain/companionship", "domain/identity", "domain/moment", "domain/relationship", "domain/together",
-	"infrastructure/ai", "infrastructure/clock", "infrastructure/config", "infrastructure/identity", "infrastructure/notification",
+	"infrastructure/ai", "infrastructure/identity", "infrastructure/notification",
 	"infrastructure/persistence/mysql/companionship", "infrastructure/persistence/mysql/identity", "infrastructure/persistence/mysql/moment",
-	"infrastructure/persistence/mysql/relationship", "infrastructure/persistence/mysql/shared", "infrastructure/persistence/mysql/together",
-	"infrastructure/security", "infrastructure/storage",
+	"infrastructure/persistence/mysql/relationship", "infrastructure/persistence/mysql/together", "infrastructure/storage",
 	"interfaces/http/companionship", "interfaces/http/identity", "interfaces/http/moment", "interfaces/http/relationship", "interfaces/http/shared", "interfaces/http/together",
 }
 
@@ -174,11 +173,11 @@ func dependencyAllowed(from, to string) bool {
 	case "domain":
 		return false
 	case "application":
-		return to == "domain"
+		return to == "domain" || to == "platform"
 	case "interfaces":
-		return to == "application" || to == "domain"
+		return to == "application" || to == "domain" || to == "platform"
 	case "infrastructure":
-		return to == "application" || to == "domain"
+		return to == "application" || to == "domain" || to == "platform"
 	case "bootstrap", "architecture":
 		return true
 	default:

@@ -1,4 +1,4 @@
-package infrastructure
+package auth
 
 import (
 	"crypto/rand"
@@ -10,20 +10,20 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-type JWTManager struct{ secret []byte }
+type TokenService struct{ secret []byte }
 
-func NewJWTManager(secret []byte) JWTManager {
-	return JWTManager{secret: append([]byte(nil), secret...)}
+func NewTokenService(secret []byte) TokenService {
+	return TokenService{secret: append([]byte(nil), secret...)}
 }
 
-func (m JWTManager) IssueAccess(userID int64, now time.Time) (string, time.Time, error) {
+func (m TokenService) IssueAccess(userID int64, now time.Time) (string, time.Time, error) {
 	expires := now.Add(15 * time.Minute)
 	claims := jwt.RegisteredClaims{Subject: strconv.FormatInt(userID, 10), IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(expires)}
 	raw, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(m.secret)
 	return raw, expires, err
 }
 
-func (m JWTManager) ParseAccess(raw string) (int64, error) {
+func (m TokenService) ParseAccess(raw string) (int64, error) {
 	token, err := jwt.ParseWithClaims(raw, &jwt.RegisteredClaims{}, func(token *jwt.Token) (any, error) {
 		if token.Method != jwt.SigningMethodHS256 {
 			return nil, fmt.Errorf("unexpected signing method")

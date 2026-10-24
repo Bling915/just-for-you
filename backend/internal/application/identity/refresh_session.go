@@ -3,7 +3,7 @@ package identity
 import (
 	"context"
 
-	appshared "github.com/nanfang/just-for-you/server/internal/application/shared"
+	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 )
 
 type RefreshSessionCommand struct{ RefreshToken string }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 
-	appshared "github.com/nanfang/just-for-you/server/internal/application/shared"
+	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 )
 
 type LogoutCommand struct{ RefreshToken string }

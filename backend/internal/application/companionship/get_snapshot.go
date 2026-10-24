@@ -2,7 +2,7 @@ package companionship
 
 import (
 	"context"
-	appshared "github.com/nanfang/just-for-you/server/internal/application/shared"
+	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/companionship"
 )
 

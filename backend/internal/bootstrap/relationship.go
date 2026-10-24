@@ -3,9 +3,9 @@ package bootstrap
 import (
 	"database/sql"
 	relationshipapp "github.com/nanfang/just-for-you/server/internal/application/relationship"
-	"github.com/nanfang/just-for-you/server/internal/infrastructure/clock"
 	relationshipmysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/relationship"
 	relationshiphttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/relationship"
+	"github.com/nanfang/just-for-you/server/internal/platform/clock"
 )
 
 func buildRelationship(db *sql.DB, enableSoloTest bool, avatars relationshipapp.AvatarURLSigner) (*relationshiphttp.Handler, *relationshipapp.GetRelationshipUseCase) {

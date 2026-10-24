@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	appshared "github.com/nanfang/just-for-you/server/internal/application/shared"
+	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
 	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 )

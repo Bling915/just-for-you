@@ -4,12 +4,12 @@ import (
 	"database/sql"
 	momentapp "github.com/nanfang/just-for-you/server/internal/application/moment"
 	relationshipapp "github.com/nanfang/just-for-you/server/internal/application/relationship"
-	"github.com/nanfang/just-for-you/server/internal/infrastructure/clock"
-	"github.com/nanfang/just-for-you/server/internal/infrastructure/config"
 	momentmysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/moment"
 	togethermysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/together"
 	cos "github.com/nanfang/just-for-you/server/internal/infrastructure/storage/cos"
 	momenthttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/moment"
+	"github.com/nanfang/just-for-you/server/internal/platform/clock"
+	"github.com/nanfang/just-for-you/server/internal/platform/config"
 )
 
 func buildMoment(cfg config.Config, db *sql.DB, get *relationshipapp.GetRelationshipUseCase) (*momenthttp.Handler, error) {

@@ -7,11 +7,11 @@ import (
 	"fmt"
 	app "github.com/nanfang/just-for-you/server/internal/application/together"
 	"github.com/nanfang/just-for-you/server/internal/infrastructure/ai"
-	"github.com/nanfang/just-for-you/server/internal/infrastructure/clock"
-	"github.com/nanfang/just-for-you/server/internal/infrastructure/config"
 	mysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/together"
 	cosstorage "github.com/nanfang/just-for-you/server/internal/infrastructure/storage/cos"
 	togetherhttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/together"
+	"github.com/nanfang/just-for-you/server/internal/platform/clock"
+	"github.com/nanfang/just-for-you/server/internal/platform/config"
 	"net/http"
 	"time"
 )
