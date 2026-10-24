@@ -31,3 +31,10 @@ func TestInvitationAcceptanceRules(t *testing.T) {
 		t.Fatalf("used err=%v", err)
 	}
 }
+
+func TestCouplePartnerOfRejectsNonMember(t *testing.T) {
+	value := NewCouple(7, 1, 2, time.Now())
+	if _, err := value.PartnerOf(3); !errors.Is(err, ErrNotCoupleMember) {
+		t.Fatalf("PartnerOf() error = %v", err)
+	}
+}

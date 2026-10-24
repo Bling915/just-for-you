@@ -1,12 +1,12 @@
-package relationshiphttp
+package couplehttp
 
 import (
 	"bytes"
 	"context"
 	"errors"
 	"github.com/gin-gonic/gin"
-	application "github.com/nanfang/just-for-you/server/internal/application/relationship"
-	domain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
+	application "github.com/nanfang/just-for-you/server/internal/couple/application"
+	domain "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -28,36 +28,36 @@ func (fakePreview) Execute(context.Context, application.PreviewInvitationQuery) 
 
 type fakeBind struct{ err error }
 
-func (f fakeBind) Execute(context.Context, application.BindRelationshipCommand) (domain.Relationship, error) {
-	return domain.Relationship{}, f.err
+func (f fakeBind) Execute(context.Context, application.BindCoupleCommand) (domain.Couple, error) {
+	return domain.Couple{}, f.err
 }
 
 type fakeGet struct{}
 
-func (fakeGet) Execute(context.Context, application.GetRelationshipQuery) (application.CurrentRelationship, error) {
-	return application.CurrentRelationship{}, domain.ErrNoActiveRelationship
+func (fakeGet) Execute(context.Context, application.GetCoupleQuery) (application.CurrentCouple, error) {
+	return application.CurrentCouple{}, domain.ErrNoActiveCouple
 }
 
 type fakeGetProfile struct{}
 
-func (fakeGetProfile) Execute(context.Context, application.GetRelationshipQuery) (application.CurrentRelationship, error) {
-	return application.CurrentRelationship{
-		Relationship: domain.NewRelationship(9, 7, 8, time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)),
-		Partner:      application.PartnerProfile{UserID: 8, DisplayName: "小南", AvatarURL: "cos://avatar"},
+func (fakeGetProfile) Execute(context.Context, application.GetCoupleQuery) (application.CurrentCouple, error) {
+	return application.CurrentCouple{
+		Couple:  domain.NewCouple(9, 7, 8, time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)),
+		Partner: application.PartnerProfile{UserID: 8, DisplayName: "小南", AvatarURL: "cos://avatar"},
 	}, nil
 }
 
 type fakeEnd struct{}
 
-func (fakeEnd) Execute(context.Context, application.EndRelationshipCommand) error { return nil }
+func (fakeEnd) Execute(context.Context, application.EndCoupleCommand) error { return nil }
 
 type fakeSoloTest struct{}
 
-func (fakeSoloTest) Execute(_ context.Context, command application.EnableSoloTestCommand) (domain.Relationship, error) {
-	return domain.NewRelationship(12, command.UserID, 1007, time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)), nil
+func (fakeSoloTest) Execute(_ context.Context, command application.EnableSoloTestCommand) (domain.Couple, error) {
+	return domain.NewCouple(12, command.UserID, 1007, time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)), nil
 }
-func fakeUseCases(bindErr error) UseCases {
-	return UseCases{CreateInvitation: fakeCreate{}, PreviewInvitation: fakePreview{}, BindRelationship: fakeBind{bindErr}, GetRelationship: fakeGet{}, EndRelationship: fakeEnd{}}
+func fakeUseCases(bindErr error) Dependencies {
+	return Dependencies{CreateInvitation: fakeCreate{}, PreviewInvitation: fakePreview{}, BindCouple: fakeBind{bindErr}, GetCouple: fakeGet{}, EndCouple: fakeEnd{}}
 }
 func TestBindMapsStableErrorCodes(t *testing.T) {
 	cases := []struct {
@@ -80,7 +80,7 @@ func TestBindMapsStableErrorCodes(t *testing.T) {
 		})
 	}
 }
-func TestGetMapsNoActiveRelationship(t *testing.T) {
+func TestGetMapsNoActiveCouple(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	group := router.Group("/v1", func(c *gin.Context) { c.Set("userID", int64(2)) })
@@ -97,7 +97,7 @@ func TestGetReturnsPartnerProfileWithoutOpenID(t *testing.T) {
 	router := gin.New()
 	group := router.Group("/v1", func(c *gin.Context) { c.Set("userID", int64(7)) })
 	useCases := fakeUseCases(nil)
-	useCases.GetRelationship = fakeGetProfile{}
+	useCases.GetCouple = fakeGetProfile{}
 	NewHandler(useCases).RegisterProtected(group)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/couples/me", nil))
@@ -112,7 +112,7 @@ func TestGetReturnsPartnerProfileWithoutOpenID(t *testing.T) {
 
 func TestSoloTestRouteIsRegisteredOnlyWhenEnabled(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	request := func(useCases UseCases) *httptest.ResponseRecorder {
+	request := func(useCases Dependencies) *httptest.ResponseRecorder {
 		router := gin.New()
 		group := router.Group("/v1", func(c *gin.Context) { c.Set("userID", int64(7)) })
 		NewHandler(useCases).RegisterProtected(group)

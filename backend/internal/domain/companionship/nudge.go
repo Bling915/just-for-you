@@ -24,7 +24,7 @@ func NewNudge(coupleID, senderID, userAID, userBID int64, kind NudgeKind, now ti
 	if senderID == userAID {
 		recipientID = userBID
 	} else if senderID != userBID {
-		return Nudge{}, ErrNotRelationshipMember
+		return Nudge{}, ErrNotCoupleMember
 	}
 	return Nudge{coupleID: coupleID, senderID: senderID, recipientID: recipientID, kind: kind, createdAt: now}, nil
 }

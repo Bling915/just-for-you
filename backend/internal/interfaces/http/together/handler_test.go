@@ -14,9 +14,9 @@ import (
 	domain "github.com/nanfang/just-for-you/server/internal/domain/together"
 )
 
-type handlerRelations struct{ rel app.ActiveRelationship }
+type handlerRelations struct{ rel app.ActiveCouple }
 
-func (h handlerRelations) GetActiveRelationship(context.Context, int64) (app.ActiveRelationship, error) {
+func (h handlerRelations) GetActiveCouple(context.Context, int64) (app.ActiveCouple, error) {
 	return h.rel, nil
 }
 
@@ -82,7 +82,7 @@ func anniversaryRouter(item domain.Anniversary, now time.Time) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	g := r.Group("/v1", func(c *gin.Context) { c.Set("userID", int64(3)) })
-	NewHandler(app.NewServiceWithStorage(&handlerRepo{item: item}, handlerRelations{app.ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3}}, handlerClock{now}, handlerStorage{}, func() string { return "key" })).RegisterProtected(g)
+	NewHandler(app.NewServiceWithStorage(&handlerRepo{item: item}, handlerRelations{app.ActiveCouple{ID: 9, UserAID: 2, UserBID: 3}}, handlerClock{now}, handlerStorage{}, func() string { return "key" })).RegisterProtected(g)
 	return r
 }
 

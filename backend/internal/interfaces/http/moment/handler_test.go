@@ -5,8 +5,8 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	application "github.com/nanfang/just-for-you/server/internal/application/moment"
+	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
-	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -184,7 +184,7 @@ func TestUpdateMapsConflictAndReturnsOccurrenceVersion(t *testing.T) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 
-	result := domain.RestoreMomentDetails(domain.RestoreInput{ID: 5, AuthorID: 1, RelationshipID: 9, Text: "更新", Status: domain.StatusNone, OccurredAt: now.Add(-time.Hour), CreatedAt: now.Add(-2 * time.Hour), UpdatedAt: now, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard})
+	result := domain.RestoreMomentDetails(domain.RestoreInput{ID: 5, AuthorID: 1, CoupleID: 9, Text: "更新", Status: domain.StatusNone, OccurredAt: now.Add(-time.Hour), CreatedAt: now.Add(-2 * time.Hour), UpdatedAt: now, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard})
 	success := fakeUseCases(nil, nil)
 	success.UpdateMoment = &fakeUpdate{result: result}
 	response = httptest.NewRecorder()
@@ -207,7 +207,7 @@ func TestPublishMapsDomainErrors(t *testing.T) {
 	cases := []struct {
 		err  error
 		code string
-	}{{domain.ErrTooManyPhotos, "TOO_MANY_PHOTOS"}, {domain.ErrEmptyMoment, "EMPTY_MOMENT"}, {domain.ErrInvalidUpload, "INVALID_UPLOAD"}, {relationshipdomain.ErrNoActiveRelationship, "NO_ACTIVE_COUPLE"}}
+	}{{domain.ErrTooManyPhotos, "TOO_MANY_PHOTOS"}, {domain.ErrEmptyMoment, "EMPTY_MOMENT"}, {domain.ErrInvalidUpload, "INVALID_UPLOAD"}, {coupledomain.ErrNoActiveCouple, "NO_ACTIVE_COUPLE"}}
 	for _, item := range cases {
 		t.Run(item.code, func(t *testing.T) {
 			response := httptest.NewRecorder()

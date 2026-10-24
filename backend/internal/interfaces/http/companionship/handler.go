@@ -5,8 +5,8 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	application "github.com/nanfang/just-for-you/server/internal/application/companionship"
+	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/companionship"
-	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 	"net/http"
 	"time"
@@ -135,7 +135,7 @@ func writeError(c *gin.Context, err error) {
 		status, code, message = http.StatusBadRequest, "INVALID_NUDGE", "互动类型不正确"
 	case errors.Is(err, domain.ErrNudgeThrottled):
 		status, code, message = http.StatusTooManyRequests, "NUDGE_THROTTLED", "慢一点，让心意先飞一会儿"
-	case errors.Is(err, relationshipdomain.ErrNoActiveRelationship):
+	case errors.Is(err, coupledomain.ErrNoActiveCouple):
 		status, code, message = http.StatusNotFound, "NO_ACTIVE_COUPLE", "还没有绑定关系"
 	default:
 		_ = c.Error(err)

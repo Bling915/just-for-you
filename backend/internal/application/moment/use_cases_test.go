@@ -3,8 +3,8 @@ package moment
 import (
 	"context"
 	"errors"
+	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	momentdomain "github.com/nanfang/just-for-you/server/internal/domain/moment"
-	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	"testing"
 	"time"
 )
@@ -13,12 +13,12 @@ type fixedClock struct{ now time.Time }
 
 func (c fixedClock) Now() time.Time { return c.now }
 
-type fakeRelationships struct {
-	active ActiveRelationship
+type fakeCouples struct {
+	active ActiveCouple
 	err    error
 }
 
-func (f fakeRelationships) GetActiveRelationship(context.Context, int64) (ActiveRelationship, error) {
+func (f fakeCouples) GetActiveCouple(context.Context, int64) (ActiveCouple, error) {
 	return f.active, f.err
 }
 
@@ -112,7 +112,7 @@ func (r *memoryMoments) Find(_ context.Context, lookup MomentLookup) (momentdoma
 func (r *memoryMoments) Delete(context.Context, int64) error { return nil }
 func (r *memoryMoments) ShareToCouple(_ context.Context, sourceID, authorID, relationshipID int64, message string, now time.Time) (momentdomain.Moment, error) {
 	source := r.existing
-	copy, err := momentdomain.NewMomentDetails(momentdomain.CreateInput{AuthorID: authorID, RelationshipID: relationshipID, Text: message, PhotoKeys: photoKeys(source.Photos()), OccurredAt: source.OccurredAt(), CreatedAt: now, SpaceType: momentdomain.SpaceShared, Visibility: momentdomain.VisibilityCouple, Kind: momentdomain.KindStandard, SourceMomentID: &sourceID})
+	copy, err := momentdomain.NewMomentDetails(momentdomain.CreateInput{AuthorID: authorID, CoupleID: relationshipID, Text: message, PhotoKeys: photoKeys(source.Photos()), OccurredAt: source.OccurredAt(), CreatedAt: now, SpaceType: momentdomain.SpaceShared, Visibility: momentdomain.VisibilityCouple, Kind: momentdomain.KindStandard, SourceMomentID: &sourceID})
 	if err == nil {
 		r.sharedCopy = copy
 	}
@@ -156,15 +156,15 @@ func (r *memoryMoments) ResurfaceCandidates(context.Context, int64, time.Time, i
 
 func TestSavePerspectiveRequiresSharedMomentOtherPartnerAndValidUploads(t *testing.T) {
 	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
-	shared := momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 7, AuthorID: 1, RelationshipID: 9, Text: "那天", SpaceType: momentdomain.SpaceShared, Visibility: momentdomain.VisibilityCouple, Kind: momentdomain.KindStandard, OccurredAt: now, CreatedAt: now, UpdatedAt: now})
+	shared := momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 7, AuthorID: 1, CoupleID: 9, Text: "那天", SpaceType: momentdomain.SpaceShared, Visibility: momentdomain.VisibilityCouple, Kind: momentdomain.KindStandard, OccurredAt: now, CreatedAt: now, UpdatedAt: now})
 	uploads := &fakeUploads{grants: map[string]UploadGrant{"p": {ObjectKey: "p", OwnerID: 2, ContentType: "image/jpeg", ExpiresAt: now.Add(time.Hour)}}}
 	repo := &memoryMoments{existing: shared}
-	useCase := NewSavePerspectiveUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 1}}, uploads, repo, fakeStorage{}, fixedClock{now})
+	useCase := NewSavePerspectiveUseCase(fakeCouples{active: ActiveCouple{ID: 9, PartnerID: 1}}, uploads, repo, fakeStorage{}, fixedClock{now})
 	value, err := useCase.Execute(context.Background(), SavePerspectiveCommand{UserID: 2, MomentID: 7, Text: "我的视角", PhotoKeys: []string{"p"}})
 	if err != nil || value.AuthorID() != 2 || len(value.Photos()) != 1 {
 		t.Fatalf("value=%+v err=%v", value, err)
 	}
-	ownerUseCase := NewSavePerspectiveUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, uploads, repo, fakeStorage{}, fixedClock{now})
+	ownerUseCase := NewSavePerspectiveUseCase(fakeCouples{active: ActiveCouple{ID: 9, PartnerID: 2}}, uploads, repo, fakeStorage{}, fixedClock{now})
 	if _, err = ownerUseCase.Execute(context.Background(), SavePerspectiveCommand{UserID: 1, MomentID: 7, Text: "自己补充"}); !errors.Is(err, ErrPerspectiveRequiresPartner) {
 		t.Fatalf("err=%v", err)
 	}
@@ -197,20 +197,20 @@ func (u testUseCases) GetTimeline(ctx context.Context, userID int64, cursor stri
 func (u testUseCases) DeleteMoment(ctx context.Context, userID, momentID int64) error {
 	return u.delete.Execute(ctx, DeleteMomentCommand{userID, momentID})
 }
-func newMomentService(now time.Time, relationships fakeRelationships, uploads *fakeUploads, repository *memoryMoments) testUseCases {
+func newMomentService(now time.Time, relationships fakeCouples, uploads *fakeUploads, repository *memoryMoments) testUseCases {
 	clock := fixedClock{now}
 	storage := fakeStorage{}
 	return testUseCases{NewPublishMomentUseCase(relationships, uploads, repository, storage, clock), NewGetTimelineUseCase(relationships, repository, storage, clock), NewDeleteMomentUseCase(relationships, repository)}
 }
-func TestPublishMomentRejectsMissingRelationship(t *testing.T) {
-	service := newMomentService(time.Now(), fakeRelationships{err: relationshipdomain.ErrNoActiveRelationship}, &fakeUploads{grants: map[string]UploadGrant{}}, &memoryMoments{})
+func TestPublishMomentRejectsMissingCouple(t *testing.T) {
+	service := newMomentService(time.Now(), fakeCouples{err: coupledomain.ErrNoActiveCouple}, &fakeUploads{grants: map[string]UploadGrant{}}, &memoryMoments{})
 	_, err := service.PublishMoment(context.Background(), 1, PublishInput{Text: "hello"})
-	if !errors.Is(err, relationshipdomain.ErrNoActiveRelationship) {
+	if !errors.Is(err, coupledomain.ErrNoActiveCouple) {
 		t.Fatalf("err=%v", err)
 	}
 }
 func TestPublishMomentRejectsInvalidPhotoGrant(t *testing.T) {
-	service := newMomentService(time.Now(), fakeRelationships{active: ActiveRelationship{ID: 9}}, &fakeUploads{grants: map[string]UploadGrant{}}, &memoryMoments{})
+	service := newMomentService(time.Now(), fakeCouples{active: ActiveCouple{ID: 9}}, &fakeUploads{grants: map[string]UploadGrant{}}, &memoryMoments{})
 	_, err := service.PublishMoment(context.Background(), 1, PublishInput{PhotoKeys: []string{"forged"}})
 	if !errors.Is(err, momentdomain.ErrInvalidUpload) {
 		t.Fatalf("err=%v", err)
@@ -222,7 +222,7 @@ func TestPublishMomentRejectsMissingOrInvalidStoredObject(t *testing.T) {
 	uploads := &fakeUploads{grants: map[string]UploadGrant{
 		"photo": {ObjectKey: "photo", OwnerID: 1, ContentType: "image/jpeg", ExpiresAt: now.Add(time.Minute)},
 	}}
-	service := testUseCases{publish: NewPublishMomentUseCase(fakeRelationships{active: ActiveRelationship{ID: 9}}, uploads, &memoryMoments{}, fakeStorage{verifyErr: momentdomain.ErrInvalidUpload}, fixedClock{now})}
+	service := testUseCases{publish: NewPublishMomentUseCase(fakeCouples{active: ActiveCouple{ID: 9}}, uploads, &memoryMoments{}, fakeStorage{verifyErr: momentdomain.ErrInvalidUpload}, fixedClock{now})}
 	_, err := service.PublishMoment(context.Background(), 1, PublishInput{PhotoKeys: []string{"photo"}})
 	if !errors.Is(err, momentdomain.ErrInvalidUpload) {
 		t.Fatalf("err=%v", err)
@@ -244,21 +244,21 @@ func TestGetHomeLimitsHighlightsAndDegradesReaderFailure(t *testing.T) {
 	moments := &memoryMoments{saved: []momentdomain.Moment{}}
 	// 恰好等于展示上限：不触发「还有更多」。
 	reader := &fakeHighlights{items: []AnniversaryHighlight{{ID: 1}, {ID: 2}, {ID: 3}}}
-	u := NewGetHomeUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, moments, fakeStorage{}, fixedClock{now}, reader)
+	u := NewGetHomeUseCase(fakeCouples{active: ActiveCouple{ID: 9, PartnerID: 2}}, moments, fakeStorage{}, fixedClock{now}, reader)
 	got, err := u.Execute(context.Background(), GetHomeQuery{UserID: 1})
 	if err != nil || reader.limit != pinnedDisplayLimit+1 || len(got.PinnedAnniversaries) != pinnedDisplayLimit || got.HasMorePinned {
 		t.Fatalf("正好上限时 got=%+v limit=%d err=%v", got, reader.limit, err)
 	}
 	// 超出上限：只展示前 3 个，并置 HasMorePinned 告知前端。
 	reader = &fakeHighlights{items: []AnniversaryHighlight{{ID: 1}, {ID: 2}, {ID: 3}, {ID: 4}}}
-	u = NewGetHomeUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, moments, fakeStorage{}, fixedClock{now}, reader)
+	u = NewGetHomeUseCase(fakeCouples{active: ActiveCouple{ID: 9, PartnerID: 2}}, moments, fakeStorage{}, fixedClock{now}, reader)
 	got, err = u.Execute(context.Background(), GetHomeQuery{UserID: 1})
 	if err != nil || len(got.PinnedAnniversaries) != pinnedDisplayLimit || !got.HasMorePinned {
 		t.Fatalf("超出上限时 got=%+v err=%v", got, err)
 	}
 	// 读取器故障：降级为空，不影响其余数据。
 	reader = &fakeHighlights{err: errors.New("anniversary unavailable")}
-	u = NewGetHomeUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, moments, fakeStorage{}, fixedClock{now}, reader)
+	u = NewGetHomeUseCase(fakeCouples{active: ActiveCouple{ID: 9, PartnerID: 2}}, moments, fakeStorage{}, fixedClock{now}, reader)
 	got, err = u.Execute(context.Background(), GetHomeQuery{UserID: 1})
 	if err != nil || len(got.PinnedAnniversaries) != 0 || got.Recent == nil {
 		t.Fatalf("读取降级 got=%+v err=%v", got, err)
@@ -273,7 +273,7 @@ func TestPublishMomentKeepsNinePhotoOrder(t *testing.T) {
 		uploads.grants[keys[i]] = UploadGrant{ObjectKey: keys[i], OwnerID: 1, ExpiresAt: now.Add(time.Minute)}
 	}
 	repository := &memoryMoments{}
-	service := newMomentService(now, fakeRelationships{active: ActiveRelationship{ID: 9}}, uploads, repository)
+	service := newMomentService(now, fakeCouples{active: ActiveCouple{ID: 9}}, uploads, repository)
 	moment, err := service.PublishMoment(context.Background(), 1, PublishInput{PhotoKeys: keys})
 	if err != nil {
 		t.Fatal(err)
@@ -288,28 +288,28 @@ func TestPublishFailureDoesNotConsumeGrants(t *testing.T) {
 	now := time.Now()
 	uploads := &fakeUploads{grants: map[string]UploadGrant{"a": {ObjectKey: "a", OwnerID: 1, ExpiresAt: now.Add(time.Minute)}}}
 	repository := &memoryMoments{saveErr: errors.New("database down")}
-	service := newMomentService(now, fakeRelationships{active: ActiveRelationship{ID: 9}}, uploads, repository)
+	service := newMomentService(now, fakeCouples{active: ActiveCouple{ID: 9}}, uploads, repository)
 	_, _ = service.PublishMoment(context.Background(), 1, PublishInput{PhotoKeys: []string{"a"}})
 	if repository.consumed {
 		t.Fatal("grant consumed after failed save")
 	}
 }
-func TestDeleteMomentRejectsNonAuthorAndEndedRelationship(t *testing.T) {
+func TestDeleteMomentRejectsNonAuthorAndEndedCouple(t *testing.T) {
 	now := time.Now()
 	existing, _ := momentdomain.NewMoment(2, 9, "hello", momentdomain.StatusNone, "", nil, now)
 	repository := &memoryMoments{existing: existing}
-	service := newMomentService(now, fakeRelationships{active: ActiveRelationship{ID: 9}}, &fakeUploads{grants: map[string]UploadGrant{}}, repository)
+	service := newMomentService(now, fakeCouples{active: ActiveCouple{ID: 9}}, &fakeUploads{grants: map[string]UploadGrant{}}, repository)
 	if err := service.DeleteMoment(context.Background(), 1, 7); !errors.Is(err, momentdomain.ErrNotAuthor) {
 		t.Fatalf("err=%v", err)
 	}
-	service = newMomentService(now, fakeRelationships{err: relationshipdomain.ErrNoActiveRelationship}, &fakeUploads{grants: map[string]UploadGrant{}}, repository)
-	if err := service.DeleteMoment(context.Background(), 1, 7); !errors.Is(err, relationshipdomain.ErrNoActiveRelationship) {
+	service = newMomentService(now, fakeCouples{err: coupledomain.ErrNoActiveCouple}, &fakeUploads{grants: map[string]UploadGrant{}}, repository)
+	if err := service.DeleteMoment(context.Background(), 1, 7); !errors.Is(err, coupledomain.ErrNoActiveCouple) {
 		t.Fatalf("ended err=%v", err)
 	}
 }
-func TestTimelineRejectsOldCursorAfterRelationshipEnds(t *testing.T) {
-	service := newMomentService(time.Now(), fakeRelationships{err: relationshipdomain.ErrNoActiveRelationship}, &fakeUploads{grants: map[string]UploadGrant{}}, &memoryMoments{})
-	if _, err := service.GetTimeline(context.Background(), 1, "old", 20); !errors.Is(err, relationshipdomain.ErrNoActiveRelationship) {
+func TestTimelineRejectsOldCursorAfterCoupleEnds(t *testing.T) {
+	service := newMomentService(time.Now(), fakeCouples{err: coupledomain.ErrNoActiveCouple}, &fakeUploads{grants: map[string]UploadGrant{}}, &memoryMoments{})
+	if _, err := service.GetTimeline(context.Background(), 1, "old", 20); !errors.Is(err, coupledomain.ErrNoActiveCouple) {
 		t.Fatalf("err=%v", err)
 	}
 }
@@ -321,7 +321,7 @@ func TestTimelineReturnsSignedReadURLs(t *testing.T) {
 		t.Fatal(err)
 	}
 	repository := &memoryMoments{saved: []momentdomain.Moment{moment}}
-	service := newMomentService(now, fakeRelationships{active: ActiveRelationship{ID: 9}}, &fakeUploads{grants: map[string]UploadGrant{}}, repository)
+	service := newMomentService(now, fakeCouples{active: ActiveCouple{ID: 9}}, &fakeUploads{grants: map[string]UploadGrant{}}, repository)
 
 	page, err := service.GetTimeline(context.Background(), 1, "", 20)
 	if err != nil {
@@ -336,27 +336,27 @@ func TestTimelineBuildsExplicitSpaceFilters(t *testing.T) {
 	now := time.Now()
 	tests := []struct {
 		name          string
-		relationships fakeRelationships
+		relationships fakeCouples
 		query         GetTimelineQuery
 		want          TimelineFilter
 	}{
 		{
 			name:          "shared defaults to active relationship",
-			relationships: fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}},
+			relationships: fakeCouples{active: ActiveCouple{ID: 9, PartnerID: 2}},
 			query:         GetTimelineQuery{UserID: 1},
-			want:          TimelineFilter{ViewerID: 1, RelationshipID: 9, SpaceType: momentdomain.SpaceShared},
+			want:          TimelineFilter{ViewerID: 1, CoupleID: 9, SpaceType: momentdomain.SpaceShared},
 		},
 		{
 			name:          "personal me works without relationship",
-			relationships: fakeRelationships{err: relationshipdomain.ErrNoActiveRelationship},
+			relationships: fakeCouples{err: coupledomain.ErrNoActiveCouple},
 			query:         GetTimelineQuery{UserID: 1, SpaceType: momentdomain.SpacePersonal, Owner: TimelineOwnerMe},
 			want:          TimelineFilter{ViewerID: 1, OwnerID: 1, SpaceType: momentdomain.SpacePersonal},
 		},
 		{
 			name:          "personal partner uses current partner and relationship",
-			relationships: fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}},
+			relationships: fakeCouples{active: ActiveCouple{ID: 9, PartnerID: 2}},
 			query:         GetTimelineQuery{UserID: 1, SpaceType: momentdomain.SpacePersonal, Owner: TimelineOwnerPartner},
-			want:          TimelineFilter{ViewerID: 1, RelationshipID: 9, OwnerID: 2, SpaceType: momentdomain.SpacePersonal},
+			want:          TimelineFilter{ViewerID: 1, CoupleID: 9, OwnerID: 2, SpaceType: momentdomain.SpacePersonal},
 		},
 	}
 	for _, test := range tests {
@@ -373,12 +373,12 @@ func TestTimelineBuildsExplicitSpaceFilters(t *testing.T) {
 	}
 }
 
-func TestUpdateMomentChecksRelationshipAuthorAndNewPhotoGrant(t *testing.T) {
+func TestUpdateMomentChecksCoupleAuthorAndNewPhotoGrant(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
-	existing := momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 5, AuthorID: 7, RelationshipID: 9, Text: "旧内容", Status: momentdomain.StatusNone, Photos: []momentdomain.Photo{momentdomain.NewPhoto("existing", 1)}, OccurredAt: now.Add(-time.Hour), CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour), SpaceType: momentdomain.SpaceShared, Visibility: momentdomain.VisibilityCouple, Kind: momentdomain.KindStandard})
+	existing := momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 5, AuthorID: 7, CoupleID: 9, Text: "旧内容", Status: momentdomain.StatusNone, Photos: []momentdomain.Photo{momentdomain.NewPhoto("existing", 1)}, OccurredAt: now.Add(-time.Hour), CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour), SpaceType: momentdomain.SpaceShared, Visibility: momentdomain.VisibilityCouple, Kind: momentdomain.KindStandard})
 	repository := &memoryMoments{existing: existing}
 	uploads := &fakeUploads{grants: map[string]UploadGrant{"new": {ObjectKey: "new", OwnerID: 7, ContentType: "image/jpeg", ExpiresAt: now.Add(time.Hour)}}}
-	useCase := NewUpdateMomentUseCase(fakeRelationships{active: ActiveRelationship{ID: 9}}, uploads, repository, fakeStorage{}, fixedClock{now})
+	useCase := NewUpdateMomentUseCase(fakeCouples{active: ActiveCouple{ID: 9}}, uploads, repository, fakeStorage{}, fixedClock{now})
 
 	updated, err := useCase.Execute(context.Background(), UpdateMomentCommand{UserID: 7, MomentID: 5, Text: "新内容", PhotoKeys: []string{"new", "existing"}, OccurredAt: now.Add(-time.Minute), Version: existing.UpdatedAt()})
 	if err != nil || updated.Text() != "新内容" || updated.Photos()[0].ObjectKey() != "new" {
@@ -387,8 +387,8 @@ func TestUpdateMomentChecksRelationshipAuthorAndNewPhotoGrant(t *testing.T) {
 	if _, err = useCase.Execute(context.Background(), UpdateMomentCommand{UserID: 8, MomentID: 5, Text: "越权", OccurredAt: now, Version: existing.UpdatedAt()}); !errors.Is(err, momentdomain.ErrNotAuthor) {
 		t.Fatalf("non-author err=%v", err)
 	}
-	ended := NewUpdateMomentUseCase(fakeRelationships{err: relationshipdomain.ErrNoActiveRelationship}, uploads, repository, fakeStorage{}, fixedClock{now})
-	if _, err = ended.Execute(context.Background(), UpdateMomentCommand{UserID: 7, MomentID: 5, Text: "内容", OccurredAt: now, Version: existing.UpdatedAt()}); !errors.Is(err, relationshipdomain.ErrNoActiveRelationship) {
+	ended := NewUpdateMomentUseCase(fakeCouples{err: coupledomain.ErrNoActiveCouple}, uploads, repository, fakeStorage{}, fixedClock{now})
+	if _, err = ended.Execute(context.Background(), UpdateMomentCommand{UserID: 7, MomentID: 5, Text: "内容", OccurredAt: now, Version: existing.UpdatedAt()}); !errors.Is(err, coupledomain.ErrNoActiveCouple) {
 		t.Fatalf("ended err=%v", err)
 	}
 }
@@ -396,43 +396,43 @@ func TestUpdateMomentChecksRelationshipAuthorAndNewPhotoGrant(t *testing.T) {
 func TestPublishMomentSupportsSharedAndPersonalSpaces(t *testing.T) {
 	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 	tests := []struct {
-		name             string
-		relationships    fakeRelationships
-		command          PublishMomentCommand
-		wantSpace        momentdomain.SpaceType
-		wantVisibility   momentdomain.Visibility
-		wantRelationship int64
-		wantErr          error
+		name           string
+		relationships  fakeCouples
+		command        PublishMomentCommand
+		wantSpace      momentdomain.SpaceType
+		wantVisibility momentdomain.Visibility
+		wantCouple     int64
+		wantErr        error
 	}{
 		{
 			name:          "default remains shared",
-			relationships: fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}},
+			relationships: fakeCouples{active: ActiveCouple{ID: 9, PartnerID: 2}},
 			command:       PublishMomentCommand{UserID: 1, Text: "共同小事"},
-			wantSpace:     momentdomain.SpaceShared, wantVisibility: momentdomain.VisibilityCouple, wantRelationship: 9,
+			wantSpace:     momentdomain.SpaceShared, wantVisibility: momentdomain.VisibilityCouple, wantCouple: 9,
 		},
 		{
 			name:          "private works without relationship",
-			relationships: fakeRelationships{err: relationshipdomain.ErrNoActiveRelationship},
+			relationships: fakeCouples{err: coupledomain.ErrNoActiveCouple},
 			command:       PublishMomentCommand{UserID: 1, Text: "只给自己", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPrivate},
 			wantSpace:     momentdomain.SpacePersonal, wantVisibility: momentdomain.VisibilityPrivate,
 		},
 		{
 			name:          "partner visible uses current relationship",
-			relationships: fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}},
+			relationships: fakeCouples{active: ActiveCouple{ID: 9, PartnerID: 2}},
 			command:       PublishMomentCommand{UserID: 1, Text: "给 TA 看", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPartner},
-			wantSpace:     momentdomain.SpacePersonal, wantVisibility: momentdomain.VisibilityPartner, wantRelationship: 9,
+			wantSpace:     momentdomain.SpacePersonal, wantVisibility: momentdomain.VisibilityPartner, wantCouple: 9,
 		},
 		{
 			name:          "invalid shared private pair",
-			relationships: fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}},
+			relationships: fakeCouples{active: ActiveCouple{ID: 9, PartnerID: 2}},
 			command:       PublishMomentCommand{UserID: 1, Text: "错误组合", SpaceType: momentdomain.SpaceShared, Visibility: momentdomain.VisibilityPrivate},
 			wantErr:       momentdomain.ErrInvalidSpaceVisibility,
 		},
 		{
 			name:          "partner visibility requires relationship",
-			relationships: fakeRelationships{err: relationshipdomain.ErrNoActiveRelationship},
+			relationships: fakeCouples{err: coupledomain.ErrNoActiveCouple},
 			command:       PublishMomentCommand{UserID: 1, Text: "没有伴侣", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPartner},
-			wantErr:       relationshipdomain.ErrNoActiveRelationship,
+			wantErr:       coupledomain.ErrNoActiveCouple,
 		},
 	}
 	for _, test := range tests {
@@ -449,8 +449,8 @@ func TestPublishMomentSupportsSharedAndPersonalSpaces(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got.SpaceType() != test.wantSpace || got.Visibility() != test.wantVisibility || got.RelationshipID() != test.wantRelationship {
-				t.Fatalf("moment space=%q visibility=%q relationship=%d", got.SpaceType(), got.Visibility(), got.RelationshipID())
+			if got.SpaceType() != test.wantSpace || got.Visibility() != test.wantVisibility || got.CoupleID() != test.wantCouple {
+				t.Fatalf("moment space=%q visibility=%q relationship=%d", got.SpaceType(), got.Visibility(), got.CoupleID())
 			}
 		})
 	}
@@ -464,7 +464,7 @@ func TestUpdateMomentChangesOnlyPersonalVisibility(t *testing.T) {
 		OccurredAt: now.Add(-time.Hour), CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour),
 	})
 	repository := &memoryMoments{existing: private}
-	useCase := NewUpdateMomentUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, &fakeUploads{grants: map[string]UploadGrant{}}, repository, fakeStorage{}, fixedClock{now})
+	useCase := NewUpdateMomentUseCase(fakeCouples{active: ActiveCouple{ID: 9, PartnerID: 2}}, &fakeUploads{grants: map[string]UploadGrant{}}, repository, fakeStorage{}, fixedClock{now})
 	updated, err := useCase.Execute(context.Background(), UpdateMomentCommand{
 		UserID: 1, MomentID: 5, Text: "给 TA 看", SpaceType: momentdomain.SpacePersonal,
 		Visibility: momentdomain.VisibilityPartner, OccurredAt: now.Add(-time.Minute), Version: private.UpdatedAt(),
@@ -472,8 +472,8 @@ func TestUpdateMomentChangesOnlyPersonalVisibility(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.SpaceType() != momentdomain.SpacePersonal || updated.Visibility() != momentdomain.VisibilityPartner || updated.RelationshipID() != 9 {
-		t.Fatalf("updated=%+v visibility=%q relationship=%d", updated, updated.Visibility(), updated.RelationshipID())
+	if updated.SpaceType() != momentdomain.SpacePersonal || updated.Visibility() != momentdomain.VisibilityPartner || updated.CoupleID() != 9 {
+		t.Fatalf("updated=%+v visibility=%q relationship=%d", updated, updated.Visibility(), updated.CoupleID())
 	}
 
 	shared, _ := momentdomain.NewMoment(1, 9, "共同小事", momentdomain.StatusNone, "", nil, now.Add(-time.Hour))
@@ -487,11 +487,11 @@ func TestUpdateMomentChangesOnlyPersonalVisibility(t *testing.T) {
 	}
 }
 
-func TestUpdatePrivateMomentWorksWithoutRelationship(t *testing.T) {
+func TestUpdatePrivateMomentWorksWithoutCouple(t *testing.T) {
 	now := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
 	private := momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 5, AuthorID: 1, Text: "旧内容", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPrivate, Kind: momentdomain.KindStandard, OccurredAt: now.Add(-time.Hour), CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour)})
 	repository := &memoryMoments{existing: private}
-	useCase := NewUpdateMomentUseCase(fakeRelationships{err: relationshipdomain.ErrNoActiveRelationship}, &fakeUploads{grants: map[string]UploadGrant{}}, repository, fakeStorage{}, fixedClock{now})
+	useCase := NewUpdateMomentUseCase(fakeCouples{err: coupledomain.ErrNoActiveCouple}, &fakeUploads{grants: map[string]UploadGrant{}}, repository, fakeStorage{}, fixedClock{now})
 	updated, err := useCase.Execute(context.Background(), UpdateMomentCommand{UserID: 1, MomentID: 5, Text: "新内容", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPrivate, OccurredAt: now.Add(-time.Minute), Version: private.UpdatedAt()})
 	if err != nil || updated.Text() != "新内容" {
 		t.Fatalf("updated=%+v err=%v", updated, err)
@@ -506,7 +506,7 @@ func TestShareToCoupleCopiesPersonalMomentWithoutChangingSource(t *testing.T) {
 	}
 	source = momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 7, AuthorID: source.AuthorID(), Text: source.Text(), Photos: source.Photos(), OccurredAt: source.OccurredAt(), CreatedAt: source.CreatedAt(), UpdatedAt: source.UpdatedAt(), SpaceType: source.SpaceType(), Visibility: source.Visibility(), Kind: source.Kind()})
 	repository := &memoryMoments{existing: source}
-	useCase := NewShareToCoupleUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, repository, fixedClock{now})
+	useCase := NewShareToCoupleUseCase(fakeCouples{active: ActiveCouple{ID: 9, PartnerID: 2}}, repository, fixedClock{now})
 	shared, err := useCase.Execute(context.Background(), ShareToCoupleCommand{UserID: 1, MomentID: 7, Message: "也放进我们的故事"})
 	if err != nil {
 		t.Fatal(err)
@@ -519,25 +519,25 @@ func TestShareToCoupleCopiesPersonalMomentWithoutChangingSource(t *testing.T) {
 	}
 }
 
-func TestShareToCoupleRequiresPersonalAuthorAndRelationship(t *testing.T) {
+func TestShareToCoupleRequiresPersonalAuthorAndCouple(t *testing.T) {
 	now := time.Now()
-	personal := momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 7, AuthorID: 2, RelationshipID: 9, Text: "TA 的", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPartner, Kind: momentdomain.KindStandard, OccurredAt: now, CreatedAt: now, UpdatedAt: now})
+	personal := momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 7, AuthorID: 2, CoupleID: 9, Text: "TA 的", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPartner, Kind: momentdomain.KindStandard, OccurredAt: now, CreatedAt: now, UpdatedAt: now})
 	repository := &memoryMoments{existing: personal}
-	useCase := NewShareToCoupleUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, repository, fixedClock{now})
+	useCase := NewShareToCoupleUseCase(fakeCouples{active: ActiveCouple{ID: 9, PartnerID: 2}}, repository, fixedClock{now})
 	if _, err := useCase.Execute(context.Background(), ShareToCoupleCommand{UserID: 1, MomentID: 7}); !errors.Is(err, momentdomain.ErrNotAuthor) {
 		t.Fatalf("non-author err=%v", err)
 	}
-	ended := NewShareToCoupleUseCase(fakeRelationships{err: relationshipdomain.ErrNoActiveRelationship}, repository, fixedClock{now})
-	if _, err := ended.Execute(context.Background(), ShareToCoupleCommand{UserID: 2, MomentID: 7}); !errors.Is(err, relationshipdomain.ErrNoActiveRelationship) {
+	ended := NewShareToCoupleUseCase(fakeCouples{err: coupledomain.ErrNoActiveCouple}, repository, fixedClock{now})
+	if _, err := ended.Execute(context.Background(), ShareToCoupleCommand{UserID: 2, MomentID: 7}); !errors.Is(err, coupledomain.ErrNoActiveCouple) {
 		t.Fatalf("ended err=%v", err)
 	}
 }
 
 func TestReactToMomentUsesVisibilityPolicyAndDeleteOwnOnly(t *testing.T) {
 	now := time.Now()
-	visible := momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 7, AuthorID: 2, RelationshipID: 9, Text: "给你看", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPartner, Kind: momentdomain.KindStandard, OccurredAt: now, CreatedAt: now, UpdatedAt: now})
+	visible := momentdomain.RestoreMomentDetails(momentdomain.RestoreInput{ID: 7, AuthorID: 2, CoupleID: 9, Text: "给你看", SpaceType: momentdomain.SpacePersonal, Visibility: momentdomain.VisibilityPartner, Kind: momentdomain.KindStandard, OccurredAt: now, CreatedAt: now, UpdatedAt: now})
 	repository := &memoryMoments{existing: visible}
-	useCase := NewReactToMomentUseCase(fakeRelationships{active: ActiveRelationship{ID: 9, PartnerID: 2}}, repository, fixedClock{now})
+	useCase := NewReactToMomentUseCase(fakeCouples{active: ActiveCouple{ID: 9, PartnerID: 2}}, repository, fixedClock{now})
 	reaction, err := useCase.Execute(context.Background(), ReactToMomentCommand{UserID: 1, MomentID: 7, Type: momentdomain.ReactionHug})
 	if err != nil || reaction.Type() != momentdomain.ReactionHug {
 		t.Fatalf("reaction=%+v err=%v", reaction, err)

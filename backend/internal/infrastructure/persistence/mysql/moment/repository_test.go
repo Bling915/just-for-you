@@ -7,8 +7,8 @@ import (
 	"errors"
 	"github.com/DATA-DOG/go-sqlmock"
 	application "github.com/nanfang/just-for-you/server/internal/application/moment"
+	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
-	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	"regexp"
 	"testing"
 	"time"
@@ -54,7 +54,7 @@ func TestUpdateWithGrantsUsesOptimisticLockAndUpdatesPhotosAtomically(t *testing
 	defer db.Close()
 	version := time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC)
 	now := version.Add(time.Hour)
-	moment := domain.RestoreMomentDetails(domain.RestoreInput{ID: 20, AuthorID: 1, RelationshipID: 9, Text: "edited", Status: domain.StatusMissYou, Place: "外滩", Photos: []domain.Photo{domain.NewPhoto("new", 1)}, OccurredAt: now.Add(-time.Minute), CreatedAt: version.Add(-time.Hour), UpdatedAt: now, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard})
+	moment := domain.RestoreMomentDetails(domain.RestoreInput{ID: 20, AuthorID: 1, CoupleID: 9, Text: "edited", Status: domain.StatusMissYou, Place: "外滩", Photos: []domain.Photo{domain.NewPhoto("new", 1)}, OccurredAt: now.Add(-time.Minute), CreatedAt: version.Add(-time.Hour), UpdatedAt: now, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard})
 	grants := []application.UploadGrant{{ObjectKey: "new", OwnerID: 1, ExpiresAt: now.Add(time.Minute)}}
 	mock.ExpectBegin()
 	mock.ExpectQuery("SELECT user_id,expires_at,consumed_at FROM upload_grants").WithArgs("new").WillReturnRows(sqlmock.NewRows([]string{"user_id", "expires_at", "consumed_at"}).AddRow(1, now.Add(time.Minute), nil))
@@ -108,7 +108,7 @@ func TestListScopesQueriesToRequestedSpace(t *testing.T) {
 	}{
 		{
 			name:   "shared relationship",
-			filter: application.TimelineFilter{ViewerID: 1, RelationshipID: 9, SpaceType: domain.SpaceShared},
+			filter: application.TimelineFilter{ViewerID: 1, CoupleID: 9, SpaceType: domain.SpaceShared},
 			query:  `FROM moments WHERE couple_id=\? AND space_type='shared' AND deleted_at IS NULL`,
 			args:   []any{int64(9), 21},
 		},
@@ -120,7 +120,7 @@ func TestListScopesQueriesToRequestedSpace(t *testing.T) {
 		},
 		{
 			name:   "partner visible personal",
-			filter: application.TimelineFilter{ViewerID: 1, RelationshipID: 9, OwnerID: 2, SpaceType: domain.SpacePersonal},
+			filter: application.TimelineFilter{ViewerID: 1, CoupleID: 9, OwnerID: 2, SpaceType: domain.SpacePersonal},
 			query:  `FROM moments WHERE couple_id=\? AND author_user_id=\? AND space_type='personal' AND visibility='partner' AND deleted_at IS NULL`,
 			args:   []any{int64(9), int64(2), 21},
 		},
@@ -157,7 +157,7 @@ func TestFindUsesViewerVisibilityScope(t *testing.T) {
 	mock.ExpectQuery(`FROM moments WHERE id=\? AND deleted_at IS NULL AND \(`).
 		WithArgs(int64(7), int64(1), int64(9), int64(9), int64(1)).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}))
-	_, err = NewMySQLRepository(db).Find(context.Background(), application.MomentLookup{ViewerID: 1, RelationshipID: 9, MomentID: 7})
+	_, err = NewMySQLRepository(db).Find(context.Background(), application.MomentLookup{ViewerID: 1, CoupleID: 9, MomentID: 7})
 	if !errors.Is(err, domain.ErrMomentNotFound) {
 		t.Fatalf("err=%v", err)
 	}
@@ -256,7 +256,7 @@ func TestReactionUpsertIsIdempotentAndDeleteIsOwnerScoped(t *testing.T) {
 	}
 }
 
-func TestReactionUpsertRejectsRelationshipEndedBeforeWrite(t *testing.T) {
+func TestReactionUpsertRejectsCoupleEndedBeforeWrite(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
@@ -269,7 +269,7 @@ func TestReactionUpsertRejectsRelationshipEndedBeforeWrite(t *testing.T) {
 	mock.ExpectQuery("SELECT id FROM couples").WithArgs(int64(9), int64(2), int64(2)).WillReturnError(sql.ErrNoRows)
 	mock.ExpectRollback()
 	_, err = NewMySQLRepository(db).UpsertReaction(context.Background(), reaction, 9)
-	if !errors.Is(err, relationshipdomain.ErrNoActiveRelationship) {
+	if !errors.Is(err, coupledomain.ErrNoActiveCouple) {
 		t.Fatalf("err=%v", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {

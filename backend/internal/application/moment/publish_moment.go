@@ -2,8 +2,8 @@ package moment
 
 import (
 	"context"
-	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
+	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 	"time"
 )
 
@@ -19,21 +19,21 @@ type PublishMomentCommand struct {
 	Visibility          domain.Visibility
 }
 type PublishMomentUseCase struct {
-	relationships ActiveRelationshipReader
+	relationships ActiveCoupleReader
 	uploads       UploadAuthorizer
 	moments       MomentRepository
 	photos        PhotoStorage
 	clock         appshared.Clock
 }
 
-func NewPublishMomentUseCase(r ActiveRelationshipReader, u UploadAuthorizer, m MomentRepository, p PhotoStorage, c appshared.Clock) *PublishMomentUseCase {
+func NewPublishMomentUseCase(r ActiveCoupleReader, u UploadAuthorizer, m MomentRepository, p PhotoStorage, c appshared.Clock) *PublishMomentUseCase {
 	return &PublishMomentUseCase{r, u, m, p, c}
 }
 func (u *PublishMomentUseCase) Execute(ctx context.Context, c PublishMomentCommand) (domain.Moment, error) {
 	spaceType, visibility := normalizePublishSpace(c.SpaceType, c.Visibility)
 	var relationshipID int64
 	if spaceType != domain.SpacePersonal || visibility != domain.VisibilityPrivate {
-		rel, err := u.relationships.GetActiveRelationship(ctx, c.UserID)
+		rel, err := u.relationships.GetActiveCouple(ctx, c.UserID)
 		if err != nil {
 			return domain.Moment{}, err
 		}
@@ -53,7 +53,7 @@ func (u *PublishMomentUseCase) Execute(ctx context.Context, c PublishMomentComma
 	if occurredAt.IsZero() {
 		occurredAt = now
 	}
-	m, err := domain.NewMomentDetails(domain.CreateInput{AuthorID: c.UserID, RelationshipID: relationshipID, Text: c.Text, Status: c.Status, Place: c.PlaceName, Latitude: c.Latitude, Longitude: c.Longitude, PhotoKeys: c.PhotoKeys, OccurredAt: occurredAt, CreatedAt: now, SpaceType: spaceType, Visibility: visibility, Kind: domain.KindStandard})
+	m, err := domain.NewMomentDetails(domain.CreateInput{AuthorID: c.UserID, CoupleID: relationshipID, Text: c.Text, Status: c.Status, Place: c.PlaceName, Latitude: c.Latitude, Longitude: c.Longitude, PhotoKeys: c.PhotoKeys, OccurredAt: occurredAt, CreatedAt: now, SpaceType: spaceType, Visibility: visibility, Kind: domain.KindStandard})
 	if err != nil {
 		return domain.Moment{}, err
 	}

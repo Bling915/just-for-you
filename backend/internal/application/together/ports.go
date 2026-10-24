@@ -7,12 +7,12 @@ import (
 	domain "github.com/nanfang/just-for-you/server/internal/domain/together"
 )
 
-type ActiveRelationship struct {
+type ActiveCouple struct {
 	ID, UserAID, UserBID int64
 	BoundAt              time.Time
 }
-type RelationshipReader interface {
-	GetActiveRelationship(context.Context, int64) (ActiveRelationship, error)
+type CoupleReader interface {
+	GetActiveCouple(context.Context, int64) (ActiveCouple, error)
 }
 type Repository interface {
 	ListAnniversaries(context.Context, int64) ([]domain.Anniversary, error)

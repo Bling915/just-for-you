@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
+	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 )
 
 var ErrCannotShareMoment = errors.New("moment cannot be shared to couple")
@@ -16,21 +16,21 @@ type ShareToCoupleCommand struct {
 }
 
 type ShareToCoupleUseCase struct {
-	relationships ActiveRelationshipReader
+	relationships ActiveCoupleReader
 	moments       MomentRepository
 	clock         appshared.Clock
 }
 
-func NewShareToCoupleUseCase(relationships ActiveRelationshipReader, moments MomentRepository, clock appshared.Clock) *ShareToCoupleUseCase {
+func NewShareToCoupleUseCase(relationships ActiveCoupleReader, moments MomentRepository, clock appshared.Clock) *ShareToCoupleUseCase {
 	return &ShareToCoupleUseCase{relationships: relationships, moments: moments, clock: clock}
 }
 
 func (u *ShareToCoupleUseCase) Execute(ctx context.Context, command ShareToCoupleCommand) (domain.Moment, error) {
-	relationship, err := u.relationships.GetActiveRelationship(ctx, command.UserID)
+	relationship, err := u.relationships.GetActiveCouple(ctx, command.UserID)
 	if err != nil {
 		return domain.Moment{}, err
 	}
-	source, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, RelationshipID: relationship.ID, MomentID: command.MomentID})
+	source, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, CoupleID: relationship.ID, MomentID: command.MomentID})
 	if err != nil {
 		return domain.Moment{}, err
 	}

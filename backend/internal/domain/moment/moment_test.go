@@ -62,7 +62,7 @@ func TestNewMomentRejectsDuplicatePhotoKeys(t *testing.T) {
 
 func TestMomentUpdateRequiresAuthorAndPreservesIdentity(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
-	moment := RestoreMomentDetails(RestoreInput{ID: 5, AuthorID: 7, RelationshipID: 9, Text: "旧内容", Status: StatusNone, Photos: []Photo{NewPhoto("old", 1)}, OccurredAt: now, CreatedAt: now, UpdatedAt: now, SpaceType: SpaceShared, Visibility: VisibilityCouple, Kind: KindStandard})
+	moment := RestoreMomentDetails(RestoreInput{ID: 5, AuthorID: 7, CoupleID: 9, Text: "旧内容", Status: StatusNone, Photos: []Photo{NewPhoto("old", 1)}, OccurredAt: now, CreatedAt: now, UpdatedAt: now, SpaceType: SpaceShared, Visibility: VisibilityCouple, Kind: KindStandard})
 	occurred := now.Add(-time.Hour)
 	latitude, longitude := 31.2304, 121.4737
 
@@ -73,7 +73,7 @@ func TestMomentUpdateRequiresAuthorAndPreservesIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.ID() != 5 || updated.AuthorID() != 7 || updated.RelationshipID() != 9 {
+	if updated.ID() != 5 || updated.AuthorID() != 7 || updated.CoupleID() != 9 {
 		t.Fatalf("identity changed: %+v", updated)
 	}
 	if !updated.OccurredAt().Equal(occurred) || updated.Latitude() == nil || updated.Longitude() == nil || updated.Photos()[0].ObjectKey() != "new-b" || updated.Photos()[1].Order() != 2 {

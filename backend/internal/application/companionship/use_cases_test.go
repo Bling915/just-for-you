@@ -6,20 +6,20 @@ import (
 	"testing"
 	"time"
 
+	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/companionship"
-	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 )
 
 type fixedClock struct{ now time.Time }
 
 func (c fixedClock) Now() time.Time { return c.now }
 
-type memoryRelationships struct {
-	relationship ActiveRelationship
+type memoryCouples struct {
+	relationship ActiveCouple
 	err          error
 }
 
-func (r memoryRelationships) GetActiveRelationship(context.Context, int64) (ActiveRelationship, error) {
+func (r memoryCouples) GetActiveCouple(context.Context, int64) (ActiveCouple, error) {
 	return r.relationship, r.err
 }
 
@@ -62,18 +62,18 @@ func (r *memoryRepository) LatestNudge(_ context.Context, coupleID int64) (*doma
 	return &n, nil
 }
 
-func TestUpdatePresenceRequiresActiveRelationshipAndStoresStatus(t *testing.T) {
+func TestUpdatePresenceRequiresActiveCoupleAndStoresStatus(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	repo := &memoryRepository{}
-	useCase := NewUpdatePresenceUseCase(memoryRelationships{relationship: ActiveRelationship{ID: 9, UserAID: 7, UserBID: 8}}, repo, fixedClock{now})
+	useCase := NewUpdatePresenceUseCase(memoryCouples{relationship: ActiveCouple{ID: 9, UserAID: 7, UserBID: 8}}, repo, fixedClock{now})
 
 	result, err := useCase.Execute(context.Background(), UpdatePresenceCommand{UserID: 7, Preset: "in_class", ExpiresAt: timePointer(now.Add(time.Hour))})
 	if err != nil || result.UserID() != 7 || len(repo.presences) != 1 {
 		t.Fatalf("result=%+v stored=%d err=%v", result, len(repo.presences), err)
 	}
 
-	ended := NewUpdatePresenceUseCase(memoryRelationships{err: relationshipdomain.ErrNoActiveRelationship}, repo, fixedClock{now})
-	if _, err = ended.Execute(context.Background(), UpdatePresenceCommand{UserID: 7, Preset: "tired"}); !errors.Is(err, relationshipdomain.ErrNoActiveRelationship) {
+	ended := NewUpdatePresenceUseCase(memoryCouples{err: coupledomain.ErrNoActiveCouple}, repo, fixedClock{now})
+	if _, err = ended.Execute(context.Background(), UpdatePresenceCommand{UserID: 7, Preset: "tired"}); !errors.Is(err, coupledomain.ErrNoActiveCouple) {
 		t.Fatalf("err=%v", err)
 	}
 }
@@ -82,7 +82,7 @@ func TestGetSnapshotHidesExpiredPresence(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	expires := now.Add(-time.Second)
 	repo := &memoryRepository{presences: []domain.Presence{domain.RestorePresence(1, 9, 8, domain.PresetTired, "", &expires, now.Add(-time.Hour))}}
-	useCase := NewGetSnapshotUseCase(memoryRelationships{relationship: ActiveRelationship{ID: 9, UserAID: 7, UserBID: 8}}, repo, fixedClock{now})
+	useCase := NewGetSnapshotUseCase(memoryCouples{relationship: ActiveCouple{ID: 9, UserAID: 7, UserBID: 8}}, repo, fixedClock{now})
 
 	result, err := useCase.Execute(context.Background(), GetSnapshotQuery{UserID: 7})
 	if err != nil || result.PartnerPresence != nil {
@@ -93,7 +93,7 @@ func TestGetSnapshotHidesExpiredPresence(t *testing.T) {
 func TestSendNudgeTargetsPartnerAndThrottlesRapidRepeats(t *testing.T) {
 	now := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	repo := &memoryRepository{}
-	useCase := NewSendNudgeUseCase(memoryRelationships{relationship: ActiveRelationship{ID: 9, UserAID: 7, UserBID: 8}}, repo, fixedClock{now})
+	useCase := NewSendNudgeUseCase(memoryCouples{relationship: ActiveCouple{ID: 9, UserAID: 7, UserBID: 8}}, repo, fixedClock{now})
 
 	nudge, err := useCase.Execute(context.Background(), SendNudgeCommand{UserID: 7, Kind: "hug"})
 	if err != nil || nudge.RecipientID() != 8 {

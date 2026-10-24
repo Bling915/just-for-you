@@ -9,8 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	application "github.com/nanfang/just-for-you/server/internal/application/moment"
+	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
-	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 )
 
@@ -444,7 +444,7 @@ func writeError(c *gin.Context, err error) {
 		status, code, message = http.StatusNotFound, "MOMENT_NOT_FOUND", "动态不存在"
 	case errors.Is(err, application.ErrPartnerRequired):
 		status, code, message = http.StatusConflict, "PARTNER_REQUIRED", "需要先绑定伴侣"
-	case errors.Is(err, relationshipdomain.ErrNoActiveRelationship):
+	case errors.Is(err, coupledomain.ErrNoActiveCouple):
 		status, code, message = http.StatusNotFound, "NO_ACTIVE_COUPLE", "还没有绑定情侣关系"
 	}
 	if status >= http.StatusInternalServerError {

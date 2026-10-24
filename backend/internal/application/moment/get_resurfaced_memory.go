@@ -2,8 +2,8 @@ package moment
 
 import (
 	"context"
-	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
+	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 	"time"
 )
 
@@ -14,17 +14,17 @@ type ResurfacedMemoryResult struct {
 	PhotoURLs map[string]string
 }
 type GetResurfacedMemoryUseCase struct {
-	relationships ActiveRelationshipReader
+	relationships ActiveCoupleReader
 	moments       MomentRepository
 	photos        PhotoStorage
 	clock         appshared.Clock
 }
 
-func NewGetResurfacedMemoryUseCase(r ActiveRelationshipReader, m MomentRepository, p PhotoStorage, c appshared.Clock) *GetResurfacedMemoryUseCase {
+func NewGetResurfacedMemoryUseCase(r ActiveCoupleReader, m MomentRepository, p PhotoStorage, c appshared.Clock) *GetResurfacedMemoryUseCase {
 	return &GetResurfacedMemoryUseCase{r, m, p, c}
 }
 func (u *GetResurfacedMemoryUseCase) Execute(ctx context.Context, q GetResurfacedMemoryQuery) (ResurfacedMemoryResult, error) {
-	rel, err := u.relationships.GetActiveRelationship(ctx, q.UserID)
+	rel, err := u.relationships.GetActiveCouple(ctx, q.UserID)
 	if err != nil {
 		return ResurfacedMemoryResult{}, err
 	}
@@ -38,7 +38,7 @@ func (u *GetResurfacedMemoryUseCase) Execute(ctx context.Context, q GetResurface
 	now := u.clock.Now().In(time.FixedZone("CST", 8*3600))
 	for i := range values {
 		value := values[i]
-		if value.SpaceType() != domain.SpaceShared || value.RelationshipID() != rel.ID {
+		if value.SpaceType() != domain.SpaceShared || value.CoupleID() != rel.ID {
 			continue
 		}
 		at := value.OccurredAt().In(now.Location())

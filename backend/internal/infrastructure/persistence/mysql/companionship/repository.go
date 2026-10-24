@@ -7,18 +7,18 @@ import (
 	"time"
 
 	application "github.com/nanfang/just-for-you/server/internal/application/companionship"
+	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/companionship"
-	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 )
 
 type Repository struct{ db *sql.DB }
 
 func NewRepository(db *sql.DB) Repository { return Repository{db} }
-func (r Repository) GetActiveRelationship(ctx context.Context, userID int64) (application.ActiveRelationship, error) {
-	var result application.ActiveRelationship
+func (r Repository) GetActiveCouple(ctx context.Context, userID int64) (application.ActiveCouple, error) {
+	var result application.ActiveCouple
 	err := r.db.QueryRowContext(ctx, "SELECT id,user_a_id,user_b_id FROM couples WHERE status='active' AND (user_a_id=? OR user_b_id=?)", userID, userID).Scan(&result.ID, &result.UserAID, &result.UserBID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return application.ActiveRelationship{}, relationshipdomain.ErrNoActiveRelationship
+		return application.ActiveCouple{}, coupledomain.ErrNoActiveCouple
 	}
 	return result, err
 }

@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	app "github.com/nanfang/just-for-you/server/internal/application/together"
-	relationship "github.com/nanfang/just-for-you/server/internal/domain/relationship"
+	relationship "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/together"
 	"strings"
 	"time"
@@ -36,11 +36,11 @@ func (r Repository) RecentContextMoments(ctx context.Context, coupleID int64, li
 }
 
 func NewRepository(db *sql.DB) Repository { return Repository{db: db} }
-func (r Repository) GetActiveRelationship(ctx context.Context, userID int64) (app.ActiveRelationship, error) {
-	var v app.ActiveRelationship
+func (r Repository) GetActiveCouple(ctx context.Context, userID int64) (app.ActiveCouple, error) {
+	var v app.ActiveCouple
 	err := r.db.QueryRowContext(ctx, "SELECT id,user_a_id,user_b_id,bound_at FROM couples WHERE status='active' AND (user_a_id=? OR user_b_id=?)", userID, userID).Scan(&v.ID, &v.UserAID, &v.UserBID, &v.BoundAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		err = relationship.ErrNoActiveRelationship
+		err = relationship.ErrNoActiveCouple
 	}
 	return v, err
 }

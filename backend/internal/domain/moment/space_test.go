@@ -27,7 +27,7 @@ func TestNewMomentDetailsAcceptsOnlyValidSpaceVisibilityPairs(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			moment, err := NewMomentDetails(CreateInput{
-				AuthorID: test.relationshipID + 1, RelationshipID: test.relationshipID,
+				AuthorID: test.relationshipID + 1, CoupleID: test.relationshipID,
 				Text: "一件小事", SpaceType: test.space, Visibility: test.visibility,
 				Kind: KindStandard, OccurredAt: now, CreatedAt: now,
 			})
@@ -51,7 +51,7 @@ func TestDailyQuestionMomentRequiresSharedQuestionLink(t *testing.T) {
 	now := time.Date(2026, 10, 22, 10, 0, 0, 0, time.UTC)
 	questionID := int64(42)
 	valid, err := NewMomentDetails(CreateInput{
-		AuthorID: 1, RelationshipID: 9, Text: "我们今天的回答", SpaceType: SpaceShared,
+		AuthorID: 1, CoupleID: 9, Text: "我们今天的回答", SpaceType: SpaceShared,
 		Visibility: VisibilityCouple, Kind: KindDailyQuestion, DailyQuestionID: &questionID,
 		OccurredAt: now, CreatedAt: now,
 	})
@@ -63,7 +63,7 @@ func TestDailyQuestionMomentRequiresSharedQuestionLink(t *testing.T) {
 	}
 
 	_, err = NewMomentDetails(CreateInput{
-		AuthorID: 1, RelationshipID: 9, Text: "缺少题目", SpaceType: SpaceShared,
+		AuthorID: 1, CoupleID: 9, Text: "缺少题目", SpaceType: SpaceShared,
 		Visibility: VisibilityCouple, Kind: KindDailyQuestion, OccurredAt: now, CreatedAt: now,
 	})
 	if !errors.Is(err, ErrInvalidMomentKind) {
@@ -75,7 +75,7 @@ func TestSharedCopyKeepsSourceMomentLink(t *testing.T) {
 	now := time.Date(2026, 10, 22, 10, 0, 0, 0, time.UTC)
 	sourceID := int64(21)
 	moment, err := NewMomentDetails(CreateInput{
-		AuthorID: 1, RelationshipID: 9, Text: "分享给我们", SpaceType: SpaceShared,
+		AuthorID: 1, CoupleID: 9, Text: "分享给我们", SpaceType: SpaceShared,
 		Visibility: VisibilityCouple, Kind: KindStandard, SourceMomentID: &sourceID,
 		OccurredAt: now, CreatedAt: now,
 	})

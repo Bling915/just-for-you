@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
+	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 )
 
 var ErrPerspectiveOnlyForShared = errors.New("perspective only for shared moment")
@@ -18,26 +18,26 @@ type SavePerspectiveCommand struct {
 }
 type DeletePerspectiveCommand struct{ UserID, MomentID int64 }
 type SavePerspectiveUseCase struct {
-	relationships ActiveRelationshipReader
+	relationships ActiveCoupleReader
 	uploads       UploadAuthorizer
 	moments       MomentRepository
 	photos        PhotoStorage
 	clock         appshared.Clock
 }
 
-func NewSavePerspectiveUseCase(r ActiveRelationshipReader, u UploadAuthorizer, m MomentRepository, p PhotoStorage, c appshared.Clock) *SavePerspectiveUseCase {
+func NewSavePerspectiveUseCase(r ActiveCoupleReader, u UploadAuthorizer, m MomentRepository, p PhotoStorage, c appshared.Clock) *SavePerspectiveUseCase {
 	return &SavePerspectiveUseCase{r, u, m, p, c}
 }
 func (u *SavePerspectiveUseCase) Execute(ctx context.Context, command SavePerspectiveCommand) (domain.Perspective, error) {
-	rel, err := u.relationships.GetActiveRelationship(ctx, command.UserID)
+	rel, err := u.relationships.GetActiveCouple(ctx, command.UserID)
 	if err != nil {
 		return domain.Perspective{}, err
 	}
-	moment, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, RelationshipID: rel.ID, MomentID: command.MomentID})
+	moment, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, CoupleID: rel.ID, MomentID: command.MomentID})
 	if err != nil {
 		return domain.Perspective{}, err
 	}
-	if moment.SpaceType() != domain.SpaceShared || moment.RelationshipID() != rel.ID {
+	if moment.SpaceType() != domain.SpaceShared || moment.CoupleID() != rel.ID {
 		return domain.Perspective{}, ErrPerspectiveOnlyForShared
 	}
 	if moment.AuthorID() == command.UserID {
@@ -59,11 +59,11 @@ func (u *SavePerspectiveUseCase) Execute(ctx context.Context, command SavePerspe
 	return u.moments.SavePerspectiveWithGrants(ctx, value, grants, rel.ID)
 }
 func (u *SavePerspectiveUseCase) Delete(ctx context.Context, command DeletePerspectiveCommand) error {
-	rel, err := u.relationships.GetActiveRelationship(ctx, command.UserID)
+	rel, err := u.relationships.GetActiveCouple(ctx, command.UserID)
 	if err != nil {
 		return err
 	}
-	moment, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, RelationshipID: rel.ID, MomentID: command.MomentID})
+	moment, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, CoupleID: rel.ID, MomentID: command.MomentID})
 	if err != nil {
 		return err
 	}

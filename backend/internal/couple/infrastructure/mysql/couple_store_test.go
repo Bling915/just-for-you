@@ -1,4 +1,4 @@
-package infrastructure
+package mysql
 
 import (
 	"context"
@@ -23,7 +23,7 @@ func TestAcceptInvitationUsesLockAndTransaction(t *testing.T) {
 	mock.ExpectExec("INSERT INTO couples").WithArgs(int64(1), int64(2), now).WillReturnResult(sqlmock.NewResult(9, 1))
 	mock.ExpectExec("UPDATE invite_codes SET consumed_at").WithArgs(now, int64(2), "AB3K9Z").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
-	relationship, err := NewMySQLRepository(db).AcceptInvitation(context.Background(), "AB3K9Z", 2, now)
+	relationship, err := NewMySQLCoupleStore(db).AcceptInvitation(context.Background(), "AB3K9Z", 2, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestAcceptInvitationUsesLockAndTransaction(t *testing.T) {
 	}
 }
 
-func TestCreateSoloRelationshipCreatesDedicatedPartnerInTransaction(t *testing.T) {
+func TestCreateSoloCoupleCreatesDedicatedPartnerInTransaction(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +49,7 @@ func TestCreateSoloRelationshipCreatesDedicatedPartnerInTransaction(t *testing.T
 	mock.ExpectExec("INSERT INTO couples").WithArgs(int64(7), int64(1007), now).WillReturnResult(sqlmock.NewResult(9, 1))
 	mock.ExpectCommit()
 
-	relationship, err := NewMySQLRepository(db).CreateSoloRelationship(context.Background(), 7, now)
+	relationship, err := NewMySQLCoupleStore(db).CreateSoloCouple(context.Background(), 7, now)
 	if err != nil {
 		t.Fatal(err)
 	}

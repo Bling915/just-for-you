@@ -2,8 +2,8 @@ package companionship
 
 import (
 	"context"
-	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/companionship"
+	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 )
 
 type GetSnapshotQuery struct{ UserID int64 }
@@ -12,16 +12,16 @@ type Snapshot struct {
 	LatestNudge     *domain.Nudge
 }
 type GetSnapshotUseCase struct {
-	relationships RelationshipReader
+	relationships CoupleReader
 	repository    Repository
 	clock         appshared.Clock
 }
 
-func NewGetSnapshotUseCase(r RelationshipReader, repo Repository, c appshared.Clock) *GetSnapshotUseCase {
+func NewGetSnapshotUseCase(r CoupleReader, repo Repository, c appshared.Clock) *GetSnapshotUseCase {
 	return &GetSnapshotUseCase{r, repo, c}
 }
 func (u *GetSnapshotUseCase) Execute(ctx context.Context, query GetSnapshotQuery) (Snapshot, error) {
-	relationship, err := u.relationships.GetActiveRelationship(ctx, query.UserID)
+	relationship, err := u.relationships.GetActiveCouple(ctx, query.UserID)
 	if err != nil {
 		return Snapshot{}, err
 	}

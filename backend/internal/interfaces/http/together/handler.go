@@ -4,7 +4,7 @@ import (
 	"errors"
 	"github.com/gin-gonic/gin"
 	app "github.com/nanfang/just-for-you/server/internal/application/together"
-	relationship "github.com/nanfang/just-for-you/server/internal/domain/relationship"
+	relationship "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/together"
 	shared "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 	"net/http"
@@ -350,7 +350,7 @@ func fail(c *gin.Context, e error) {
 		status, code, msg = 409, "DAILY_QUESTION_FROZEN", "双方已回答，今天的答案已经珍藏"
 	case errors.Is(e, domain.ErrNotFound):
 		status, code, msg = 404, "NOT_FOUND", "内容不存在"
-	case errors.Is(e, relationship.ErrNoActiveRelationship):
+	case errors.Is(e, relationship.ErrNoActiveCouple):
 		status, code, msg = 404, "NO_ACTIVE_COUPLE", "还没有绑定关系"
 	default:
 		_ = c.Error(e)

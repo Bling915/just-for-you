@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/companionship"
+	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 )
 
 const nudgeCooldown = 10 * time.Second
@@ -15,16 +15,16 @@ type SendNudgeCommand struct {
 	Kind   string
 }
 type SendNudgeUseCase struct {
-	relationships RelationshipReader
+	relationships CoupleReader
 	repository    Repository
 	clock         appshared.Clock
 }
 
-func NewSendNudgeUseCase(r RelationshipReader, repo Repository, c appshared.Clock) *SendNudgeUseCase {
+func NewSendNudgeUseCase(r CoupleReader, repo Repository, c appshared.Clock) *SendNudgeUseCase {
 	return &SendNudgeUseCase{r, repo, c}
 }
 func (u *SendNudgeUseCase) Execute(ctx context.Context, command SendNudgeCommand) (domain.Nudge, error) {
-	relationship, err := u.relationships.GetActiveRelationship(ctx, command.UserID)
+	relationship, err := u.relationships.GetActiveCouple(ctx, command.UserID)
 	if err != nil {
 		return domain.Nudge{}, err
 	}

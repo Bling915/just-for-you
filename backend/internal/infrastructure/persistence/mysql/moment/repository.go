@@ -8,8 +8,8 @@ import (
 	"errors"
 	"fmt"
 	application "github.com/nanfang/just-for-you/server/internal/application/moment"
+	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
-	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
 	"strconv"
 	"strings"
 	"time"
@@ -105,17 +105,17 @@ func (r MySQLRepository) SaveWithGrants(ctx context.Context, moment domain.Momen
 			return domain.Moment{}, domain.ErrInvalidUpload
 		}
 	}
-	if moment.RelationshipID() > 0 {
+	if moment.CoupleID() > 0 {
 		var relationshipID int64
-		err = tx.QueryRowContext(ctx, "SELECT id FROM couples WHERE id=? AND status='active' AND (user_a_id=? OR user_b_id=?) FOR UPDATE", moment.RelationshipID(), moment.AuthorID(), moment.AuthorID()).Scan(&relationshipID)
+		err = tx.QueryRowContext(ctx, "SELECT id FROM couples WHERE id=? AND status='active' AND (user_a_id=? OR user_b_id=?) FOR UPDATE", moment.CoupleID(), moment.AuthorID(), moment.AuthorID()).Scan(&relationshipID)
 		if errors.Is(err, sql.ErrNoRows) {
-			return domain.Moment{}, relationshipdomain.ErrNoActiveRelationship
+			return domain.Moment{}, coupledomain.ErrNoActiveCouple
 		}
 		if err != nil {
 			return domain.Moment{}, err
 		}
 	}
-	result, err := tx.ExecContext(ctx, "INSERT INTO moments(couple_id,author_user_id,space_type,visibility,kind,source_moment_id,daily_question_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", nullablePositiveID(moment.RelationshipID()), moment.AuthorID(), string(moment.SpaceType()), string(moment.Visibility()), string(moment.Kind()), moment.SourceMomentID(), moment.DailyQuestionID(), moment.Text(), string(moment.Status()), moment.Place(), moment.Latitude(), moment.Longitude(), moment.OccurredAt(), moment.CreatedAt(), moment.UpdatedAt())
+	result, err := tx.ExecContext(ctx, "INSERT INTO moments(couple_id,author_user_id,space_type,visibility,kind,source_moment_id,daily_question_id,body,status_code,place_name,latitude,longitude,occurred_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", nullablePositiveID(moment.CoupleID()), moment.AuthorID(), string(moment.SpaceType()), string(moment.Visibility()), string(moment.Kind()), moment.SourceMomentID(), moment.DailyQuestionID(), moment.Text(), string(moment.Status()), moment.Place(), moment.Latitude(), moment.Longitude(), moment.OccurredAt(), moment.CreatedAt(), moment.UpdatedAt())
 	if err != nil {
 		return domain.Moment{}, err
 	}
@@ -136,7 +136,7 @@ func (r MySQLRepository) SaveWithGrants(ctx context.Context, moment domain.Momen
 	if err = tx.Commit(); err != nil {
 		return domain.Moment{}, err
 	}
-	return domain.RestoreMomentDetails(domain.RestoreInput{ID: id, AuthorID: moment.AuthorID(), RelationshipID: moment.RelationshipID(), Text: moment.Text(), Status: moment.Status(), Place: moment.Place(), Latitude: moment.Latitude(), Longitude: moment.Longitude(), Photos: moment.Photos(), OccurredAt: moment.OccurredAt(), CreatedAt: moment.CreatedAt(), UpdatedAt: moment.UpdatedAt(), SpaceType: moment.SpaceType(), Visibility: moment.Visibility(), Kind: moment.Kind(), SourceMomentID: moment.SourceMomentID(), DailyQuestionID: moment.DailyQuestionID()}), nil
+	return domain.RestoreMomentDetails(domain.RestoreInput{ID: id, AuthorID: moment.AuthorID(), CoupleID: moment.CoupleID(), Text: moment.Text(), Status: moment.Status(), Place: moment.Place(), Latitude: moment.Latitude(), Longitude: moment.Longitude(), Photos: moment.Photos(), OccurredAt: moment.OccurredAt(), CreatedAt: moment.CreatedAt(), UpdatedAt: moment.UpdatedAt(), SpaceType: moment.SpaceType(), Visibility: moment.Visibility(), Kind: moment.Kind(), SourceMomentID: moment.SourceMomentID(), DailyQuestionID: moment.DailyQuestionID()}), nil
 }
 
 func nullablePositiveID(value int64) any {
@@ -159,17 +159,17 @@ func (r MySQLRepository) UpdateWithGrants(ctx context.Context, moment domain.Mom
 			return domain.Moment{}, domain.ErrInvalidUpload
 		}
 	}
-	if moment.RelationshipID() > 0 {
+	if moment.CoupleID() > 0 {
 		var relationshipID int64
-		err = tx.QueryRowContext(ctx, "SELECT id FROM couples WHERE id=? AND status='active' AND (user_a_id=? OR user_b_id=?) FOR UPDATE", moment.RelationshipID(), moment.AuthorID(), moment.AuthorID()).Scan(&relationshipID)
+		err = tx.QueryRowContext(ctx, "SELECT id FROM couples WHERE id=? AND status='active' AND (user_a_id=? OR user_b_id=?) FOR UPDATE", moment.CoupleID(), moment.AuthorID(), moment.AuthorID()).Scan(&relationshipID)
 		if errors.Is(err, sql.ErrNoRows) {
-			return domain.Moment{}, relationshipdomain.ErrNoActiveRelationship
+			return domain.Moment{}, coupledomain.ErrNoActiveCouple
 		}
 		if err != nil {
 			return domain.Moment{}, err
 		}
 	}
-	result, err := tx.ExecContext(ctx, "UPDATE moments SET couple_id=?,visibility=?,body=?,status_code=?,place_name=?,latitude=?,longitude=?,occurred_at=?,updated_at=? WHERE id=? AND author_user_id=? AND space_type=? AND updated_at=? AND deleted_at IS NULL", nullablePositiveID(moment.RelationshipID()), string(moment.Visibility()), moment.Text(), string(moment.Status()), moment.Place(), moment.Latitude(), moment.Longitude(), moment.OccurredAt(), moment.UpdatedAt(), moment.ID(), moment.AuthorID(), string(moment.SpaceType()), version)
+	result, err := tx.ExecContext(ctx, "UPDATE moments SET couple_id=?,visibility=?,body=?,status_code=?,place_name=?,latitude=?,longitude=?,occurred_at=?,updated_at=? WHERE id=? AND author_user_id=? AND space_type=? AND updated_at=? AND deleted_at IS NULL", nullablePositiveID(moment.CoupleID()), string(moment.Visibility()), moment.Text(), string(moment.Status()), moment.Place(), moment.Latitude(), moment.Longitude(), moment.OccurredAt(), moment.UpdatedAt(), moment.ID(), moment.AuthorID(), string(moment.SpaceType()), version)
 	if err != nil {
 		return domain.Moment{}, err
 	}
@@ -202,15 +202,15 @@ func (r MySQLRepository) List(ctx context.Context, filter application.TimelineFi
 	query := "SELECT " + momentSelectColumns + " FROM moments WHERE "
 	args := []any{}
 	switch {
-	case filter.SpaceType == domain.SpaceShared && filter.RelationshipID > 0 && filter.OwnerID == 0:
+	case filter.SpaceType == domain.SpaceShared && filter.CoupleID > 0 && filter.OwnerID == 0:
 		query += "couple_id=? AND space_type='shared' AND deleted_at IS NULL"
-		args = append(args, filter.RelationshipID)
+		args = append(args, filter.CoupleID)
 	case filter.SpaceType == domain.SpacePersonal && filter.OwnerID == filter.ViewerID && filter.OwnerID > 0:
 		query += "author_user_id=? AND space_type='personal' AND deleted_at IS NULL"
 		args = append(args, filter.OwnerID)
-	case filter.SpaceType == domain.SpacePersonal && filter.RelationshipID > 0 && filter.OwnerID > 0 && filter.OwnerID != filter.ViewerID:
+	case filter.SpaceType == domain.SpacePersonal && filter.CoupleID > 0 && filter.OwnerID > 0 && filter.OwnerID != filter.ViewerID:
 		query += "couple_id=? AND author_user_id=? AND space_type='personal' AND visibility='partner' AND deleted_at IS NULL"
-		args = append(args, filter.RelationshipID, filter.OwnerID)
+		args = append(args, filter.CoupleID, filter.OwnerID)
 	default:
 		return application.TimelinePage{}, application.ErrInvalidSpaceQuery
 	}
@@ -290,7 +290,7 @@ func (r MySQLRepository) scanMoment(ctx context.Context, row scanner) (domain.Mo
 	if dailyQuestion.Valid {
 		dailyQuestionID = &dailyQuestion.Int64
 	}
-	return domain.RestoreMomentDetails(domain.RestoreInput{ID: id, AuthorID: author, RelationshipID: relationship.Int64, Text: text, Status: domain.Status(status), Place: place, Latitude: latitudeValue, Longitude: longitudeValue, Photos: photos, OccurredAt: occurred, CreatedAt: created, UpdatedAt: updated, DeletedAt: deletedAt, SpaceType: domain.SpaceType(spaceType), Visibility: domain.Visibility(visibility), Kind: domain.Kind(kind), SourceMomentID: sourceMomentID, DailyQuestionID: dailyQuestionID}), nil
+	return domain.RestoreMomentDetails(domain.RestoreInput{ID: id, AuthorID: author, CoupleID: relationship.Int64, Text: text, Status: domain.Status(status), Place: place, Latitude: latitudeValue, Longitude: longitudeValue, Photos: photos, OccurredAt: occurred, CreatedAt: created, UpdatedAt: updated, DeletedAt: deletedAt, SpaceType: domain.SpaceType(spaceType), Visibility: domain.Visibility(visibility), Kind: domain.Kind(kind), SourceMomentID: sourceMomentID, DailyQuestionID: dailyQuestionID}), nil
 }
 func (r MySQLRepository) Recent(ctx context.Context, filter application.TimelineFilter, limit int) ([]domain.Moment, error) {
 	page, err := r.List(ctx, filter, "", limit)
@@ -305,7 +305,7 @@ func (r MySQLRepository) LatestStatusByAuthor(ctx context.Context, relationshipI
 	return &moment, err
 }
 func (r MySQLRepository) Find(ctx context.Context, lookup application.MomentLookup) (domain.Moment, error) {
-	row := r.db.QueryRowContext(ctx, "SELECT "+momentSelectColumns+" FROM moments WHERE id=? AND deleted_at IS NULL AND ((author_user_id=? AND space_type='personal') OR (couple_id=? AND space_type='shared') OR (couple_id=? AND space_type='personal' AND visibility='partner' AND author_user_id<>?))", lookup.MomentID, lookup.ViewerID, lookup.RelationshipID, lookup.RelationshipID, lookup.ViewerID)
+	row := r.db.QueryRowContext(ctx, "SELECT "+momentSelectColumns+" FROM moments WHERE id=? AND deleted_at IS NULL AND ((author_user_id=? AND space_type='personal') OR (couple_id=? AND space_type='shared') OR (couple_id=? AND space_type='personal' AND visibility='partner' AND author_user_id<>?))", lookup.MomentID, lookup.ViewerID, lookup.CoupleID, lookup.CoupleID, lookup.ViewerID)
 	moment, err := r.scanMoment(ctx, row)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = domain.ErrMomentNotFound
@@ -364,7 +364,7 @@ func (r MySQLRepository) ShareToCouple(ctx context.Context, sourceID, authorID, 
 	var activeID int64
 	err = tx.QueryRowContext(ctx, "SELECT id FROM couples WHERE id=? AND status='active' AND (user_a_id=? OR user_b_id=?) FOR UPDATE", relationshipID, authorID, authorID).Scan(&activeID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return domain.Moment{}, relationshipdomain.ErrNoActiveRelationship
+		return domain.Moment{}, coupledomain.ErrNoActiveCouple
 	}
 	if err != nil {
 		return domain.Moment{}, err
@@ -374,7 +374,7 @@ func (r MySQLRepository) ShareToCouple(ctx context.Context, sourceID, authorID, 
 		text = body
 	}
 	latitudeValue, longitudeValue := nullFloatPointer(latitude), nullFloatPointer(longitude)
-	copyMoment, err := domain.NewMomentDetails(domain.CreateInput{AuthorID: authorID, RelationshipID: relationshipID, Text: text, Status: domain.Status(status), Place: place, Latitude: latitudeValue, Longitude: longitudeValue, PhotoKeys: photoObjectKeys(photos), OccurredAt: occurredAt, CreatedAt: now, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard, SourceMomentID: &sourceID})
+	copyMoment, err := domain.NewMomentDetails(domain.CreateInput{AuthorID: authorID, CoupleID: relationshipID, Text: text, Status: domain.Status(status), Place: place, Latitude: latitudeValue, Longitude: longitudeValue, PhotoKeys: photoObjectKeys(photos), OccurredAt: occurredAt, CreatedAt: now, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard, SourceMomentID: &sourceID})
 	if err != nil {
 		return domain.Moment{}, err
 	}
@@ -394,7 +394,7 @@ func (r MySQLRepository) ShareToCouple(ctx context.Context, sourceID, authorID, 
 	if err = tx.Commit(); err != nil {
 		return domain.Moment{}, err
 	}
-	return domain.RestoreMomentDetails(domain.RestoreInput{ID: id, AuthorID: authorID, RelationshipID: relationshipID, Text: copyMoment.Text(), Status: copyMoment.Status(), Place: copyMoment.Place(), Latitude: copyMoment.Latitude(), Longitude: copyMoment.Longitude(), Photos: photos, OccurredAt: occurredAt, CreatedAt: now, UpdatedAt: now, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard, SourceMomentID: &sourceID}), nil
+	return domain.RestoreMomentDetails(domain.RestoreInput{ID: id, AuthorID: authorID, CoupleID: relationshipID, Text: copyMoment.Text(), Status: copyMoment.Status(), Place: copyMoment.Place(), Latitude: copyMoment.Latitude(), Longitude: copyMoment.Longitude(), Photos: photos, OccurredAt: occurredAt, CreatedAt: now, UpdatedAt: now, SpaceType: domain.SpaceShared, Visibility: domain.VisibilityCouple, Kind: domain.KindStandard, SourceMomentID: &sourceID}), nil
 }
 
 func (r MySQLRepository) UpsertReaction(ctx context.Context, reaction domain.Reaction, relationshipID int64) (domain.Reaction, error) {
@@ -420,7 +420,7 @@ func (r MySQLRepository) UpsertReaction(ctx context.Context, reaction domain.Rea
 	var activeID int64
 	err = tx.QueryRowContext(ctx, "SELECT id FROM couples WHERE id=? AND status='active' AND (user_a_id=? OR user_b_id=?) FOR UPDATE", relationshipID, reaction.UserID(), reaction.UserID()).Scan(&activeID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return domain.Reaction{}, relationshipdomain.ErrNoActiveRelationship
+		return domain.Reaction{}, coupledomain.ErrNoActiveCouple
 	}
 	if err != nil {
 		return domain.Reaction{}, err
@@ -504,7 +504,7 @@ func (r MySQLRepository) SavePerspectiveWithGrants(ctx context.Context, value do
 	}
 	err = tx.QueryRowContext(ctx, "SELECT id FROM couples WHERE id=? AND status='active' AND (user_a_id=? OR user_b_id=?) FOR UPDATE", relationshipID, value.AuthorID(), value.AuthorID()).Scan(&activeID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return domain.Perspective{}, relationshipdomain.ErrNoActiveRelationship
+		return domain.Perspective{}, coupledomain.ErrNoActiveCouple
 	}
 	if err != nil {
 		return domain.Perspective{}, err

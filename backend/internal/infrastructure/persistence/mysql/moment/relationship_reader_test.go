@@ -5,23 +5,23 @@ import (
 	"testing"
 	"time"
 
-	relationshipapplication "github.com/nanfang/just-for-you/server/internal/application/relationship"
-	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
+	coupleapplication "github.com/nanfang/just-for-you/server/internal/couple/application"
+	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
 )
 
-type currentRelationshipService struct{}
+type currentCoupleService struct{}
 
-func (currentRelationshipService) Execute(context.Context, relationshipapplication.GetRelationshipQuery) (relationshipapplication.CurrentRelationship, error) {
-	return relationshipapplication.CurrentRelationship{
-		Relationship: relationshipdomain.NewRelationship(12, 7, 8, time.Now()),
-		Partner:      relationshipapplication.PartnerProfile{UserID: 8, DisplayName: "小南"},
+func (currentCoupleService) Execute(context.Context, coupleapplication.GetCoupleQuery) (coupleapplication.CurrentCouple, error) {
+	return coupleapplication.CurrentCouple{
+		Couple:  coupledomain.NewCouple(12, 7, 8, time.Now()),
+		Partner: coupleapplication.PartnerProfile{UserID: 8, DisplayName: "小南"},
 	}, nil
 }
 
-func TestActiveRelationshipReaderUsesStableRelationshipInsideCurrentView(t *testing.T) {
-	reader := NewActiveRelationshipReader(currentRelationshipService{})
+func TestActiveCoupleReaderUsesStableCoupleInsideCurrentView(t *testing.T) {
+	reader := NewActiveCoupleReader(currentCoupleService{})
 
-	result, err := reader.GetActiveRelationship(context.Background(), 7)
+	result, err := reader.GetActiveCouple(context.Background(), 7)
 	if err != nil {
 		t.Fatal(err)
 	}

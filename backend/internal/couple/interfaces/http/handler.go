@@ -1,11 +1,11 @@
-package relationshiphttp
+package couplehttp
 
 import (
 	"context"
 	"errors"
 	"github.com/gin-gonic/gin"
-	application "github.com/nanfang/just-for-you/server/internal/application/relationship"
-	domain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
+	application "github.com/nanfang/just-for-you/server/internal/couple/application"
+	domain "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 	"net/http"
 )
@@ -16,30 +16,30 @@ type CreateInvitationExecutor interface {
 type PreviewInvitationExecutor interface {
 	Execute(context.Context, application.PreviewInvitationQuery) (domain.Invitation, error)
 }
-type BindRelationshipExecutor interface {
-	Execute(context.Context, application.BindRelationshipCommand) (domain.Relationship, error)
+type BindCoupleExecutor interface {
+	Execute(context.Context, application.BindCoupleCommand) (domain.Couple, error)
 }
-type GetRelationshipExecutor interface {
-	Execute(context.Context, application.GetRelationshipQuery) (application.CurrentRelationship, error)
+type GetCoupleExecutor interface {
+	Execute(context.Context, application.GetCoupleQuery) (application.CurrentCouple, error)
 }
-type EndRelationshipExecutor interface {
-	Execute(context.Context, application.EndRelationshipCommand) error
+type EndCoupleExecutor interface {
+	Execute(context.Context, application.EndCoupleCommand) error
 }
 type EnableSoloTestExecutor interface {
-	Execute(context.Context, application.EnableSoloTestCommand) (domain.Relationship, error)
+	Execute(context.Context, application.EnableSoloTestCommand) (domain.Couple, error)
 }
-type UseCases struct {
+type Dependencies struct {
 	CreateInvitation  CreateInvitationExecutor
 	PreviewInvitation PreviewInvitationExecutor
-	BindRelationship  BindRelationshipExecutor
-	GetRelationship   GetRelationshipExecutor
-	EndRelationship   EndRelationshipExecutor
+	BindCouple        BindCoupleExecutor
+	GetCouple         GetCoupleExecutor
+	EndCouple         EndCoupleExecutor
 	EnableSoloTest    EnableSoloTestExecutor
 }
-type Handler struct{ useCases UseCases }
+type Handler struct{ useCases Dependencies }
 
-func NewHandler(useCases UseCases) *Handler { return &Handler{useCases: useCases} }
-func (*Handler) RegisterPublic(*gin.Engine) {}
+func NewHandler(useCases Dependencies) *Handler { return &Handler{useCases: useCases} }
+func (*Handler) RegisterPublic(*gin.Engine)     {}
 func (h *Handler) RegisterProtected(group *gin.RouterGroup) {
 	group.POST("/couples/invitations", h.create)
 	group.GET("/couples/invitations/:code", h.preview)
@@ -74,7 +74,7 @@ func (h *Handler) bind(c *gin.Context) {
 		httpserver.WriteError(c, 400, "INVITE_INVALID", "邀请码无效")
 		return
 	}
-	x, err := h.useCases.BindRelationship.Execute(c, application.BindRelationshipCommand{UserID: httpserver.UserID(c), Code: input.Code})
+	x, err := h.useCases.BindCouple.Execute(c, application.BindCoupleCommand{UserID: httpserver.UserID(c), Code: input.Code})
 	if err != nil {
 		writeDomainError(c, err)
 		return
@@ -82,15 +82,15 @@ func (h *Handler) bind(c *gin.Context) {
 	httpserver.WriteData(c, 201, relationshipDTO(x))
 }
 func (h *Handler) get(c *gin.Context) {
-	x, err := h.useCases.GetRelationship.Execute(c, application.GetRelationshipQuery{UserID: httpserver.UserID(c)})
+	x, err := h.useCases.GetCouple.Execute(c, application.GetCoupleQuery{UserID: httpserver.UserID(c)})
 	if err != nil {
 		writeDomainError(c, err)
 		return
 	}
-	httpserver.WriteData(c, 200, currentRelationshipDTO(x))
+	httpserver.WriteData(c, 200, currentCoupleDTO(x))
 }
 func (h *Handler) end(c *gin.Context) {
-	if err := h.useCases.EndRelationship.Execute(c, application.EndRelationshipCommand{UserID: httpserver.UserID(c)}); err != nil {
+	if err := h.useCases.EndCouple.Execute(c, application.EndCoupleCommand{UserID: httpserver.UserID(c)}); err != nil {
 		writeDomainError(c, err)
 		return
 	}
@@ -118,7 +118,7 @@ func writeDomainError(c *gin.Context, err error) {
 		status, code = http.StatusBadRequest, "CANNOT_BIND_SELF"
 	case errors.Is(err, domain.ErrAlreadyBound):
 		status, code = http.StatusBadRequest, "ALREADY_BOUND"
-	case errors.Is(err, domain.ErrNoActiveRelationship):
+	case errors.Is(err, domain.ErrNoActiveCouple):
 		code = "NO_ACTIVE_COUPLE"
 		status = 404
 	}
@@ -132,11 +132,11 @@ func writeDomainError(c *gin.Context, err error) {
 func invitationDTO(x domain.Invitation) gin.H {
 	return gin.H{"code": x.Code(), "creatorUserId": x.CreatorID(), "expiresAt": x.ExpiresAt()}
 }
-func relationshipDTO(x domain.Relationship) gin.H {
+func relationshipDTO(x domain.Couple) gin.H {
 	return gin.H{"id": x.ID(), "userAId": x.UserAID(), "userBId": x.UserBID(), "status": x.Status(), "boundAt": x.BoundAt()}
 }
-func currentRelationshipDTO(x application.CurrentRelationship) gin.H {
-	relationship := x.Relationship
+func currentCoupleDTO(x application.CurrentCouple) gin.H {
+	relationship := x.Couple
 	return gin.H{
 		"id": relationship.ID(), "userAId": relationship.UserAID(), "userBId": relationship.UserBID(),
 		"status": relationship.Status(), "boundAt": relationship.BoundAt(), "soloTest": x.SoloTest,

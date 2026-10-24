@@ -7,9 +7,9 @@ import (
 	domain "github.com/nanfang/just-for-you/server/internal/domain/companionship"
 )
 
-type ActiveRelationship struct{ ID, UserAID, UserBID int64 }
+type ActiveCouple struct{ ID, UserAID, UserBID int64 }
 
-func (r ActiveRelationship) PartnerOf(userID int64) int64 {
+func (r ActiveCouple) PartnerOf(userID int64) int64 {
 	if userID == r.UserAID {
 		return r.UserBID
 	}
@@ -19,8 +19,8 @@ func (r ActiveRelationship) PartnerOf(userID int64) int64 {
 	return 0
 }
 
-type RelationshipReader interface {
-	GetActiveRelationship(context.Context, int64) (ActiveRelationship, error)
+type CoupleReader interface {
+	GetActiveCouple(context.Context, int64) (ActiveCouple, error)
 }
 type Repository interface {
 	SavePresence(context.Context, domain.Presence) (domain.Presence, error)

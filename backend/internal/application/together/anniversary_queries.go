@@ -16,14 +16,14 @@ func (s *Service) ListAnniversaries(ctx context.Context, userID int64) ([]domain
 	if err != nil {
 		return nil, err
 	}
-	hasRelationship := false
+	hasCouple := false
 	for _, item := range items {
 		if item.SystemKind() == "relationship" {
-			hasRelationship = true
+			hasCouple = true
 			break
 		}
 	}
-	if !hasRelationship && !r.BoundAt.IsZero() {
+	if !hasCouple && !r.BoundAt.IsZero() {
 		relationshipItem := domain.RestoreAnniversary(0, r.ID, r.UserAID, "我们在一起", r.BoundAt, true, domain.CountModeElapsed, true, "", "", "relationship", r.BoundAt, r.BoundAt)
 		relationshipItem, err = s.repo.SaveAnniversary(ctx, relationshipItem)
 		if err != nil {

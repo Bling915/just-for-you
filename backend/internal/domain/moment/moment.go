@@ -26,35 +26,35 @@ type Moment struct {
 }
 
 type CreateInput struct {
-	AuthorID, RelationshipID int64
-	Text                     string
-	Status                   Status
-	Place                    string
-	Latitude, Longitude      *float64
-	PhotoKeys                []string
-	OccurredAt, CreatedAt    time.Time
-	SpaceType                SpaceType
-	Visibility               Visibility
-	Kind                     Kind
-	SourceMomentID           *int64
-	DailyQuestionID          *int64
+	AuthorID, CoupleID    int64
+	Text                  string
+	Status                Status
+	Place                 string
+	Latitude, Longitude   *float64
+	PhotoKeys             []string
+	OccurredAt, CreatedAt time.Time
+	SpaceType             SpaceType
+	Visibility            Visibility
+	Kind                  Kind
+	SourceMomentID        *int64
+	DailyQuestionID       *int64
 }
 
 type RestoreInput struct {
-	ID, AuthorID, RelationshipID int64
-	Text                         string
-	Status                       Status
-	Place                        string
-	Latitude, Longitude          *float64
-	Photos                       []Photo
-	OccurredAt, CreatedAt        time.Time
-	UpdatedAt                    time.Time
-	DeletedAt                    *time.Time
-	SpaceType                    SpaceType
-	Visibility                   Visibility
-	Kind                         Kind
-	SourceMomentID               *int64
-	DailyQuestionID              *int64
+	ID, AuthorID, CoupleID int64
+	Text                   string
+	Status                 Status
+	Place                  string
+	Latitude, Longitude    *float64
+	Photos                 []Photo
+	OccurredAt, CreatedAt  time.Time
+	UpdatedAt              time.Time
+	DeletedAt              *time.Time
+	SpaceType              SpaceType
+	Visibility             Visibility
+	Kind                   Kind
+	SourceMomentID         *int64
+	DailyQuestionID        *int64
 }
 
 type UpdateInput struct {
@@ -66,15 +66,15 @@ type UpdateInput struct {
 	OccurredAt          time.Time
 	SpaceType           SpaceType
 	Visibility          Visibility
-	RelationshipID      int64
+	CoupleID            int64
 }
 
 func NewMoment(authorID, relationshipID int64, text string, status Status, place string, photoKeys []string, createdAt time.Time) (Moment, error) {
-	return NewMomentDetails(CreateInput{AuthorID: authorID, RelationshipID: relationshipID, Text: text, Status: status, Place: place, PhotoKeys: photoKeys, OccurredAt: createdAt, CreatedAt: createdAt, SpaceType: SpaceShared, Visibility: VisibilityCouple, Kind: KindStandard})
+	return NewMomentDetails(CreateInput{AuthorID: authorID, CoupleID: relationshipID, Text: text, Status: status, Place: place, PhotoKeys: photoKeys, OccurredAt: createdAt, CreatedAt: createdAt, SpaceType: SpaceShared, Visibility: VisibilityCouple, Kind: KindStandard})
 }
 
 func NewMomentDetails(input CreateInput) (Moment, error) {
-	if err := validateSpace(input.SpaceType, input.Visibility, input.RelationshipID); err != nil {
+	if err := validateSpace(input.SpaceType, input.Visibility, input.CoupleID); err != nil {
 		return Moment{}, err
 	}
 	if err := validateKind(input.Kind, input.SpaceType, input.SourceMomentID, input.DailyQuestionID); err != nil {
@@ -85,7 +85,7 @@ func NewMomentDetails(input CreateInput) (Moment, error) {
 	if err != nil {
 		return Moment{}, err
 	}
-	return Moment{authorID: input.AuthorID, relationshipID: input.RelationshipID, text: fields.text, status: input.Status, spaceType: input.SpaceType, visibility: input.Visibility, kind: input.Kind, sourceMomentID: copyInt64(input.SourceMomentID), dailyQuestionID: copyInt64(input.DailyQuestionID), place: fields.place, latitude: copyFloat(input.Latitude), longitude: copyFloat(input.Longitude), photos: fields.photos, occurredAt: input.OccurredAt, createdAt: input.CreatedAt, updatedAt: input.CreatedAt}, nil
+	return Moment{authorID: input.AuthorID, relationshipID: input.CoupleID, text: fields.text, status: input.Status, spaceType: input.SpaceType, visibility: input.Visibility, kind: input.Kind, sourceMomentID: copyInt64(input.SourceMomentID), dailyQuestionID: copyInt64(input.DailyQuestionID), place: fields.place, latitude: copyFloat(input.Latitude), longitude: copyFloat(input.Longitude), photos: fields.photos, occurredAt: input.OccurredAt, createdAt: input.CreatedAt, updatedAt: input.CreatedAt}, nil
 }
 
 func (m Moment) Update(actorID int64, input UpdateInput, now time.Time) (Moment, error) {
@@ -96,7 +96,7 @@ func (m Moment) Update(actorID int64, input UpdateInput, now time.Time) (Moment,
 	if err != nil {
 		return Moment{}, err
 	}
-	spaceType, visibility, relationshipID := input.SpaceType, input.Visibility, input.RelationshipID
+	spaceType, visibility, relationshipID := input.SpaceType, input.Visibility, input.CoupleID
 	if spaceType == "" {
 		spaceType, visibility, relationshipID = m.spaceType, m.visibility, m.relationshipID
 	}
@@ -184,14 +184,14 @@ func copyFloat(value *float64) *float64 {
 }
 
 func RestoreMoment(id, authorID, relationshipID int64, text string, status Status, place string, photos []Photo, createdAt time.Time, deletedAt *time.Time) Moment {
-	return RestoreMomentDetails(RestoreInput{ID: id, AuthorID: authorID, RelationshipID: relationshipID, Text: text, Status: status, Place: place, Photos: photos, OccurredAt: createdAt, CreatedAt: createdAt, UpdatedAt: createdAt, DeletedAt: deletedAt, SpaceType: SpaceShared, Visibility: VisibilityCouple, Kind: KindStandard})
+	return RestoreMomentDetails(RestoreInput{ID: id, AuthorID: authorID, CoupleID: relationshipID, Text: text, Status: status, Place: place, Photos: photos, OccurredAt: createdAt, CreatedAt: createdAt, UpdatedAt: createdAt, DeletedAt: deletedAt, SpaceType: SpaceShared, Visibility: VisibilityCouple, Kind: KindStandard})
 }
 func RestoreMomentDetails(input RestoreInput) Moment {
-	return Moment{id: input.ID, authorID: input.AuthorID, relationshipID: input.RelationshipID, text: input.Text, status: input.Status, spaceType: input.SpaceType, visibility: input.Visibility, kind: input.Kind, sourceMomentID: copyInt64(input.SourceMomentID), dailyQuestionID: copyInt64(input.DailyQuestionID), place: input.Place, latitude: copyFloat(input.Latitude), longitude: copyFloat(input.Longitude), photos: append([]Photo(nil), input.Photos...), occurredAt: input.OccurredAt, createdAt: input.CreatedAt, updatedAt: input.UpdatedAt, deletedAt: input.DeletedAt}
+	return Moment{id: input.ID, authorID: input.AuthorID, relationshipID: input.CoupleID, text: input.Text, status: input.Status, spaceType: input.SpaceType, visibility: input.Visibility, kind: input.Kind, sourceMomentID: copyInt64(input.SourceMomentID), dailyQuestionID: copyInt64(input.DailyQuestionID), place: input.Place, latitude: copyFloat(input.Latitude), longitude: copyFloat(input.Longitude), photos: append([]Photo(nil), input.Photos...), occurredAt: input.OccurredAt, createdAt: input.CreatedAt, updatedAt: input.UpdatedAt, deletedAt: input.DeletedAt}
 }
 func (m Moment) ID() int64               { return m.id }
 func (m Moment) AuthorID() int64         { return m.authorID }
-func (m Moment) RelationshipID() int64   { return m.relationshipID }
+func (m Moment) CoupleID() int64         { return m.relationshipID }
 func (m Moment) Text() string            { return m.text }
 func (m Moment) Status() Status          { return m.status }
 func (m Moment) SpaceType() SpaceType    { return m.spaceType }

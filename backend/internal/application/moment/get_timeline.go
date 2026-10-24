@@ -3,9 +3,9 @@ package moment
 import (
 	"context"
 	"errors"
-	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
+	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
-	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
+	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 	"time"
 )
 
@@ -19,13 +19,13 @@ type GetTimelineQuery struct {
 	Owner     TimelineOwner
 }
 type GetTimelineUseCase struct {
-	relationships ActiveRelationshipReader
+	relationships ActiveCoupleReader
 	moments       MomentRepository
 	photos        PhotoStorage
 	clock         appshared.Clock
 }
 
-func NewGetTimelineUseCase(r ActiveRelationshipReader, m MomentRepository, p PhotoStorage, c appshared.Clock) *GetTimelineUseCase {
+func NewGetTimelineUseCase(r ActiveCoupleReader, m MomentRepository, p PhotoStorage, c appshared.Clock) *GetTimelineUseCase {
 	return &GetTimelineUseCase{r, m, p, c}
 }
 func (u *GetTimelineUseCase) Execute(ctx context.Context, q GetTimelineQuery) (TimelinePage, error) {
@@ -88,7 +88,7 @@ func (u *GetTimelineUseCase) timelineFilter(ctx context.Context, q GetTimelineQu
 	if space != domain.SpaceShared && space != domain.SpacePersonal {
 		return TimelineFilter{}, ErrInvalidSpaceQuery
 	}
-	rel, err := u.relationships.GetActiveRelationship(ctx, q.UserID)
+	rel, err := u.relationships.GetActiveCouple(ctx, q.UserID)
 	if err != nil {
 		return TimelineFilter{}, err
 	}
@@ -96,13 +96,13 @@ func (u *GetTimelineUseCase) timelineFilter(ctx context.Context, q GetTimelineQu
 		if q.Owner != "" {
 			return TimelineFilter{}, ErrInvalidSpaceQuery
 		}
-		return TimelineFilter{ViewerID: q.UserID, RelationshipID: rel.ID, SpaceType: domain.SpaceShared}, nil
+		return TimelineFilter{ViewerID: q.UserID, CoupleID: rel.ID, SpaceType: domain.SpaceShared}, nil
 	}
 	if q.Owner != TimelineOwnerPartner {
 		return TimelineFilter{}, ErrInvalidSpaceQuery
 	}
 	if rel.PartnerID <= 0 || rel.PartnerID == q.UserID {
-		return TimelineFilter{}, relationshipdomain.ErrNoActiveRelationship
+		return TimelineFilter{}, coupledomain.ErrNoActiveCouple
 	}
-	return TimelineFilter{ViewerID: q.UserID, RelationshipID: rel.ID, OwnerID: rel.PartnerID, SpaceType: domain.SpacePersonal}, nil
+	return TimelineFilter{ViewerID: q.UserID, CoupleID: rel.ID, OwnerID: rel.PartnerID, SpaceType: domain.SpacePersonal}, nil
 }

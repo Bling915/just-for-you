@@ -5,9 +5,9 @@ import (
 	"errors"
 	"time"
 
-	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
+	coupledomain "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
-	relationshipdomain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
+	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 )
 
 type UpdateMomentCommand struct {
@@ -24,30 +24,30 @@ type UpdateMomentCommand struct {
 }
 
 type UpdateMomentUseCase struct {
-	relationships ActiveRelationshipReader
+	relationships ActiveCoupleReader
 	uploads       UploadAuthorizer
 	moments       MomentRepository
 	photos        PhotoStorage
 	clock         appshared.Clock
 }
 
-func NewUpdateMomentUseCase(r ActiveRelationshipReader, u UploadAuthorizer, m MomentRepository, p PhotoStorage, c appshared.Clock) *UpdateMomentUseCase {
+func NewUpdateMomentUseCase(r ActiveCoupleReader, u UploadAuthorizer, m MomentRepository, p PhotoStorage, c appshared.Clock) *UpdateMomentUseCase {
 	return &UpdateMomentUseCase{r, u, m, p, c}
 }
 
 func (u *UpdateMomentUseCase) Execute(ctx context.Context, command UpdateMomentCommand) (domain.Moment, error) {
-	var relationship *ActiveRelationship
-	current, relationshipErr := u.relationships.GetActiveRelationship(ctx, command.UserID)
+	var relationship *ActiveCouple
+	current, relationshipErr := u.relationships.GetActiveCouple(ctx, command.UserID)
 	if relationshipErr == nil {
 		relationship = &current
-	} else if !errors.Is(relationshipErr, relationshipdomain.ErrNoActiveRelationship) {
+	} else if !errors.Is(relationshipErr, coupledomain.ErrNoActiveCouple) {
 		return domain.Moment{}, relationshipErr
 	}
 	var relationshipID int64
 	if relationship != nil {
 		relationshipID = relationship.ID
 	}
-	existing, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, RelationshipID: relationshipID, MomentID: command.MomentID})
+	existing, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, CoupleID: relationshipID, MomentID: command.MomentID})
 	if err != nil {
 		return domain.Moment{}, err
 	}
@@ -65,15 +65,15 @@ func (u *UpdateMomentUseCase) Execute(ctx context.Context, command UpdateMomentC
 	if visibility == "" {
 		visibility = existing.Visibility()
 	}
-	newRelationshipID := existing.RelationshipID()
+	newCoupleID := existing.CoupleID()
 	if spaceType == domain.SpacePersonal && visibility == domain.VisibilityPrivate {
-		newRelationshipID = 0
+		newCoupleID = 0
 	} else if relationship != nil {
-		newRelationshipID = relationship.ID
+		newCoupleID = relationship.ID
 	} else {
 		return domain.Moment{}, relationshipErr
 	}
-	updated, err := existing.Update(command.UserID, domain.UpdateInput{Text: command.Text, Status: command.Status, Place: command.PlaceName, Latitude: command.Latitude, Longitude: command.Longitude, PhotoKeys: command.PhotoKeys, OccurredAt: command.OccurredAt, SpaceType: spaceType, Visibility: visibility, RelationshipID: newRelationshipID}, u.clock.Now())
+	updated, err := existing.Update(command.UserID, domain.UpdateInput{Text: command.Text, Status: command.Status, Place: command.PlaceName, Latitude: command.Latitude, Longitude: command.Longitude, PhotoKeys: command.PhotoKeys, OccurredAt: command.OccurredAt, SpaceType: spaceType, Visibility: visibility, CoupleID: newCoupleID}, u.clock.Now())
 	if err != nil {
 		return domain.Moment{}, err
 	}

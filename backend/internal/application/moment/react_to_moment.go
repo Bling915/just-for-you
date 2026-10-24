@@ -3,8 +3,8 @@ package moment
 import (
 	"context"
 
-	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
+	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 )
 
 type ReactToMomentCommand struct {
@@ -18,21 +18,21 @@ type DeleteReactionCommand struct {
 }
 
 type ReactToMomentUseCase struct {
-	relationships ActiveRelationshipReader
+	relationships ActiveCoupleReader
 	moments       MomentRepository
 	clock         appshared.Clock
 }
 
-func NewReactToMomentUseCase(relationships ActiveRelationshipReader, moments MomentRepository, clock appshared.Clock) *ReactToMomentUseCase {
+func NewReactToMomentUseCase(relationships ActiveCoupleReader, moments MomentRepository, clock appshared.Clock) *ReactToMomentUseCase {
 	return &ReactToMomentUseCase{relationships: relationships, moments: moments, clock: clock}
 }
 
 func (u *ReactToMomentUseCase) Execute(ctx context.Context, command ReactToMomentCommand) (domain.Reaction, error) {
-	relationship, err := u.relationships.GetActiveRelationship(ctx, command.UserID)
+	relationship, err := u.relationships.GetActiveCouple(ctx, command.UserID)
 	if err != nil {
 		return domain.Reaction{}, err
 	}
-	value, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, RelationshipID: relationship.ID, MomentID: command.MomentID})
+	value, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, CoupleID: relationship.ID, MomentID: command.MomentID})
 	if err != nil {
 		return domain.Reaction{}, err
 	}
@@ -47,11 +47,11 @@ func (u *ReactToMomentUseCase) Execute(ctx context.Context, command ReactToMomen
 }
 
 func (u *ReactToMomentUseCase) Delete(ctx context.Context, command DeleteReactionCommand) error {
-	relationship, err := u.relationships.GetActiveRelationship(ctx, command.UserID)
+	relationship, err := u.relationships.GetActiveCouple(ctx, command.UserID)
 	if err != nil {
 		return err
 	}
-	value, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, RelationshipID: relationship.ID, MomentID: command.MomentID})
+	value, err := u.moments.Find(ctx, MomentLookup{ViewerID: command.UserID, CoupleID: relationship.ID, MomentID: command.MomentID})
 	if err != nil {
 		return err
 	}

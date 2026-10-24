@@ -14,16 +14,16 @@ type NotificationPreferenceRepository interface {
 	SavePreferences(context.Context, int64, int64, NotificationPreferences) (NotificationPreferences, error)
 }
 type NotificationPreferencesService struct {
-	relationships RelationshipReader
+	relationships CoupleReader
 	repo          NotificationPreferenceRepository
 	available     map[string]bool
 }
 
-func NewNotificationPreferencesService(r RelationshipReader, repo NotificationPreferenceRepository, available map[string]bool) *NotificationPreferencesService {
+func NewNotificationPreferencesService(r CoupleReader, repo NotificationPreferenceRepository, available map[string]bool) *NotificationPreferencesService {
 	return &NotificationPreferencesService{r, repo, available}
 }
 func (s *NotificationPreferencesService) Get(ctx context.Context, userID int64) (NotificationPreferences, error) {
-	rel, e := s.relationships.GetActiveRelationship(ctx, userID)
+	rel, e := s.relationships.GetActiveCouple(ctx, userID)
 	if e != nil {
 		return NotificationPreferences{}, e
 	}
@@ -32,7 +32,7 @@ func (s *NotificationPreferencesService) Get(ctx context.Context, userID int64) 
 	return v, e
 }
 func (s *NotificationPreferencesService) Update(ctx context.Context, userID int64, v NotificationPreferences) (NotificationPreferences, error) {
-	rel, e := s.relationships.GetActiveRelationship(ctx, userID)
+	rel, e := s.relationships.GetActiveCouple(ctx, userID)
 	if e != nil {
 		return NotificationPreferences{}, e
 	}

@@ -35,7 +35,7 @@ func TestRepositoryStoresPresenceAndReadsLatestEffectiveCandidate(t *testing.T) 
 	}
 }
 
-func TestRepositoryReturnsOnlyActiveRelationship(t *testing.T) {
+func TestRepositoryReturnsOnlyActiveCouple(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestRepositoryReturnsOnlyActiveRelationship(t *testing.T) {
 	defer db.Close()
 	repo := NewRepository(db)
 	mock.ExpectQuery("SELECT id,user_a_id,user_b_id FROM couples").WithArgs(int64(7), int64(7)).WillReturnRows(sqlmock.NewRows([]string{"id", "user_a_id", "user_b_id"}).AddRow(9, 7, 8))
-	relationship, err := repo.GetActiveRelationship(context.Background(), 7)
+	relationship, err := repo.GetActiveCouple(context.Background(), 7)
 	if err != nil || relationship.ID != 9 || relationship.UserBID != 8 {
 		t.Fatalf("relationship=%+v err=%v", relationship, err)
 	}

@@ -6,12 +6,12 @@ import (
 	"time"
 )
 
-type ActiveRelationship struct {
+type ActiveCouple struct {
 	ID        int64
 	PartnerID int64
 }
-type ActiveRelationshipReader interface {
-	GetActiveRelationship(context.Context, int64) (ActiveRelationship, error)
+type ActiveCoupleReader interface {
+	GetActiveCouple(context.Context, int64) (ActiveCouple, error)
 }
 type UploadInput struct {
 	ContentType string
@@ -82,16 +82,16 @@ const (
 )
 
 type TimelineFilter struct {
-	ViewerID       int64
-	RelationshipID int64
-	OwnerID        int64
-	SpaceType      domain.SpaceType
+	ViewerID  int64
+	CoupleID  int64
+	OwnerID   int64
+	SpaceType domain.SpaceType
 }
 
 type MomentLookup struct {
-	ViewerID       int64
-	RelationshipID int64
-	MomentID       int64
+	ViewerID int64
+	CoupleID int64
+	MomentID int64
 }
 
 type MomentRepository interface {

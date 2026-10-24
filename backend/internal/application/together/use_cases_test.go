@@ -3,7 +3,7 @@ package together
 import (
 	"context"
 	"errors"
-	relationship "github.com/nanfang/just-for-you/server/internal/domain/relationship"
+	relationship "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/together"
 	"testing"
 	"time"
@@ -14,11 +14,11 @@ type fakeClock struct{ now time.Time }
 func (f fakeClock) Now() time.Time { return f.now }
 
 type fakeRelations struct {
-	rel ActiveRelationship
+	rel ActiveCouple
 	err error
 }
 
-func (f fakeRelations) GetActiveRelationship(context.Context, int64) (ActiveRelationship, error) {
+func (f fakeRelations) GetActiveCouple(context.Context, int64) (ActiveCouple, error) {
 	return f.rel, f.err
 }
 
@@ -101,9 +101,9 @@ func (f *fakeRepo) FindWish(context.Context, int64, int64) (domain.Wish, error) 
 func (f *fakeRepo) UpdateWish(_ context.Context, v domain.Wish) (domain.Wish, error) { return v, nil }
 func (f *fakeRepo) DeleteWish(context.Context, int64, int64, int64) error            { return nil }
 func (f *fakeRepo) MomentCoupleID(context.Context, int64) (int64, error)             { return 1, nil }
-func TestEndedRelationshipDeniesTogetherData(t *testing.T) {
-	s := NewService(&fakeRepo{}, fakeRelations{err: relationship.ErrNoActiveRelationship}, fakeClock{})
-	if _, e := s.ListTodos(context.Background(), 2); !errors.Is(e, relationship.ErrNoActiveRelationship) {
+func TestEndedCoupleDeniesTogetherData(t *testing.T) {
+	s := NewService(&fakeRepo{}, fakeRelations{err: relationship.ErrNoActiveCouple}, fakeClock{})
+	if _, e := s.ListTodos(context.Background(), 2); !errors.Is(e, relationship.ErrNoActiveCouple) {
 		t.Fatalf("got %v", e)
 	}
 }
@@ -111,7 +111,7 @@ func TestTodoCompletionIsIdempotent(t *testing.T) {
 	now := time.Now()
 	todo, _ := domain.NewTodo(1, 2, "散步", nil, now)
 	repo := &fakeRepo{todo: todo}
-	s := NewService(repo, fakeRelations{rel: ActiveRelationship{ID: 1, UserAID: 2, UserBID: 3}}, fakeClock{now: now})
+	s := NewService(repo, fakeRelations{rel: ActiveCouple{ID: 1, UserAID: 2, UserBID: 3}}, fakeClock{now: now})
 	first, e := s.SetTodoCompleted(context.Background(), 3, 9, true)
 	if e != nil || first.Status() != "completed" {
 		t.Fatalf("first: %v", e)
@@ -137,7 +137,7 @@ func TestListAnniversariesSortsPinnedCountdownThenElapsedStably(t *testing.T) {
 		item(3, now.AddDate(0, 0, 1), domain.CountModeCountdown, true),
 		item(1, now.AddDate(-2, 0, 0), domain.CountModeElapsed, false),
 	}}
-	s := NewService(repo, fakeRelations{rel: ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now})
+	s := NewService(repo, fakeRelations{rel: ActiveCouple{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now})
 	got, err := s.ListAnniversaries(context.Background(), 3)
 	if err != nil {
 		t.Fatal(err)
@@ -155,7 +155,7 @@ func TestPartnerCanUpdateAnniversaryInsideCoupleButNotForeignItem(t *testing.T) 
 	owned := domain.RestoreAnniversary(7, 9, 2, "相识", now, true, domain.CountModeCountdown, false, "", "", "none", now, now)
 	foreign := domain.RestoreAnniversary(8, 10, 4, "别人的", now, true, domain.CountModeCountdown, false, "", "", "none", now, now)
 	repo := &fakeRepo{anniversaries: []domain.Anniversary{owned, foreign}}
-	s := NewService(repo, fakeRelations{rel: ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now})
+	s := NewService(repo, fakeRelations{rel: ActiveCouple{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now})
 	draft := domain.AnniversaryDraft{Title: "我们的相识", Date: now, CountMode: domain.CountModeElapsed, Pinned: true}
 	updated, err := s.UpdateAnniversary(context.Background(), 3, 7, draft)
 	if err != nil || updated.Title() != "我们的相识" || !updated.Pinned() {
@@ -169,16 +169,16 @@ func TestPartnerCanUpdateAnniversaryInsideCoupleButNotForeignItem(t *testing.T) 
 func TestSystemAnniversaryCannotBeDeleted(t *testing.T) {
 	now := time.Now()
 	repo := &fakeRepo{anniversaries: []domain.Anniversary{domain.RestoreAnniversary(7, 9, 2, "我们在一起", now, true, domain.CountModeElapsed, true, "", "", "relationship", now, now)}}
-	s := NewService(repo, fakeRelations{rel: ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now})
+	s := NewService(repo, fakeRelations{rel: ActiveCouple{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now})
 	if err := s.DeleteAnniversary(context.Background(), 2, 7); !errors.Is(err, domain.ErrSystemAnniversary) {
 		t.Fatalf("error=%v", err)
 	}
 }
 
-func TestListCreatesEditableRelationshipAnniversaryOnce(t *testing.T) {
+func TestListCreatesEditableCoupleAnniversaryOnce(t *testing.T) {
 	now := time.Date(2026, 5, 20, 8, 0, 0, 0, time.UTC)
 	repo := &fakeRepo{}
-	s := NewService(repo, fakeRelations{rel: ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3, BoundAt: now}}, fakeClock{now})
+	s := NewService(repo, fakeRelations{rel: ActiveCouple{ID: 9, UserAID: 2, UserBID: 3, BoundAt: now}}, fakeClock{now})
 	first, err := s.ListAnniversaries(context.Background(), 3)
 	if err != nil || len(first) != 1 || first[0].ID() == 0 || first[0].SystemKind() != "relationship" {
 		t.Fatalf("first=%#v err=%v", first, err)
@@ -205,7 +205,7 @@ func TestCoverUploadGrantRequiresOwnedAnniversaryAndSupportedImage(t *testing.T)
 	now := time.Date(2026, 10, 22, 10, 0, 0, 0, time.UTC)
 	item := domain.RestoreAnniversary(7, 9, 2, "相识", now, true, domain.CountModeCountdown, false, "", "", "none", now, now)
 	repo := &fakeRepo{anniversaries: []domain.Anniversary{item}}
-	s := NewServiceWithStorage(repo, fakeRelations{rel: ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now}, coverStorageStub{}, func() string { return "fixed" })
+	s := NewServiceWithStorage(repo, fakeRelations{rel: ActiveCouple{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now}, coverStorageStub{}, func() string { return "fixed" })
 	g, err := s.RequestCoverUpload(context.Background(), 3, 7, "image/jpeg", 5<<20)
 	if err != nil || g.ObjectKey != "couples/9/anniversaries/7/fixed" || g.ResourceID != 7 {
 		t.Fatalf("grant=%+v err=%v", g, err)
@@ -224,7 +224,7 @@ func TestCoverUpdateConsumesMatchingGrantOnceAndPreservesOldCoverOnFailure(t *te
 	grant := CoverUploadGrant{ObjectKey: "couples/9/anniversaries/7/new", OwnerID: 3, ResourceID: 7, ContentType: "image/jpeg", Purpose: "anniversary_cover", ExpiresAt: now.Add(time.Minute)}
 	repo := &fakeRepo{anniversaries: []domain.Anniversary{item}, coverGrants: map[string]CoverUploadGrant{grant.ObjectKey: grant}}
 	draft := domain.AnniversaryDraft{Title: "相识", Date: now, CountMode: domain.CountModeCountdown, RepeatsYearly: true, CoverRef: grant.ObjectKey}
-	s := NewServiceWithStorage(repo, fakeRelations{rel: ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now}, coverStorageStub{verifyErr: errors.New("missing")}, func() string { return "x" })
+	s := NewServiceWithStorage(repo, fakeRelations{rel: ActiveCouple{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now}, coverStorageStub{verifyErr: errors.New("missing")}, func() string { return "x" })
 	if _, err := s.UpdateAnniversary(context.Background(), 3, 7, draft); !errors.Is(err, domain.ErrInvalidCover) {
 		t.Fatalf("verify err=%v", err)
 	}
@@ -232,7 +232,7 @@ func TestCoverUpdateConsumesMatchingGrantOnceAndPreservesOldCoverOnFailure(t *te
 	if stored.CoverRef() != "old" {
 		t.Fatalf("cover changed=%s", stored.CoverRef())
 	}
-	s = NewServiceWithStorage(repo, fakeRelations{rel: ActiveRelationship{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now}, coverStorageStub{}, func() string { return "x" })
+	s = NewServiceWithStorage(repo, fakeRelations{rel: ActiveCouple{ID: 9, UserAID: 2, UserBID: 3}}, fakeClock{now}, coverStorageStub{}, func() string { return "x" })
 	if _, err := s.UpdateAnniversary(context.Background(), 3, 7, draft); err != nil {
 		t.Fatal(err)
 	}

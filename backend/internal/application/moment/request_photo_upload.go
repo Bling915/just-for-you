@@ -2,8 +2,8 @@ package moment
 
 import (
 	"context"
-	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 	domain "github.com/nanfang/just-for-you/server/internal/domain/moment"
+	appshared "github.com/nanfang/just-for-you/server/internal/platform/clock"
 )
 
 type RequestPhotoUploadCommand struct {

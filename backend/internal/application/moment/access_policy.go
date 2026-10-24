@@ -13,7 +13,7 @@ var (
 
 type AccessPolicy struct{}
 
-func (AccessPolicy) CanRead(value domain.Moment, viewerID int64, relationship *ActiveRelationship) error {
+func (AccessPolicy) CanRead(value domain.Moment, viewerID int64, relationship *ActiveCouple) error {
 	if value.SpaceType() == domain.SpacePersonal {
 		if viewerID == value.AuthorID() {
 			return nil
@@ -23,13 +23,13 @@ func (AccessPolicy) CanRead(value domain.Moment, viewerID int64, relationship *A
 		}
 		return ErrMomentNotVisible
 	}
-	if value.SpaceType() == domain.SpaceShared && inOwningRelationship(value, viewerID, relationship) {
+	if value.SpaceType() == domain.SpaceShared && inOwningCouple(value, viewerID, relationship) {
 		return nil
 	}
 	return ErrMomentNotVisible
 }
 
-func (p AccessPolicy) CanMutate(value domain.Moment, actorID int64, relationship *ActiveRelationship) error {
+func (p AccessPolicy) CanMutate(value domain.Moment, actorID int64, relationship *ActiveCouple) error {
 	if actorID != value.AuthorID() {
 		return domain.ErrNotAuthor
 	}
@@ -42,26 +42,26 @@ func (p AccessPolicy) CanMutate(value domain.Moment, actorID int64, relationship
 	return nil
 }
 
-func (p AccessPolicy) CanInteract(value domain.Moment, actorID int64, relationship *ActiveRelationship) error {
+func (p AccessPolicy) CanInteract(value domain.Moment, actorID int64, relationship *ActiveCouple) error {
 	if actorID == value.AuthorID() {
 		return ErrMomentNotVisible
 	}
 	if err := p.CanRead(value, actorID, relationship); err != nil {
 		return err
 	}
-	if relationship == nil || relationship.ID != value.RelationshipID() {
+	if relationship == nil || relationship.ID != value.CoupleID() {
 		return ErrPartnerRequired
 	}
 	return nil
 }
 
-func inOwningRelationship(value domain.Moment, viewerID int64, relationship *ActiveRelationship) bool {
-	if relationship == nil || relationship.ID <= 0 || relationship.ID != value.RelationshipID() {
+func inOwningCouple(value domain.Moment, viewerID int64, relationship *ActiveCouple) bool {
+	if relationship == nil || relationship.ID <= 0 || relationship.ID != value.CoupleID() {
 		return false
 	}
 	return viewerID == value.AuthorID() || relationship.PartnerID == value.AuthorID()
 }
 
-func isCurrentPartner(value domain.Moment, viewerID int64, relationship *ActiveRelationship) bool {
-	return viewerID != value.AuthorID() && relationship != nil && relationship.ID == value.RelationshipID() && relationship.PartnerID == value.AuthorID()
+func isCurrentPartner(value domain.Moment, viewerID int64, relationship *ActiveCouple) bool {
+	return viewerID != value.AuthorID() && relationship != nil && relationship.ID == value.CoupleID() && relationship.PartnerID == value.AuthorID()
 }

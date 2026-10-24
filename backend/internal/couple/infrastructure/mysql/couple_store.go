@@ -1,4 +1,4 @@
-package infrastructure
+package mysql
 
 import (
 	"context"
@@ -6,19 +6,19 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	application "github.com/nanfang/just-for-you/server/internal/application/relationship"
-	domain "github.com/nanfang/just-for-you/server/internal/domain/relationship"
+	application "github.com/nanfang/just-for-you/server/internal/couple/application"
+	domain "github.com/nanfang/just-for-you/server/internal/couple/domain"
 	"time"
 )
 
-type MySQLRepository struct{ db *sql.DB }
+type MySQLCoupleStore struct{ db *sql.DB }
 
-func NewMySQLRepository(db *sql.DB) MySQLRepository { return MySQLRepository{db: db} }
-func (r MySQLRepository) SaveInvitation(ctx context.Context, i domain.Invitation) error {
+func NewMySQLCoupleStore(db *sql.DB) MySQLCoupleStore { return MySQLCoupleStore{db: db} }
+func (r MySQLCoupleStore) SaveInvitation(ctx context.Context, i domain.Invitation) error {
 	_, err := r.db.ExecContext(ctx, "INSERT INTO invite_codes(code,creator_user_id,expires_at) VALUES(?,?,?)", i.Code(), i.CreatorID(), i.ExpiresAt())
 	return err
 }
-func (r MySQLRepository) FindInvitation(ctx context.Context, code string) (domain.Invitation, error) {
+func (r MySQLCoupleStore) FindInvitation(ctx context.Context, code string) (domain.Invitation, error) {
 	var creator, consumer int64
 	var expires time.Time
 	var used sql.NullTime
@@ -35,20 +35,20 @@ func (r MySQLRepository) FindInvitation(ctx context.Context, code string) (domai
 	}
 	return domain.RestoreInvitation(code, creator, expires, usedAt, consumer), nil
 }
-func (r MySQLRepository) AcceptInvitation(ctx context.Context, code string, userID int64, now time.Time) (domain.Relationship, error) {
+func (r MySQLCoupleStore) AcceptInvitation(ctx context.Context, code string, userID int64, now time.Time) (domain.Couple, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
 	defer tx.Rollback()
 	var creator int64
 	var expires time.Time
 	var used sql.NullTime
 	if err = tx.QueryRowContext(ctx, "SELECT code,creator_user_id,expires_at,consumed_at FROM invite_codes WHERE code=? FOR UPDATE", code).Scan(new(string), &creator, &expires, &used); errors.Is(err, sql.ErrNoRows) {
-		return domain.Relationship{}, domain.ErrInvitationInvalid
+		return domain.Couple{}, domain.ErrInvitationInvalid
 	}
 	if err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
 	var usedAt *time.Time
 	if used.Valid {
@@ -56,7 +56,7 @@ func (r MySQLRepository) AcceptInvitation(ctx context.Context, code string, user
 	}
 	invitation := domain.RestoreInvitation(code, creator, expires, usedAt, 0)
 	if err = invitation.CanBeAcceptedBy(userID, now); err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
 	// Lock stable user rows in a deterministic order so different invitations
 	// cannot concurrently bind the same user into two active relationships.
@@ -66,105 +66,105 @@ func (r MySQLRepository) AcceptInvitation(ctx context.Context, code string, user
 	}
 	rows, err := tx.QueryContext(ctx, "SELECT id FROM users WHERE id IN (?,?) ORDER BY id FOR UPDATE", first, second)
 	if err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
 	locked := 0
 	for rows.Next() {
 		locked++
 	}
 	if err := rows.Close(); err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
 	if err := rows.Err(); err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
 	if locked != 2 {
-		return domain.Relationship{}, domain.ErrInvitationInvalid
+		return domain.Couple{}, domain.ErrInvitationInvalid
 	}
 	var count int
 	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM couples WHERE status='active' AND (user_a_id IN (?,?) OR user_b_id IN (?,?)) FOR UPDATE", userID, creator, userID, creator).Scan(&count); err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
 	if count > 0 {
-		return domain.Relationship{}, domain.ErrAlreadyBound
+		return domain.Couple{}, domain.ErrAlreadyBound
 	}
-	relationship := domain.NewRelationship(0, creator, userID, now)
+	relationship := domain.NewCouple(0, creator, userID, now)
 	result, err := tx.ExecContext(ctx, "INSERT INTO couples(user_a_id,user_b_id,status,bound_at) VALUES(?,?,'active',?)", relationship.UserAID(), relationship.UserBID(), now)
 	if err != nil {
-		return domain.Relationship{}, domain.ErrAlreadyBound
+		return domain.Couple{}, domain.ErrAlreadyBound
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE invite_codes SET consumed_at=?,consumer_user_id=? WHERE code=?", now, userID, code); err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
 	if err = tx.Commit(); err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
-	return domain.NewRelationship(id, creator, userID, now), nil
+	return domain.NewCouple(id, creator, userID, now), nil
 }
 
-func (r MySQLRepository) CreateSoloRelationship(ctx context.Context, userID int64, now time.Time) (domain.Relationship, error) {
+func (r MySQLCoupleStore) CreateSoloCouple(ctx context.Context, userID int64, now time.Time) (domain.Couple, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
 	defer tx.Rollback()
 	var lockedUserID int64
 	if err = tx.QueryRowContext(ctx, "SELECT id FROM users WHERE id=? FOR UPDATE", userID).Scan(&lockedUserID); err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
 	var active int
 	if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM couples WHERE status='active' AND (user_a_id=? OR user_b_id=?) FOR UPDATE", userID, userID).Scan(&active); err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
 	if active > 0 {
-		return domain.Relationship{}, domain.ErrAlreadyBound
+		return domain.Couple{}, domain.ErrAlreadyBound
 	}
 	openid := fmt.Sprintf("solo-test-partner:%d", userID)
 	result, err := tx.ExecContext(ctx, "INSERT INTO users(wechat_openid,display_name) VALUES(?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id),display_name=VALUES(display_name)", openid, "测试搭子")
 	if err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
 	partnerID, err := result.LastInsertId()
 	if err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
-	relationship := domain.NewRelationship(0, userID, partnerID, now)
+	relationship := domain.NewCouple(0, userID, partnerID, now)
 	result, err = tx.ExecContext(ctx, "INSERT INTO couples(user_a_id,user_b_id,status,bound_at) VALUES(?,?,'active',?)", relationship.UserAID(), relationship.UserBID(), now)
 	if err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
 	if err = tx.Commit(); err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
-	return domain.NewRelationship(id, userID, partnerID, now), nil
+	return domain.NewCouple(id, userID, partnerID, now), nil
 }
-func (r MySQLRepository) GetActive(ctx context.Context, userID int64) (domain.Relationship, error) {
+func (r MySQLCoupleStore) GetActive(ctx context.Context, userID int64) (domain.Couple, error) {
 	var id, a, b int64
 	var status string
 	var bound time.Time
 	var ended sql.NullTime
 	err := r.db.QueryRowContext(ctx, "SELECT id,user_a_id,user_b_id,status,bound_at,ended_at FROM couples WHERE status='active' AND (user_a_id=? OR user_b_id=?)", userID, userID).Scan(&id, &a, &b, &status, &bound, &ended)
 	if errors.Is(err, sql.ErrNoRows) {
-		return domain.Relationship{}, domain.ErrNoActiveRelationship
+		return domain.Couple{}, domain.ErrNoActiveCouple
 	}
 	if err != nil {
-		return domain.Relationship{}, err
+		return domain.Couple{}, err
 	}
 	var endedAt *time.Time
 	if ended.Valid {
 		endedAt = &ended.Time
 	}
-	return domain.RestoreRelationship(id, a, b, status, bound, endedAt), nil
+	return domain.RestoreCouple(id, a, b, status, bound, endedAt), nil
 }
-func (r MySQLRepository) GetActiveDetails(ctx context.Context, userID int64) (domain.Relationship, application.PartnerProfile, bool, error) {
+func (r MySQLCoupleStore) GetActiveDetails(ctx context.Context, userID int64) (domain.Couple, application.PartnerProfile, bool, error) {
 	var id, a, b, partnerID int64
 	var status, displayName, avatarURL string
 	var bound time.Time
@@ -179,27 +179,27 @@ func (r MySQLRepository) GetActiveDetails(ctx context.Context, userID int64) (do
 		WHERE c.status='active' AND (c.user_a_id=? OR c.user_b_id=?)`, userID, userID, userID).
 		Scan(&id, &a, &b, &status, &bound, &ended, &partnerID, &displayName, &avatarURL, &soloTest)
 	if errors.Is(err, sql.ErrNoRows) {
-		return domain.Relationship{}, application.PartnerProfile{}, false, domain.ErrNoActiveRelationship
+		return domain.Couple{}, application.PartnerProfile{}, false, domain.ErrNoActiveCouple
 	}
 	if err != nil {
-		return domain.Relationship{}, application.PartnerProfile{}, false, err
+		return domain.Couple{}, application.PartnerProfile{}, false, err
 	}
 	var endedAt *time.Time
 	if ended.Valid {
 		endedAt = &ended.Time
 	}
-	relationship := domain.RestoreRelationship(id, a, b, status, bound, endedAt)
+	relationship := domain.RestoreCouple(id, a, b, status, bound, endedAt)
 	partner := application.PartnerProfile{UserID: partnerID, DisplayName: displayName, AvatarRef: avatarURL}
 	return relationship, partner, soloTest, nil
 }
-func (r MySQLRepository) End(ctx context.Context, userID int64, now time.Time) error {
+func (r MySQLCoupleStore) End(ctx context.Context, userID int64, now time.Time) error {
 	result, err := r.db.ExecContext(ctx, "UPDATE couples SET status='ended',ended_at=? WHERE status='active' AND (user_a_id=? OR user_b_id=?)", now, userID, userID)
 	if err != nil {
 		return err
 	}
 	count, _ := result.RowsAffected()
 	if count == 0 {
-		return domain.ErrNoActiveRelationship
+		return domain.ErrNoActiveCouple
 	}
 	return nil
 }

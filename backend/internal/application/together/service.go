@@ -9,21 +9,21 @@ import (
 
 type Service struct {
 	repo          Repository
-	relationships RelationshipReader
+	relationships CoupleReader
 	clock         Clock
 	storage       MediaStorage
 	key           func() string
 }
 
-func NewServiceWithStorage(repo Repository, relationships RelationshipReader, clock Clock, storage MediaStorage, key func() string) *Service {
+func NewServiceWithStorage(repo Repository, relationships CoupleReader, clock Clock, storage MediaStorage, key func() string) *Service {
 	return &Service{repo: repo, relationships: relationships, clock: clock, storage: storage, key: key}
 }
 
-func NewService(repo Repository, relationships RelationshipReader, clock Clock) *Service {
+func NewService(repo Repository, relationships CoupleReader, clock Clock) *Service {
 	return &Service{repo: repo, relationships: relationships, clock: clock}
 }
-func (s *Service) relationship(ctx context.Context, userID int64) (ActiveRelationship, error) {
-	return s.relationships.GetActiveRelationship(ctx, userID)
+func (s *Service) relationship(ctx context.Context, userID int64) (ActiveCouple, error) {
+	return s.relationships.GetActiveCouple(ctx, userID)
 }
 func (s *Service) ListTodos(ctx context.Context, userID int64) ([]domain.Todo, error) {
 	r, e := s.relationship(ctx, userID)

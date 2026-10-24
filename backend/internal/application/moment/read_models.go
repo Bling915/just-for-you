@@ -7,11 +7,11 @@ import (
 )
 
 type ReadModels struct {
-	relationships ActiveRelationshipReader
+	relationships ActiveCoupleReader
 	repo          ReadRepository
 }
 
-func NewReadModels(r ActiveRelationshipReader, repo ReadRepository) *ReadModels {
+func NewReadModels(r ActiveCoupleReader, repo ReadRepository) *ReadModels {
 	return &ReadModels{r, repo}
 }
 func monthRange(month string) (time.Time, time.Time, error) {
@@ -24,7 +24,7 @@ func monthRange(month string) (time.Time, time.Time, error) {
 	return start, start.AddDate(0, 1, 0), nil
 }
 func (r *ReadModels) Calendar(ctx context.Context, userID int64, month string) ([]CalendarDay, error) {
-	rel, e := r.relationships.GetActiveRelationship(ctx, userID)
+	rel, e := r.relationships.GetActiveCouple(ctx, userID)
 	if e != nil {
 		return nil, e
 	}
@@ -35,14 +35,14 @@ func (r *ReadModels) Calendar(ctx context.Context, userID int64, month string) (
 	return r.repo.Calendar(ctx, rel.ID, from, to)
 }
 func (r *ReadModels) Map(ctx context.Context, userID int64, from, to time.Time) ([]MapPoint, error) {
-	rel, e := r.relationships.GetActiveRelationship(ctx, userID)
+	rel, e := r.relationships.GetActiveCouple(ctx, userID)
 	if e != nil {
 		return nil, e
 	}
 	return r.repo.Map(ctx, rel.ID, from, to, 500)
 }
 func (r *ReadModels) Report(ctx context.Context, userID int64, month string) (MonthlyReport, error) {
-	rel, e := r.relationships.GetActiveRelationship(ctx, userID)
+	rel, e := r.relationships.GetActiveCouple(ctx, userID)
 	if e != nil {
 		return MonthlyReport{}, e
 	}
