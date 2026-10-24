@@ -8,14 +8,14 @@ import (
 )
 
 type DailyQuestionService struct {
-	relationships CoupleReader
-	repo          DailyQuestionRepository
+	relationships ActiveCoupleReader
+	repo          DailyQuestionStore
 	generator     QuestionGenerator
 	clock         Clock
 	contextReader QuestionContextReader
 }
 
-func NewDailyQuestionService(r CoupleReader, repo DailyQuestionRepository, g QuestionGenerator, c Clock, readers ...QuestionContextReader) *DailyQuestionService {
+func NewDailyQuestionService(r ActiveCoupleReader, repo DailyQuestionStore, g QuestionGenerator, c Clock, readers ...QuestionContextReader) *DailyQuestionService {
 	var reader QuestionContextReader
 	if len(readers) > 0 {
 		reader = readers[0]
@@ -33,7 +33,7 @@ func (s *DailyQuestionService) GetToday(ctx context.Context, userID int64) (doma
 		return domain.DailyQuestion{}, err
 	}
 	day := shanghaiDay(s.clock.Now())
-	value, err := s.repo.FindDailyQuestion(ctx, rel.ID, day)
+	value, err := s.repo.Find(ctx, rel.ID, day)
 	if err == nil {
 		return value, nil
 	}
@@ -55,7 +55,7 @@ func (s *DailyQuestionService) GetToday(ctx context.Context, userID int64) (doma
 		return domain.DailyQuestion{}, err
 	}
 	value = value.WithContextVersion(generated.ContextVersion)
-	return s.repo.CreateDailyQuestion(ctx, value)
+	return s.repo.Create(ctx, value)
 }
 
 type SubmitDailyAnswerCommand struct {
@@ -80,12 +80,12 @@ func (s *DailyQuestionService) SubmitAnswer(ctx context.Context, c SubmitDailyAn
 	if partner == c.UserID {
 		partner = rel.UserBID
 	}
-	return s.repo.SubmitDailyAnswer(ctx, questionID, c.UserID, partner, c.Text, s.clock.Now())
+	return s.repo.SubmitAnswer(ctx, questionID, c.UserID, partner, c.Text, s.clock.Now())
 }
 func (s *DailyQuestionService) List(ctx context.Context, userID int64) ([]domain.DailyQuestion, error) {
 	rel, err := s.relationships.GetActiveCouple(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	return s.repo.ListDailyQuestions(ctx, rel.ID, 50)
+	return s.repo.List(ctx, rel.ID, 50)
 }

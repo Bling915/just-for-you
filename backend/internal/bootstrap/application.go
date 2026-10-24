@@ -33,7 +33,7 @@ func New() (*Application, error) {
 	}
 	relationship, getCouple := buildCouple(db, cfg.EnableSoloTest, avatars)
 	companionship := buildCompanionship(db, cfg, getCouple)
-	together, err := buildTogether(db, cfg)
+	sharedLife, err := buildSharedLife(db, cfg, getCouple)
 	if err != nil {
 		_ = db.Close()
 		return nil, err
@@ -43,7 +43,9 @@ func New() (*Application, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	router := httpserver.NewRouter(httpserver.Dependencies{Tokens: tokens, Registrars: []httpserver.RouteRegistrar{identity, relationship, companionship, together, moment}})
+	registrars := []httpserver.RouteRegistrar{identity, relationship, companionship, moment}
+	registrars = append(registrars, sharedLife...)
+	router := httpserver.NewRouter(httpserver.Dependencies{Tokens: tokens, Registrars: registrars})
 	return &Application{server: newHTTPServer(cfg.HTTPAddr, router), database: db}, nil
 }
 

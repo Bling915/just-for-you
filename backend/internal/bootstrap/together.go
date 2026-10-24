@@ -4,40 +4,137 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
-	"fmt"
-	app "github.com/nanfang/just-for-you/server/internal/application/together"
+	"net/http"
+	"time"
+
+	anniversaryapp "github.com/nanfang/just-for-you/server/internal/anniversary/application"
+	anniversarymysql "github.com/nanfang/just-for-you/server/internal/anniversary/infrastructure/mysql"
+	anniversaryhttp "github.com/nanfang/just-for-you/server/internal/anniversary/interfaces/http"
+	togetherapp "github.com/nanfang/just-for-you/server/internal/application/together"
+	coupleapp "github.com/nanfang/just-for-you/server/internal/couple/application"
 	"github.com/nanfang/just-for-you/server/internal/infrastructure/ai"
-	mysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/together"
+	togethermysql "github.com/nanfang/just-for-you/server/internal/infrastructure/persistence/mysql/together"
+	httpserver "github.com/nanfang/just-for-you/server/internal/interfaces/http/shared"
 	togetherhttp "github.com/nanfang/just-for-you/server/internal/interfaces/http/together"
 	cosstorage "github.com/nanfang/just-for-you/server/internal/media/infrastructure/cos"
 	"github.com/nanfang/just-for-you/server/internal/platform/clock"
 	"github.com/nanfang/just-for-you/server/internal/platform/config"
-	"net/http"
-	"time"
+	todoapp "github.com/nanfang/just-for-you/server/internal/todo/application"
+	todomysql "github.com/nanfang/just-for-you/server/internal/todo/infrastructure/mysql"
+	todohttp "github.com/nanfang/just-for-you/server/internal/todo/interfaces/http"
+	wishapp "github.com/nanfang/just-for-you/server/internal/wish/application"
+	wishmysql "github.com/nanfang/just-for-you/server/internal/wish/infrastructure/mysql"
+	wishhttp "github.com/nanfang/just-for-you/server/internal/wish/interfaces/http"
 )
 
 func coverKey() string {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return fmt.Sprintf("cover")
+	value := make([]byte, 16)
+	if _, err := rand.Read(value); err != nil {
+		return "cover"
 	}
-	return hex.EncodeToString(b)
+	return hex.EncodeToString(value)
 }
-func buildTogether(db *sql.DB, cfg config.Config) (*togetherhttp.Handler, error) {
-	repo := mysql.NewRepository(db)
-	storage, err := cosstorage.NewObjectStorage(cfg.COSBucketURL, cfg.COSSecretID, cfg.COSSecretKey)
+
+func buildSharedLife(
+	db *sql.DB,
+	cfg config.Config,
+	getCouple *coupleapp.GetCurrentCouple,
+) ([]httpserver.RouteRegistrar, error) {
+	storage, err := cosstorage.NewObjectStorage(
+		cfg.COSBucketURL,
+		cfg.COSSecretID,
+		cfg.COSSecretKey,
+	)
 	if err != nil {
 		return nil, err
 	}
+	anniversaryStore := anniversarymysql.NewMySQLAnniversaryStore(db)
+	anniversaryRelationships := newAnniversaryCoupleReader(getCouple)
+	anniversaryHandler := anniversaryhttp.NewHandler(anniversaryhttp.Dependencies{
+		List: anniversaryapp.NewListAnniversaries(
+			anniversaryRelationships,
+			anniversaryStore,
+			clock.System{},
+		),
+		Get:    anniversaryapp.NewGetAnniversary(anniversaryRelationships, anniversaryStore),
+		Create: anniversaryapp.NewCreateAnniversary(anniversaryRelationships, anniversaryStore, clock.System{}),
+		Update: anniversaryapp.NewUpdateAnniversary(
+			anniversaryRelationships,
+			anniversaryStore,
+			storage,
+			clock.System{},
+		),
+		Delete: anniversaryapp.NewDeleteAnniversary(anniversaryRelationships, anniversaryStore),
+		RequestCover: anniversaryapp.NewRequestCoverUpload(
+			anniversaryRelationships,
+			anniversaryStore,
+			storage,
+			clock.System{},
+			coverKey,
+		),
+		CoverURL: anniversaryapp.NewCoverURL(storage, clock.System{}),
+	})
+
+	todoStore := todomysql.NewMySQLTodoStore(db)
+	todoRelationships := newTodoCoupleReader(getCouple)
+	todoHandler := todohttp.NewHandler(todohttp.Dependencies{
+		List:     todoapp.NewListTodos(todoRelationships, todoStore),
+		Create:   todoapp.NewCreateTodo(todoRelationships, todoStore, clock.System{}),
+		Complete: todoapp.NewSetTodoCompleted(todoRelationships, todoStore, clock.System{}),
+		Delete:   todoapp.NewDeleteTodo(todoRelationships, todoStore),
+	})
+
+	wishStore := wishmysql.NewMySQLWishStore(db)
+	wishRelationships := newWishCoupleReader(getCouple)
+	wishHandler := wishhttp.NewHandler(wishhttp.Dependencies{
+		List:   wishapp.NewListWishes(wishRelationships, wishStore),
+		Create: wishapp.NewCreateWish(wishRelationships, wishStore, clock.System{}),
+		Complete: wishapp.NewCompleteWish(
+			wishRelationships,
+			wishmysql.NewMomentCoupleReader(db),
+			wishStore,
+			clock.System{},
+		),
+		Reopen: wishapp.NewReopenWish(wishRelationships, wishStore, clock.System{}),
+		Delete: wishapp.NewDeleteWish(wishRelationships, wishStore),
+	})
+
+	dailyStore := togethermysql.NewRepository(db)
 	fallback := ai.NewFallbackQuestions()
-	var primary app.QuestionGenerator
+	var primary togetherapp.QuestionGenerator
 	if cfg.AIBaseURL != "" && cfg.AIAPIKey != "" && cfg.AIModel != "" {
-		primary = ai.NewOpenAICompatible(cfg.AIBaseURL, cfg.AIAPIKey, cfg.AIModel, &http.Client{Timeout: 3 * time.Second})
+		primary = ai.NewOpenAICompatible(
+			cfg.AIBaseURL,
+			cfg.AIAPIKey,
+			cfg.AIModel,
+			&http.Client{Timeout: 3 * time.Second},
+		)
 	}
-	var generator app.QuestionGenerator = fallback
+	var generator togetherapp.QuestionGenerator = fallback
 	if primary != nil {
-		generator = app.PersonalizedQuestionGenerator{Preferences: repo, Primary: primary, Fallback: fallback}
+		generator = togetherapp.PersonalizedQuestionGenerator{
+			Preferences: dailyStore,
+			Primary:     primary,
+			Fallback:    fallback,
+		}
 	}
-	daily := app.NewDailyQuestionService(repo, repo, generator, clock.System{}, repo)
-	return togetherhttp.NewHandler(app.NewServiceWithStorage(repo, repo, clock.System{}, storage, coverKey), daily), nil
+	daily := togetherapp.NewDailyQuestionService(
+		newDailyQuestionCoupleReader(getCouple),
+		dailyStore,
+		generator,
+		clock.System{},
+		dailyStore,
+	)
+	dailyHandler := togetherhttp.NewHandler(togetherhttp.Dependencies{
+		GetToday:     daily,
+		SubmitAnswer: daily,
+		List:         daily,
+	})
+
+	return []httpserver.RouteRegistrar{
+		anniversaryHandler,
+		todoHandler,
+		wishHandler,
+		dailyHandler,
+	}, nil
 }

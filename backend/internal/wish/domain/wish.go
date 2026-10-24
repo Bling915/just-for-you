@@ -1,4 +1,4 @@
-package together
+package wish
 
 import (
 	"strings"

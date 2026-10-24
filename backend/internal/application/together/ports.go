@@ -8,58 +8,47 @@ import (
 )
 
 type ActiveCouple struct {
-	ID, UserAID, UserBID int64
-	BoundAt              time.Time
+	ID      int64
+	UserAID int64
+	UserBID int64
 }
-type CoupleReader interface {
+
+type ActiveCoupleReader interface {
 	GetActiveCouple(context.Context, int64) (ActiveCouple, error)
 }
-type Repository interface {
-	ListAnniversaries(context.Context, int64) ([]domain.Anniversary, error)
-	SaveAnniversary(context.Context, domain.Anniversary) (domain.Anniversary, error)
-	FindAnniversary(context.Context, int64, int64) (domain.Anniversary, error)
-	UpdateAnniversary(context.Context, domain.Anniversary) (domain.Anniversary, error)
-	CreateCoverGrant(context.Context, CoverUploadGrant) error
-	GetCoverGrant(context.Context, string) (CoverUploadGrant, error)
-	UpdateAnniversaryWithCoverGrant(context.Context, domain.Anniversary, string, time.Time) (domain.Anniversary, error)
-	DeleteAnniversary(context.Context, int64, int64, int64) error
-	ListTodos(context.Context, int64) ([]domain.Todo, error)
-	SaveTodo(context.Context, domain.Todo) (domain.Todo, error)
-	FindTodo(context.Context, int64, int64) (domain.Todo, error)
-	UpdateTodo(context.Context, domain.Todo) (domain.Todo, error)
-	DeleteTodo(context.Context, int64, int64, int64) error
-	ListWishes(context.Context, int64) ([]domain.Wish, error)
-	SaveWish(context.Context, domain.Wish) (domain.Wish, error)
-	FindWish(context.Context, int64, int64) (domain.Wish, error)
-	UpdateWish(context.Context, domain.Wish) (domain.Wish, error)
-	DeleteWish(context.Context, int64, int64, int64) error
-	MomentCoupleID(context.Context, int64) (int64, error)
+
+type Clock interface {
+	Now() time.Time
 }
-type Clock interface{ Now() time.Time }
-type MediaStorage interface {
-	SignUpload(context.Context, string, string, time.Time) (string, error)
-	VerifyUploaded(context.Context, string, string, int64) error
-	SignRead(context.Context, string, time.Time) (string, error)
+
+type GeneratedQuestion struct {
+	Text           string
+	Source         string
+	ContextVersion string
 }
-type GeneratedQuestion struct{ Text, Source, ContextVersion string }
+
 type QuestionContext struct {
 	CoupleID int64
 	Date     time.Time
 	Themes   []string
 }
+
 type QuestionGenerator interface {
 	Generate(context.Context, QuestionContext) (GeneratedQuestion, error)
 }
+
 type AIPersonalizationReader interface {
 	AIPersonalizationEnabled(context.Context, int64) (bool, error)
 }
+
 type QuestionContextReader interface {
 	RecentContextMoments(context.Context, int64, int) ([]ContextMoment, error)
 }
-type DailyQuestionRepository interface {
-	FindDailyQuestion(context.Context, int64, time.Time) (domain.DailyQuestion, error)
-	FindDailyQuestionByID(context.Context, int64, int64) (domain.DailyQuestion, error)
-	CreateDailyQuestion(context.Context, domain.DailyQuestion) (domain.DailyQuestion, error)
-	SubmitDailyAnswer(context.Context, int64, int64, int64, string, time.Time) (domain.DailyQuestion, error)
-	ListDailyQuestions(context.Context, int64, int) ([]domain.DailyQuestion, error)
+
+type DailyQuestionStore interface {
+	Find(context.Context, int64, time.Time) (domain.DailyQuestion, error)
+	FindByID(context.Context, int64, int64) (domain.DailyQuestion, error)
+	Create(context.Context, domain.DailyQuestion) (domain.DailyQuestion, error)
+	SubmitAnswer(context.Context, int64, int64, int64, string, time.Time) (domain.DailyQuestion, error)
+	List(context.Context, int64, int) ([]domain.DailyQuestion, error)
 }

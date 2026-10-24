@@ -1,4 +1,4 @@
-package together
+package anniversary
 
 import (
 	"errors"
