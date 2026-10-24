@@ -41,6 +41,6 @@ test('tracked repository root contains only delivery files', () => {
 
   assert.deepEqual(
     [...new Set(trackedRootEntries)].sort(),
-    ['.gitignore', 'README.md', 'backend', 'frontend'],
+    ['.gitignore', 'README.md', 'backend', 'docs', 'frontend'],
   );
 });
